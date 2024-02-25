@@ -15,3 +15,12 @@ buildNumber.properties
 .project
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
+
+# Latex generated output
+HDSLedger/report/*.pdf
+HDSLedger/report/*.log
+HDSLedger/report/*.aux
+HDSLedger/report/*.out
+
+# ASDF config folder
+.tool-versions
