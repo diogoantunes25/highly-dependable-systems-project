@@ -34,9 +34,10 @@ Can be found inside the `resources/` folder of the `Service` module.
 
 ## Dependencies
 
-To install the necessary dependencies run the following command:
+To install the necessary dependencies run the following commands:
 
 ```bash
+chmod +x install_deps.sh
 ./install_deps.sh
 ```
 
