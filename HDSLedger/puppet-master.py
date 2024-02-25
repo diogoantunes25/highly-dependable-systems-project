@@ -23,7 +23,9 @@ def quit_handler(*args):
 
 
 # Compile classes
-os.system("mvn clean install")
+if os.system("mvn clean install") != 0:
+    print("Failed to compile")
+    exit(1)
 
 # Spawn blockchain nodes
 with open(f"Service/src/main/resources/{server_config}") as f:
