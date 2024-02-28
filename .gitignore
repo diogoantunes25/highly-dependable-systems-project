@@ -24,3 +24,6 @@ HDSLedger/report/*.out
 
 # ASDF config folder
 .tool-versions
+
+# IntelliJ IDEA
+.idea/
