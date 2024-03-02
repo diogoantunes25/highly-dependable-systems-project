@@ -1,5 +1,6 @@
-import javax.crypto.spec.SecretKeySpec;
+package pt.ulisboa.tecnico.hdsledger.pki;
 
+import javax.crypto.spec.SecretKeySpec;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -35,7 +36,7 @@ public class RSAKeyGenerator {
     }
 
     public static void write(String privKeyPath, String pubKeyPath) throws GeneralSecurityException, IOException {
-        // get an AES private key
+        // get an RSA private key
         System.out.println("Generating RSA key ..." );
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
         keyGen.initialize(4096);
@@ -81,5 +82,4 @@ public class RSAKeyGenerator {
         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(encoded);
         return keyFactory.generatePrivate(keySpec);
     }
-
 }
