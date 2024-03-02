@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.Collections;
+import java.util.function.Consumer;
 
 /**
  * Instance of Instanbul consensus protocol
@@ -57,6 +58,9 @@ public class Instanbul {
 	// Consensus instance information per consensus instance
 	private Optional<InstanceInfo> instanceInfo;
 
+	// Callbacks to be called on deliver
+	private final List<Consumer<String>> observers = new ArrayList();
+
 	public Instanbul(ProcessConfig config, int lambda) {
 		this.lambda = lambda;
 		this.config = config;
@@ -69,6 +73,16 @@ public class Instanbul {
 		this.instanceInfo = Optional.empty();
 		this.prepareMessages = new MessageBucket(config.getN());
 		this.commitMessages = new MessageBucket(config.getN());
+	}
+
+	/**
+	 * Add callback to be called on deliver
+	 *
+	 * @param observer A function that takes a single argument and returns void
+	 * to be called when the instance delivers
+	 */
+	public void registerObserver(Consumer<String> observer) {
+		observers.add(observer);	
 	}
 
 	/**
@@ -353,7 +367,9 @@ public class Instanbul {
 	// TODO (dsa): add stuff for round change
 
 	public void decide(String value) {
-		// TODO (dsa): call upwards
+		for (Consumer obs: observers) {
+			obs.accept(value);
+		}
 	}
 
 	// TODO (dsa): factor out to schedule class (to test with different
