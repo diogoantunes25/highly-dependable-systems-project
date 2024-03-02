@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.communication;
+package pt.ulisboa.tecnico.hdsledger.consensus.message;
 
 import java.io.Serializable;
 
@@ -6,8 +6,10 @@ public class Message implements Serializable {
 
     // Sender identifier
     private String senderId;
+
     // Message identifier
     private int messageId;
+
     // Message type
     private Type type;
 

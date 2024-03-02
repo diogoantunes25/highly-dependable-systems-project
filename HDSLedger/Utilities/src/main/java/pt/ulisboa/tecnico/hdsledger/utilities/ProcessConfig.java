@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.utilities;
 public class ProcessConfig {
     public ProcessConfig() {}
 
+    // dsa: not sure why this is part of the process configuration
     private boolean isLeader;
 
     private String hostname;

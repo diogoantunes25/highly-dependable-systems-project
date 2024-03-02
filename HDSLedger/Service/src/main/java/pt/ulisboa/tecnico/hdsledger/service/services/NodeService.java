@@ -10,13 +10,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
-import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.PrePrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -100,7 +100,7 @@ public class NodeService implements UDPService {
      *
      * @param inputValue Value to value agreed upon
      */
-    public void startConsensus(String value) {
+    public synchronized void startConsensus(String value) {
 
         // Set initial consensus values
         int localConsensusInstance = this.consensusInstance.incrementAndGet();
@@ -115,6 +115,7 @@ public class NodeService implements UDPService {
 
         // Only start a consensus instance if the last one was decided
         // We need to be sure that the previous value has been decided
+        // (dsa: should this logic be here?)
         while (lastDecidedConsensusInstance.get() < localConsensusInstance - 1) {
             try {
                 Thread.sleep(1000);
@@ -141,7 +142,7 @@ public class NodeService implements UDPService {
      *
      * @param message Message to be handled
      */
-    public void uponPrePrepare(ConsensusMessage message) {
+    public synchronized void uponPrePrepare(ConsensusMessage message) {
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
@@ -348,40 +349,36 @@ public class NodeService implements UDPService {
                     while (true) {
                         Message message = link.receive();
 
-                        // Separate thread to handle each message
-                        new Thread(() -> {
+                        // If all upon rules are synchronized, there's no point
+                        // in creating a new thread to handle each message
+                        switch (message.getType()) {
 
-                            switch (message.getType()) {
-
-                                case PRE_PREPARE ->
-                                    uponPrePrepare((ConsensusMessage) message);
-
-
-                                case PREPARE ->
-                                    uponPrepare((ConsensusMessage) message);
+                            case PRE_PREPARE ->
+                                uponPrePrepare((ConsensusMessage) message);
 
 
-                                case COMMIT ->
-                                    uponCommit((ConsensusMessage) message);
+                            case PREPARE ->
+                                uponPrepare((ConsensusMessage) message);
 
 
-                                case ACK ->
-                                    LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",
-                                            config.getId(), message.getSenderId()));
+                            case COMMIT ->
+                                uponCommit((ConsensusMessage) message);
 
-                                case IGNORE ->
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received IGNORE message from {1}",
-                                                    config.getId(), message.getSenderId()));
 
-                                default ->
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received unknown message from {1}",
-                                                    config.getId(), message.getSenderId()));
+                            case ACK ->
+                                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",
+                                        config.getId(), message.getSenderId()));
 
-                            }
+                            case IGNORE ->
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} - Received IGNORE message from {1}",
+                                                config.getId(), message.getSenderId()));
 
-                        }).start();
+                            default ->
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} - Received unknown message from {1}",
+                                                config.getId(), message.getSenderId()));
+                        }
                     }
                 } catch (IOException | ClassNotFoundException e) {
                     e.printStackTrace();

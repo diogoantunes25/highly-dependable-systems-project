@@ -1,13 +1,13 @@
-package pt.ulisboa.tecnico.hdsledger.communication;
+package pt.ulisboa.tecnico.hdsledger.consensus.message;
 
 import com.google.gson.Gson;
 
-public class PrepareMessage {
+public class PrePrepareMessage {
     
     // Value
     private String value;
 
-    public PrepareMessage(String value) {
+    public PrePrepareMessage(String value) {
         this.value = value;
     }
 
