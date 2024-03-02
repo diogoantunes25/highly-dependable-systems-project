@@ -378,4 +378,11 @@ public class Instanbul {
 		int leader = (lambda + round) % config.getN();
 		return leader == id;
 	}
+
+	/**
+	 * Returns node id
+	 */
+	public int getId() {
+		return this.config.getId();
+	}
 }
