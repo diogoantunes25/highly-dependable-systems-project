@@ -22,13 +22,13 @@ public class Node {
 
         try {
             // Command line arguments
-            String id = args[0];
+            int id = Integer.valueOf(args[0]);
             nodesConfigPath += args[1];
 
             // Create configuration instances
             ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
             ProcessConfig leaderConfig = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findAny().get();
-            ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId().equals(id)).findAny().get();
+            ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId() == id).findAny().get();
 
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}",
                     nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(),

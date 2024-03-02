@@ -16,9 +16,9 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.consensus.InstanceInfo;
+import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
-import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
@@ -78,8 +78,8 @@ public class NodeService implements UDPService {
         return this.ledger;
     }
 
-    private boolean isLeader(String id) {
-        return this.leaderConfig.getId().equals(id);
+    private boolean isLeader(int id) {
+        return this.leaderConfig.getId() == id;
     }
  
     public ConsensusMessage createConsensusMessage(String value, int instance, int round) {
@@ -147,7 +147,7 @@ public class NodeService implements UDPService {
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
-        String senderId = message.getSenderId();
+        int senderId = message.getSenderId();
         int senderMessageId = message.getMessageId();
 
         PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
@@ -160,8 +160,9 @@ public class NodeService implements UDPService {
                         config.getId(), senderId, consensusInstance, round));
 
         // Verify if pre-prepare was sent by leader
-        if (!isLeader(senderId))
+        if (!isLeader(senderId)) {
             return;
+        }
 
         // Set instance value
         // TODO (dsa): why is input value set to the leader proposed value?
@@ -201,7 +202,7 @@ public class NodeService implements UDPService {
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
-        String senderId = message.getSenderId();
+        int senderId = message.getSenderId();
 
         PrepareMessage prepareMessage = message.deserializePrepareMessage();
 
