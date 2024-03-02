@@ -1,5 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.service.models;
-
+package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
 

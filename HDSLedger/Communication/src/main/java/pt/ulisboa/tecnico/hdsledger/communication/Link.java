@@ -38,7 +38,7 @@ public interface Link {
      *
      * @param data The message to be sent
      */
-    public void send(String nodeId, Message data);
+    public void send(int nodeId, Message data);
 
     /*
      * Sends a message to a specific node without guarantee of delivery

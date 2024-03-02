@@ -6,7 +6,7 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 public class ConsensusMessageBuilder {
     private final ConsensusMessage instance;
 
-    public ConsensusMessageBuilder(String sender, Message.Type type) {
+    public ConsensusMessageBuilder(int sender, Message.Type type) {
         instance = new ConsensusMessage(sender, type);
     }
 
@@ -25,13 +25,18 @@ public class ConsensusMessageBuilder {
         return this;
    }
 
-   public ConsensusMessageBuilder setReplyTo(String replyTo) {
+   public ConsensusMessageBuilder setReplyTo(int replyTo) {
         instance.setReplyTo(replyTo);
         return this;
    }
 
     public ConsensusMessageBuilder setReplyToMessageId(int replyToMessageId) {
         instance.setReplyToMessageId(replyToMessageId);
+        return this;
+    }
+
+    public ConsensusMessageBuilder setReceiver(int receiver) {
+        instance.setReceiver(receiver);
         return this;
     }
 

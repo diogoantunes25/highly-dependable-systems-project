@@ -51,6 +51,7 @@ public class NodeService implements UDPService {
     private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
 
     // Ledger (for now, just a list of strings)
+    // TODO (dsa): factor out to a state class
     private ArrayList<String> ledger = new ArrayList<String>();
 
     public NodeService(Link link, ProcessConfig config,
@@ -163,12 +164,14 @@ public class NodeService implements UDPService {
             return;
 
         // Set instance value
+        // TODO (dsa): why is input value set to the leader proposed value?
         this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
         receivedPrePrepare.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
         if (receivedPrePrepare.get(consensusInstance).put(round, true) != null) {
+            // TODO (dsa): why isn't it just dropped? (aren't link reliable...)
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                             "{0} - Already received PRE-PREPARE message for Consensus Instance {1}, Round {2}, "

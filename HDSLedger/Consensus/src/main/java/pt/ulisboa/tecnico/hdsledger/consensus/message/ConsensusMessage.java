@@ -9,13 +9,13 @@ public class ConsensusMessage extends Message {
     // Round
     private int round;
     // Who sent the previous message
-    private String replyTo;
+    private int replyTo;
     // Id of the previous message
     private int replyToMessageId;
     // Message (PREPREPARE, PREPARE, COMMIT)
     private String message;
 
-    public ConsensusMessage(String senderId, Type type) {
+    public ConsensusMessage(int senderId, Type type) {
         super(senderId, type);
     }
 
@@ -55,11 +55,11 @@ public class ConsensusMessage extends Message {
         this.round = round;
     }
 
-    public String getReplyTo() {
+    public int getReplyTo() {
         return replyTo;
     }
 
-    public void setReplyTo(String replyTo) {
+    public void setReplyTo(int replyTo) {
         this.replyTo = replyTo;
     }
 

@@ -8,9 +8,11 @@ public class ProcessConfig {
 
     private String hostname;
 
-    private String id;
+    private int id;
 
     private int port;
+
+    private int N;
 
     public boolean isLeader() {
         return isLeader;
@@ -20,7 +22,7 @@ public class ProcessConfig {
         return port;
     }
 
-    public String getId() {
+    public int getId() {
         return id;
     }
 
@@ -28,5 +30,7 @@ public class ProcessConfig {
         return hostname;
     }
 
-
+    public int getN() {
+        return N;
+    }
 }
