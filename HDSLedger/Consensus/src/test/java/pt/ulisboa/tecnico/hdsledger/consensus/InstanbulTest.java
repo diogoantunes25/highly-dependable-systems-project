@@ -32,6 +32,25 @@ public class InstanbulTest {
 		).collect(Collectors.toList());
 	}
 
+	private List<Instanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda) {
+
+		List<ProcessConfig> configs = defaultConfigs(n);
+		List<Instanbul> instances = configs.stream()
+			.map(config -> {
+				// Create instance
+				Instanbul i = new Instanbul(config, lambda);
+
+				// Register callback for deliver
+				int id = config.getId();
+				List<String> delivered = new ArrayList<>();
+				confirmed.put(id, delivered);
+				i.registerObserver(s -> delivered.add(s));
+
+				return i;
+			}).collect(Collectors.toList());
+
+		return instances;
+	}
 	/**
 	 * Checks that every list in the map provided has a unique string, which
 	 * is the same across all lists
@@ -67,31 +86,20 @@ public class InstanbulTest {
 		int lambda = 0;
 		String value = "a";
 
+		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		List<ProcessConfig> configs = defaultConfigs(n);
-		List<Instanbul> instances = configs.stream()
-			.map(config -> {
-				// Create instance
-				Instanbul i = new Instanbul(config, lambda);
-
-				// Register callback for deliver
-				int id = config.getId();
-				List<String> delivered = new ArrayList<>();
-				confirmed.put(id, delivered);
-				i.registerObserver(s -> delivered.add(s));
-
-				return i;
-			}).collect(Collectors.toList());
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
 
 		// Backlog of messages
 		Deque<ConsensusMessage> messages = new LinkedList();
 
+		// Start every replica
 		instances.forEach(instance -> {
-			// Start every replica
 			List<ConsensusMessage> output = instance.start(value);
 
-			// Add all messages to be processed
+			// Store all messages to be processed
 			output.forEach(m -> messages.addLast(m));
 		});
 
@@ -120,31 +128,20 @@ public class InstanbulTest {
 		int lambda = 0;
 		String value = "a";
 
+		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		List<ProcessConfig> configs = defaultConfigs(n);
-		List<Instanbul> instances = configs.stream()
-			.map(config -> {
-				// Create instance
-				Instanbul i = new Instanbul(config, lambda);
-
-				// Register callback for deliver
-				int id = config.getId();
-				List<String> delivered = new ArrayList<>();
-				confirmed.put(id, delivered);
-				i.registerObserver(s -> delivered.add(s));
-
-				return i;
-			}).collect(Collectors.toList());
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
 
 		// Backlog of messages
 		Deque<ConsensusMessage> messages = new LinkedList();
 
+		// Start every replica
 		instances.forEach(instance -> {
-			// Start every replica
 			List<ConsensusMessage> output = instance.start(value);
 
-			// Add all messages to be processed
+			// Store all messages to be processed
 			output.forEach(m -> messages.addLast(m));
 		});
 
@@ -163,5 +160,4 @@ public class InstanbulTest {
 		// Check that everyone delivered the same and once only
 		checkConfirmed(confirmed);	
 	}
-
 }
