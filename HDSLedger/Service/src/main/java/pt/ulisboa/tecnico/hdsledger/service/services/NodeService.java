@@ -4,11 +4,13 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
+import java.util.function.Consumer;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
@@ -18,6 +20,7 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.consensus.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
+import pt.ulisboa.tecnico.hdsledger.consensus.Instanbul;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -25,27 +28,17 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
+
     // Nodes configurations
     private final ProcessConfig[] nodesConfig;
 
-    // Current node is leader
+    // FIXME (dsa): my config ?
     private final ProcessConfig config;
-    // Leader configuration
-    private final ProcessConfig leaderConfig;
-
+    
     // Link to communicate with nodes
     private final Link link;
 
-    // Consensus instance -> Round -> List of prepare messages
-    private final MessageBucket prepareMessages;
-    // Consensus instance -> Round -> List of commit messages
-    private final MessageBucket commitMessages;
-
-    // Store if already received pre-prepare for a given <consensus, round>
-    private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
-    // Consensus instance information per consensus instance
-    private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
-    // Current consensus instance
+    // Current consensus instance (i.e. latest consensus instance I've inputed to)
     private final AtomicInteger consensusInstance = new AtomicInteger(0);
     // Last decided consensus instance
     private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
@@ -54,16 +47,22 @@ public class NodeService implements UDPService {
     // TODO (dsa): factor out to a state class
     private ArrayList<String> ledger = new ArrayList<String>();
 
-    public NodeService(Link link, ProcessConfig config,
-            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig) {
+    // We'll allow multiple instances to run in parallel if needed, so this
+    // map needs to be thread-safe
+    // Maps: lambda -> instance
+    private Map<Integer, Instanbul> instances = new ConcurrentHashMap<>();
 
+    // Stores input values for each instance that start/is planned to start
+    private Map<Integer, String> inputs = new ConcurrentHashMap<>();
+
+    // Stores decided values for each instance that ended
+    // private Map<Integer, String> decisions = new ConcurrentHashMap<>();
+
+    public NodeService(Link link, ProcessConfig config,
+            ProcessConfig[] nodesConfig) {
         this.link = link;
         this.config = config;
-        this.leaderConfig = leaderConfig;
         this.nodesConfig = nodesConfig;
-
-        this.prepareMessages = new MessageBucket(nodesConfig.length);
-        this.commitMessages = new MessageBucket(nodesConfig.length);
     }
 
     public ProcessConfig getConfig() {
@@ -78,270 +77,110 @@ public class NodeService implements UDPService {
         return this.ledger;
     }
 
-    private boolean isLeader(int id) {
-        return this.leaderConfig.getId() == id;
+    /**
+     * Returns instance with id lambda and creates one if it doesn't exist
+     */
+    private Instanbul getInstance(int lambda) {
+        return instances.computeIfAbsent(lambda, l -> {
+            Instanbul instance = new Instanbul(this.config, l);
+            Consumer<String> observer = s -> {
+                decided(l, s);
+            };
+    
+            instance.registerObserver(observer);
+            return instance;
+        });
     }
- 
-    public ConsensusMessage createConsensusMessage(String value, int instance, int round) {
-        PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
 
-        ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PRE_PREPARE)
-                .setConsensusInstance(instance)
-                .setRound(round)
-                .setMessage(prePrepareMessage.toJson())
-                .build();
 
-        return consensusMessage;
+    /*
+     * Tries to start instance with id lambda.
+     *
+     * @param lambda
+     */
+    public synchronized void tryStartConsensus(int lambda) {
+        // TODO (dsa): lock on a per instance basis
+        Instanbul instance = getInstance(lambda);
+        String value = inputs.get(lambda);
+
+        // No input has been provided for this instance yet
+        if (value == null) {
+            return;
+        }
+
+        // If previous ended or it's the first, start the instance
+        // We need to be sure that the previous value has been decided
+        if (lastDecidedConsensusInstance.get() < lambda - 1) {
+            return;
+        }
+
+        // Input into state machine
+        List<ConsensusMessage> output = instance.start(value);
+
+        // Dispatch messages
+        output.forEach(m -> link.send(m.getReceiver(), m));
     }
 
     /*
      * Start an instance of consensus for a value
-     * Only the current leader will start a consensus instance
-     * the remaining nodes only update values.
-     *
-     * @param inputValue Value to value agreed upon
+     * @param inputValue
      */
     public synchronized void startConsensus(String value) {
+        // TODO: synchronize on a per instance basis
 
         // Set initial consensus values
-        int localConsensusInstance = this.consensusInstance.incrementAndGet();
-        InstanceInfo existingConsensus = this.instanceInfo.put(localConsensusInstance, new InstanceInfo(value));
-
-        // If startConsensus was already called for a given round
-        if (existingConsensus != null) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
-                    config.getId(), localConsensusInstance));
-            return;
-        }
-
-        // Only start a consensus instance if the last one was decided
-        // We need to be sure that the previous value has been decided
-        // (dsa: should this logic be here?)
-        while (lastDecidedConsensusInstance.get() < localConsensusInstance - 1) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        // Leader broadcasts PRE-PREPARE message
-        if (this.config.isLeader()) {
-            InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
-            LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
-            this.link.broadcast(this.createConsensusMessage(value, localConsensusInstance, instance.getCurrentRound()));
-        } else {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
-        }
+        int smallestNotInputted = this.consensusInstance.incrementAndGet();
+        inputs.put(smallestNotInputted, value);
+        tryStartConsensus(smallestNotInputted);
     }
 
-    /*
-     * Handle pre prepare messages and if the message
-     * came from leader and is justified them broadcast prepare
-     *
-     * @param message Message to be handled
+    /**
+     * Handle consensus message 
+     * @param message Consensus message
      */
-    public synchronized void uponPrePrepare(ConsensusMessage message) {
+    public synchronized void handleMessage(ConsensusMessage message) {
+        // TODO: synchronize in a per instance basis
 
-        int consensusInstance = message.getConsensusInstance();
-        int round = message.getRound();
-        int senderId = message.getSenderId();
-        int senderMessageId = message.getMessageId();
+        int lambda = message.getConsensusInstance();
+        Instanbul instance = getInstance(lambda);
 
-        PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
+        // Input into state machine
+        List<ConsensusMessage> output = instance.handleMessage(message); 
 
-        String value = prePrepareMessage.getValue();
+        // Dispatch messages
+        output.forEach(m -> link.send(m.getReceiver(), m));
+    }
 
+    /**
+     * Handle decidion for instance lambda
+     */
+    private void decided(int lambda, String value) {
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
-                        "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}",
-                        config.getId(), senderId, consensusInstance, round));
+                        "{0} - Decided on Consensus Instance {1} with value {2}",
+                        config.getId(), lambda, value));
 
-        // Verify if pre-prepare was sent by leader
-        if (!isLeader(senderId)) {
-            return;
-        }
+        // Append value to the ledger (must be synchronized to be thread-safe)
+        synchronized(ledger) {
 
-        // Set instance value
-        // TODO (dsa): why is input value set to the leader proposed value?
-        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
-
-        // Within an instance of the algorithm, each upon rule is triggered at most once
-        // for any round r
-        receivedPrePrepare.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
-        if (receivedPrePrepare.get(consensusInstance).put(round, true) != null) {
-            // TODO (dsa): why isn't it just dropped? (aren't link reliable...)
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Already received PRE-PREPARE message for Consensus Instance {1}, Round {2}, "
-                                    + "replying again to make sure it reaches the initial sender",
-                            config.getId(), consensusInstance, round));
-        }
-
-        PrepareMessage prepareMessage = new PrepareMessage(prePrepareMessage.getValue());
-
-        ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PREPARE)
-                .setConsensusInstance(consensusInstance)
-                .setRound(round)
-                .setMessage(prepareMessage.toJson())
-                .setReplyTo(senderId)
-                .setReplyToMessageId(senderMessageId)
-                .build();
-
-        this.link.broadcast(consensusMessage);
-    }
-
-    /*
-     * Handle prepare messages and if there is a valid quorum broadcast commit
-     *
-     * @param message Message to be handled
-     */
-    public synchronized void uponPrepare(ConsensusMessage message) {
-
-        int consensusInstance = message.getConsensusInstance();
-        int round = message.getRound();
-        int senderId = message.getSenderId();
-
-        PrepareMessage prepareMessage = message.deserializePrepareMessage();
-
-        String value = prepareMessage.getValue();
-
-        LOGGER.log(Level.INFO,
-                MessageFormat.format(
-                        "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
-                        config.getId(), senderId, consensusInstance, round));
-
-        // Doesn't add duplicate messages
-        prepareMessages.addMessage(message);
-
-        // Set instance values
-        this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
-        InstanceInfo instance = this.instanceInfo.get(consensusInstance);
-
-        // Within an instance of the algorithm, each upon rule is triggered at most once
-        // for any round r
-        // Late prepare (consensus already ended for other nodes) only reply to him (as
-        // an ACK)
-        if (instance.getPreparedRound() >= round) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, "
-                                    + "replying again to make sure it reaches the initial sender",
-                            config.getId(), consensusInstance, round));
-
-            ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-                    .setConsensusInstance(consensusInstance)
-                    .setRound(round)
-                    .setReplyTo(senderId)
-                    .setReplyToMessageId(message.getMessageId())
-                    .setMessage(instance.getCommitMessage().toJson())
-                    .build();
-
-            link.send(senderId, m);
-            return;
-        }
-
-        // Find value with valid quorum
-        Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), consensusInstance, round);
-        if (preparedValue.isPresent() && instance.getPreparedRound() < round) {
-            instance.setPreparedValue(preparedValue.get());
-            instance.setPreparedRound(round);
-
-            // Must reply to prepare message senders
-            Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
-                    .values();
-
-            CommitMessage c = new CommitMessage(preparedValue.get());
-            instance.setCommitMessage(c);
-
-            sendersMessage.forEach(senderMessage -> {
-                ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-                        .setConsensusInstance(consensusInstance)
-                        .setRound(round)
-                        .setReplyTo(senderMessage.getSenderId())
-                        .setReplyToMessageId(senderMessage.getMessageId())
-                        .setMessage(c.toJson())
-                        .build();
-
-                link.send(senderMessage.getSenderId(), m);
-            });
-        }
-    }
-
-
-
-    /*
-     * Handle commit messages and decide if there is a valid quorum
-     *
-     * @param message Message to be handled
-     */
-    public synchronized void uponCommit(ConsensusMessage message) {
-
-        int consensusInstance = message.getConsensusInstance();
-        int round = message.getRound();
-
-        LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}",
-                        config.getId(), message.getSenderId(), consensusInstance, round));
-
-        commitMessages.addMessage(message);
-
-        InstanceInfo instance = this.instanceInfo.get(consensusInstance);
-
-        if (instance == null) {
-            // Should never happen because only receives commit as a response to a prepare message
-            MessageFormat.format(
-                    "{0} - CRITICAL: Received COMMIT message from {1}: Consensus Instance {2}, Round {3} BUT NO INSTANCE INFO",
-                    config.getId(), message.getSenderId(), consensusInstance, round);
-            return;
-        }
-
-        // Within an instance of the algorithm, each upon rule is triggered at most once
-        // for any round r
-        if (instance.getCommittedRound() >= round) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
-                            config.getId(), consensusInstance, round));
-            return;
-        }
-
-        Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
-                consensusInstance, round);
-
-        if (commitValue.isPresent() && instance.getCommittedRound() < round) {
-
-            instance = this.instanceInfo.get(consensusInstance);
-            instance.setCommittedRound(round);
-
-            String value = commitValue.get();
-
-            // Append value to the ledger (must be synchronized to be thread-safe)
-            synchronized(ledger) {
-
-                // Increment size of ledger to accommodate current instance
-                ledger.ensureCapacity(consensusInstance);
-                while (ledger.size() < consensusInstance - 1) {
-                    ledger.add("");
-                }
-                
-                ledger.add(consensusInstance - 1, value);
-                
-                LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Current Ledger: {1}",
-                            config.getId(), String.join("", ledger)));
+            // Increment size of ledger to accommodate current instance
+            ledger.ensureCapacity(lambda);
+            while (ledger.size() < lambda - 1) {
+                ledger.add("");
             }
 
-            lastDecidedConsensusInstance.getAndIncrement();
+            ledger.add(lambda - 1, value);
 
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
-                            "{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
-                            config.getId(), consensusInstance, round, true));
+                        "{0} - Current Ledger: {1}",
+                        config.getId(), String.join("", ledger)));
         }
+
+        lastDecidedConsensusInstance.incrementAndGet();
+        
+        // Try to start next round
+        tryStartConsensus(lambda+1);
     }
 
     @Override
@@ -357,17 +196,8 @@ public class NodeService implements UDPService {
                         // in creating a new thread to handle each message
                         switch (message.getType()) {
 
-                            case PRE_PREPARE ->
-                                uponPrePrepare((ConsensusMessage) message);
-
-
-                            case PREPARE ->
-                                uponPrepare((ConsensusMessage) message);
-
-
-                            case COMMIT ->
-                                uponCommit((ConsensusMessage) message);
-
+                            case PRE_PREPARE, PREPARE, COMMIT ->
+                                handleMessage((ConsensusMessage) message);
 
                             case ACK ->
                                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",

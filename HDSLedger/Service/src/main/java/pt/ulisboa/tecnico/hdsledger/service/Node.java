@@ -39,8 +39,7 @@ public class Node {
                     ConsensusMessage.class);
 
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(linkToNodes, nodeConfig, leaderConfig,
-                    nodeConfigs);
+            NodeService nodeService = new NodeService(linkToNodes, nodeConfig, nodeConfigs);
 
             nodeService.listen();
 

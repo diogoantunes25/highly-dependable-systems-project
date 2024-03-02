@@ -21,9 +21,7 @@ import java.util.function.Consumer;
 
 /**
  * Instance of Instanbul consensus protocol
- *
- * TODO (dsa): - add assumptions on atomicity
- *			   - for now it's assumed that no concurrency exists	
+ * It's assumed that a single thread executes an instance at each moment. 
  */
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
@@ -60,6 +58,9 @@ public class Instanbul {
 
 	// Callbacks to be called on deliver
 	private final List<Consumer<String>> observers = new ArrayList();
+
+	// Wheter start was called already
+	private boolean started = false;
 
 	public Instanbul(ProcessConfig config, int lambda) {
 		this.lambda = lambda;
@@ -127,6 +128,14 @@ public class Instanbul {
 	 * @param inputValue Value to value agreed upon
 	 */
 	public List<ConsensusMessage> start(String inputValue) {
+		if (started) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
+                    config.getId(), this.lambda));
+			return new ArrayList<>();
+		} else {
+			started = true;
+		}
+
 		if (!this.instanceInfo.isPresent()) {
 			this.instanceInfo = Optional.of(new InstanceInfo(inputValue));	
 		}
@@ -384,5 +393,12 @@ public class Instanbul {
 	 */
 	public int getId() {
 		return this.config.getId();
+	}
+
+	/**
+	 * Returns whether input was already called
+	 */
+	public boolean hasStarted() {
+		return started;
 	}
 }
