@@ -316,4 +316,51 @@ public class InstanbulTest {
 		// Check that everyone delivered the same and once only
 		checkConfirmed(confirmed); // ignore output value for simplicity
 	}
+
+	/**
+	 * Runs an instance of consensus with 4 nodes where one node that is not
+	 * the first leader crashes
+	 */
+	@Test
+	public void nonLeaderCrashesN4() {
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new LinkedList();
+
+		// Start every replica
+		instances.forEach(instance -> {
+			String value = String.format("a%d", instance.getId());
+			List<ConsensusMessage> output = instance.start(value);
+
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Last node crashes
+		while (messages.size() > 0) {
+			ConsensusMessage message = messages.pollFirst();	
+	 		if (message == null) {
+				throw new RuntimeException("ERROR: null message found");
+			}
+
+			int receiver = message.getReceiver();
+			if (receiver == n-1) continue;
+			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+			output.forEach(m -> messages.addLast(m));
+		}
+
+		// Crashed node is node expected to output anything
+		confirmed.remove(n-1);
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
 }
