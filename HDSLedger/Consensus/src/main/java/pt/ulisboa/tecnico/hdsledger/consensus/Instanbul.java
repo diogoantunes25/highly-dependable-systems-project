@@ -74,7 +74,7 @@ public class Instanbul {
 	/**
 	 * Utility to create PrePrepareMessages
 	 */
-	public ConsensusMessage createPrePrepareMessage(String value, int instance, int round, int receiver) {
+	private ConsensusMessage createPrePrepareMessage(String value, int instance, int round, int receiver) {
 		PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
 
 		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PRE_PREPARE)
@@ -90,7 +90,7 @@ public class Instanbul {
 	/**
 	 * Utility to create PrepareMessages
 	 */
-	public ConsensusMessage createPrepareMessage(PrePrepareMessage prePrepareMessage, String value, int instance, int round, int receiver, int senderId, int senderMessageId) {
+	private ConsensusMessage createPrepareMessage(PrePrepareMessage prePrepareMessage, String value, int instance, int round, int receiver, int senderId, int senderMessageId) {
 		PrepareMessage prepareMessage = new PrepareMessage(prePrepareMessage.getValue());
 
 		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PREPARE)
@@ -112,7 +112,7 @@ public class Instanbul {
 	 *
 	 * @param inputValue Value to value agreed upon
 	 */
-	public List<Message> start(String inputValue) {
+	public List<ConsensusMessage> start(String inputValue) {
 		if (!this.instanceInfo.isPresent()) {
 			this.instanceInfo = Optional.of(new InstanceInfo(inputValue));	
 		}
@@ -140,7 +140,7 @@ public class Instanbul {
 	 *
 	 * @param message Message to be handled
 	 */
-	public List<Message> prePrepare(ConsensusMessage message) {
+	private List<ConsensusMessage> prePrepare(ConsensusMessage message) {
 
 		// TODO (dsa): horrible, refactor message structure
 		
@@ -188,7 +188,7 @@ public class Instanbul {
 	 *
 	 * @param message Message to be handled
 	 */
-	public List<Message> prepare(ConsensusMessage message) {
+	private List<ConsensusMessage> prepare(ConsensusMessage message) {
 
 
 		int round = message.getRound();
@@ -254,7 +254,7 @@ public class Instanbul {
 			instanceInfo.get().setCommitMessage(c);
 
 
-			List<Message> output = new ArrayList<>();
+			List<ConsensusMessage> output = new ArrayList<>();
 			sendersMessage.forEach(senderMessage -> {
 					output.add(
 						new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
@@ -278,7 +278,7 @@ public class Instanbul {
 	 *
 	 * @param message Message to be handled
 	 */
-	public List<Message> commit(ConsensusMessage message) {
+	private List<ConsensusMessage> commit(ConsensusMessage message) {
 
 		int round = message.getRound();
 
@@ -327,6 +327,28 @@ public class Instanbul {
 
 		return new ArrayList<>();
 	}
+
+	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+		return switch (message.getType()) {
+			case PRE_PREPARE ->
+				prePrepare((ConsensusMessage) message);
+
+			case PREPARE ->
+				prepare((ConsensusMessage) message);
+
+			case COMMIT ->
+				commit((ConsensusMessage) message);
+
+			default -> {
+				LOGGER.log(Level.INFO,
+						MessageFormat.format("{0} - Received unknown message from {1}",
+							config.getId(), message.getSenderId()));
+
+				yield new ArrayList<>();
+			}
+		};
+	}
+
 
 	// TODO (dsa): add stuff for round change
 
