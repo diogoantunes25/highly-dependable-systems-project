@@ -1,8 +1,17 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.*;
+import pt.ulisboa.tecnico.hdsledger.library.Library;
+
 import java.util.Scanner;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 
 public class Client {
+
+    private static String nodesConfigPath = "../Service/src/main/resources/";
+    private static String clientsConfigPath = "src/main/resources/";
 
     private static void printUsage() {
         System.out.println("Available commands:");
@@ -11,13 +20,36 @@ public class Client {
     }
 
     public static void main(String[] args) {
+
+        final String clientId = args[0];
+        nodesConfigPath += args[1];
+        clientsConfigPath += args[2];
+        boolean showDebugLogs = false;
+        if (args.length == 4) {
+            showDebugLogs = args[3].equals("-debug");
+        }
+
+        // Get all configs
+        ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
+        ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
+
+        // Get the client config
+        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(clientId))
+                .findFirst();
+        if (clientConfig.isEmpty()) {
+            throw new HDSSException(ErrorMessage.ConfigFileNotFound);
+        }
+        ProcessConfig config = clientConfig.get();
+
         System.out.println("Welcome to HDSLedger Client!");
         printUsage();
         final Scanner scanner = new Scanner(System.in);
 
-        String clientId = "19"; // Hardcoded for now, then read from config
         String line = "";
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
+
+        Library library = new Library(config, nodeConfigs, clientConfigs, showDebugLogs);
+        library.listen();
 
         while (true) {
             System.out.flush();
@@ -30,6 +62,8 @@ public class Client {
                 case "append":
                     String string = tokens[1];
                     System.out.println("Appending <" + string + ">...");
+                    List<String> blockchain = library.append(string);
+                    library.printBlockchain(blockchain);
                     break;
                 case "exit":
                     System.out.println("Exiting...");
