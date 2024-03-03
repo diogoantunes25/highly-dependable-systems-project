@@ -11,7 +11,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.function.Consumer;
-import java.util.function.BiConsumer;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -27,6 +26,7 @@ import pt.ulisboa.tecnico.hdsledger.consensus.Instanbul;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.service.Slot;
 
 public class NodeService implements UDPService {
 
@@ -59,7 +59,7 @@ public class NodeService implements UDPService {
     private Map<Integer, String> inputs = new ConcurrentHashMap<>();
 
     // Callback to call when a new input is finalized by consensus
-    private Queue<BiConsumer<Integer, String>> observers = new ConcurrentLinkedQueue<>();
+    private Queue<Consumer<Slot>> observers = new ConcurrentLinkedQueue<>();
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig) {
@@ -190,7 +190,7 @@ public class NodeService implements UDPService {
      * Registers observer for confirmation of finalization of inputted values
      * @param observer Callback function
      */
-    public void registerObserver(BiConsumer<Integer, String> observer) {
+    public void registerObserver(Consumer<Slot> observer) {
         this.observers.add(observer);
     }
 
