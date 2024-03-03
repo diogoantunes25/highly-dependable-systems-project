@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
+
 public class AppendRequest extends Message {
     
     // Value to append
@@ -8,7 +10,7 @@ public class AppendRequest extends Message {
     //nonce
     private Integer nonce;
 
-    public AppendRequest(String senderId, Type type, String value, Integer nonce) {
+    public AppendRequest(int senderId, Type type, String value, Integer nonce) {
         super(senderId, type);
         this.value = value;
         this.nonce = nonce;

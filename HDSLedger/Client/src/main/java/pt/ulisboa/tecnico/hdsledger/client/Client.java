@@ -21,7 +21,7 @@ public class Client {
 
     public static void main(String[] args) {
 
-        final String clientId = args[0];
+        final int clientId = Integer.parseInt(args[0]);
         nodesConfigPath += args[1];
         clientsConfigPath += args[2];
         boolean showDebugLogs = false;
@@ -34,7 +34,7 @@ public class Client {
         ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
 
         // Get the client config
-        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(clientId))
+        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId() == clientId)
                 .findFirst();
         if (clientConfig.isEmpty()) {
             throw new HDSSException(ErrorMessage.ConfigFileNotFound);
