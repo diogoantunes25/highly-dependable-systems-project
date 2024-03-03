@@ -15,7 +15,7 @@
         <module>Utilities</module>
         <module>Communication</module>
         <module>Client</module>
-        <module>Library</module>
+        <module>ClientLibrary</module>
     </modules>
 
     <dependencies>

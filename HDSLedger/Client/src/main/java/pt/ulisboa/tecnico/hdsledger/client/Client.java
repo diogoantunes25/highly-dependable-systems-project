@@ -1,7 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
-import pt.ulisboa.tecnico.hdsledger.library.Library;
+import pt.ulisboa.tecnico.hdsledger.clientLibrary.ClientStub;
 
 import java.util.Scanner;
 import java.util.Arrays;
@@ -48,8 +48,8 @@ public class Client {
         String line = "";
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
 
-        Library library = new Library(config, nodeConfigs, clientConfigs, showDebugLogs);
-        library.listen();
+        ClientStub stub = new ClientStub(config, nodeConfigs, clientConfigs, showDebugLogs);
+        stub.listen();
 
         while (true) {
             System.out.flush();
@@ -62,8 +62,8 @@ public class Client {
                 case "append":
                     String string = tokens[1];
                     System.out.println("Appending <" + string + ">...");
-                    List<String> blockchain = library.append(string);
-                    library.printBlockchain(blockchain);
+                    List<String> blockchain = stub.append(string);
+                    stub.printBlockchain(blockchain);
                     break;
                 case "exit":
                     System.out.println("Exiting...");
