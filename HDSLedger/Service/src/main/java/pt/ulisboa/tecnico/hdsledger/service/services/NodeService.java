@@ -55,9 +55,6 @@ public class NodeService implements UDPService {
     // Stores input values for each instance that start/is planned to start
     private Map<Integer, String> inputs = new ConcurrentHashMap<>();
 
-    // Stores decided values for each instance that ended
-    // private Map<Integer, String> decisions = new ConcurrentHashMap<>();
-
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig) {
         this.link = link;
