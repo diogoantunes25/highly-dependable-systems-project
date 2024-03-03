@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.library;
+package pt.ulisboa.tecnico.hdsledger.clientLibrary;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class Library {
+public class ClientStub {
     // Client identifier (self)
     private final ProcessConfig config;
     // Link to communicate with nodes
@@ -19,7 +19,7 @@ public class Library {
     // Current request ID
     private AtomicInteger requestId = new AtomicInteger(0);
 
-    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs,
+    public ClientStub(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs,
                    boolean activateLogs) throws HDSSException {
         this.config = clientConfig;
 
@@ -82,5 +82,4 @@ public class Library {
             e.printStackTrace();
         }
     }
-
 }
