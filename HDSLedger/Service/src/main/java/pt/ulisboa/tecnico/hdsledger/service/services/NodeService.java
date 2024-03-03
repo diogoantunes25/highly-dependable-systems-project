@@ -11,6 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
@@ -55,6 +58,9 @@ public class NodeService implements UDPService {
     // Stores input values for each instance that start/is planned to start
     private Map<Integer, String> inputs = new ConcurrentHashMap<>();
 
+    // Stores input values for each instance that start/is planned to start
+    private Queue<BiConsumer<Integer, String>> observers = new ConcurrentLinkedQueue<>();
+
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig) {
         this.link = link;
@@ -95,7 +101,7 @@ public class NodeService implements UDPService {
      *
      * @param lambda
      */
-    public synchronized void tryStartConsensus(int lambda) {
+    private synchronized void tryStartConsensus(int lambda) {
         // TODO (dsa): lock on a per instance basis
         Instanbul instance = getInstance(lambda);
         String value = inputs.get(lambda);
@@ -122,7 +128,7 @@ public class NodeService implements UDPService {
      * Start an instance of consensus for a value
      * @param inputValue
      */
-    public synchronized void startConsensus(String value) {
+    public synchronized void startConsensus(String nonce, String value) {
         // TODO: synchronize on a per instance basis
 
         // Set initial consensus values
@@ -135,7 +141,7 @@ public class NodeService implements UDPService {
      * Handle consensus message 
      * @param message Consensus message
      */
-    public synchronized void handleMessage(ConsensusMessage message) {
+    private synchronized void handleMessage(ConsensusMessage message) {
         // TODO: synchronize in a per instance basis
 
         int lambda = message.getConsensusInstance();
@@ -178,6 +184,14 @@ public class NodeService implements UDPService {
         
         // Try to start next round
         tryStartConsensus(lambda+1);
+    }
+
+    /**
+     * Registers observer for confirmation of finalization of inputted values
+     * @param observer Callback function
+     */
+    public void registerObserver(BiConsumer<Integer, String> observer) {
+        this.observers.add(observer);
     }
 
     @Override
