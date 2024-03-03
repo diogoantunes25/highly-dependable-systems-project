@@ -15,7 +15,7 @@ public class RSAKeyGenerator {
 
         // check args
         if (args.length != 3) {
-            System.err.println("Usage: RSAKeyGenerator [r|w] <priv-key-file> <pub-key-file>");
+            // System.err.println("Usage: RSAKeyGenerator [r|w] <priv-key-file> <pub-key-file>");
             return;
         }
 
@@ -24,50 +24,50 @@ public class RSAKeyGenerator {
         final String pubkeyPath = args[2];
 
         if (mode.toLowerCase().startsWith("w")) {
-            System.out.println("Generate and save keys");
+            // System.out.println("Generate and save keys");
             write(privkeyPath, pubkeyPath);
         } else {
-            System.out.println("Load keys");
+            // System.out.println("Load keys");
             read(privkeyPath, "priv");
             read(pubkeyPath, "pub");
         }
 
-        System.out.println("Done.");
+        // System.out.println("Done.");
     }
 
     public static void write(String privKeyPath, String pubKeyPath) throws GeneralSecurityException, IOException {
         // get an RSA private key
-        System.out.println("Generating RSA key ..." );
+        // System.out.println("Generating RSA key ..." );
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
         keyGen.initialize(4096);
         KeyPair keys = keyGen.generateKeyPair();
-        System.out.println("Finish generating RSA keys");
+        // System.out.println("Finish generating RSA keys");
 
-        System.out.println("Private Key:");
+        // System.out.println("Private Key:");
         PrivateKey privKey = keys.getPrivate();
         byte[] privKeyEncoded = privKey.getEncoded();
-        System.out.println("Encoded type '" + privKey.getFormat() + "' ..." );
+        // System.out.println("Encoded type '" + privKey.getFormat() + "' ..." );
 
-        System.out.println(DataUtils.bytesToHex(privKeyEncoded));
-        System.out.println("Public Key:");
+        // System.out.println(DataUtils.bytesToHex(privKeyEncoded));
+        // System.out.println("Public Key:");
         PublicKey pubKey = keys.getPublic();
         byte[] pubKeyEncoded = pubKey.getEncoded();
-        System.out.println("Encoded type '" + pubKey.getFormat() + "' ..." );
+        // System.out.println("Encoded type '" + pubKey.getFormat() + "' ..." );
 
-        System.out.println(DataUtils.bytesToHex(pubKeyEncoded));
+        // System.out.println(DataUtils.bytesToHex(pubKeyEncoded));
 
-        System.out.println("Writing Private key to '" + privKeyPath + "' ..." );
+        // System.out.println("Writing Private key to '" + privKeyPath + "' ..." );
         try (FileOutputStream privFos = new FileOutputStream(privKeyPath)) {
             privFos.write(privKeyEncoded);
         }
-        System.out.println("Writing Public key to '" + pubKeyPath + "' ..." );
+        // System.out.println("Writing Public key to '" + pubKeyPath + "' ..." );
         try (FileOutputStream pubFos = new FileOutputStream(pubKeyPath)) {
             pubFos.write(pubKeyEncoded);
         }
     }
 
     public static Key read(String keyPath, String type) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
-        System.out.println("Reading key from file " + keyPath + " ...");
+        // System.out.println("Reading key from file " + keyPath + " ...");
         byte[] encoded;
         try (FileInputStream fis = new FileInputStream(keyPath)) {
             encoded = new byte[fis.available()];
