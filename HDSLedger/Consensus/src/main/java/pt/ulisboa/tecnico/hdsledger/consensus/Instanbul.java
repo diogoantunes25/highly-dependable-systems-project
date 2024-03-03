@@ -53,14 +53,17 @@ public class Instanbul {
 	// Store if already received pre-prepare for a given round
 	private final Map<Integer, Boolean> receivedPrePrepare = new HashMap<>();
 
-	// Consensus instance information per consensus instance
-	private Optional<InstanceInfo> instanceInfo;
-
 	// Callbacks to be called on deliver
 	private final List<Consumer<String>> observers = new ArrayList();
 
 	// Wheter start was called already
 	private boolean started = false;
+
+	// FIXME (dsa): I'm not sure that this is needed
+	private Optional<CommitMessage> commitMessage;
+
+	// Decided value
+	private Optional<String> decision;
 
 	public Instanbul(ProcessConfig config, int lambda) {
 		this.lambda = lambda;
@@ -70,8 +73,10 @@ public class Instanbul {
 		this.pri = Optional.empty();
 		this.pvi = Optional.empty();
 		this.inputValuei = Optional.empty();
+		this.decision = Optional.empty();
 
-		this.instanceInfo = Optional.empty();
+		this.commitMessage = Optional.empty();
+		// this.instanceInfo = Optional.empty();
 		this.prepareMessages = new MessageBucket(config.getN());
 		this.commitMessages = new MessageBucket(config.getN());
 	}
@@ -120,6 +125,19 @@ public class Instanbul {
 		return consensusMessage;
 	}
 
+	/**
+	 * Utility to create CommitMessages
+	 */
+	private ConsensusMessage createCommitMessage(int instance, int round, int receiver, String commitMessageJson) {
+		return new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+			.setConsensusInstance(instance)
+			.setRound(round)
+			.setMessage(commitMessageJson)
+			.setReceiver(receiver)
+			.build();
+	}
+
+
 	/*
 	 * Start an instance of consensus for a value
 	 * Only the current leader will start a consensus instance,
@@ -129,15 +147,18 @@ public class Instanbul {
 	 */
 	public List<ConsensusMessage> start(String inputValue) {
 		if (started) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
-                    config.getId(), this.lambda));
+			LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
+						config.getId(), this.lambda));
 			return new ArrayList<>();
 		} else {
 			started = true;
 		}
 
-		if (!this.instanceInfo.isPresent()) {
-			this.instanceInfo = Optional.of(new InstanceInfo(inputValue));	
+		// if (!this.instanceInfo.isPresent()) {
+		// 	this.instanceInfo = Optional.of(new InstanceInfo(inputValue));	
+		// }
+		if (!this.inputValuei.isPresent()) {
+			this.inputValuei = Optional.of(inputValue);
 		}
 
 		// Leader broadcasts PRE-PREPARE message
@@ -186,8 +207,11 @@ public class Instanbul {
 		}
 
 		// Set instance value
-		if (!this.instanceInfo.isPresent()) {
-			this.instanceInfo = Optional.of(new InstanceInfo(value));	
+		// if (!this.instanceInfo.isPresent()) {
+		// 	this.instanceInfo = Optional.of(new InstanceInfo(value));	
+		// }
+		if (!this.inputValuei.isPresent()) {
+			this.inputValuei = Optional.of(value);
 		}
 
 		// Resend in case message hasn't yet reached leader
@@ -215,6 +239,7 @@ public class Instanbul {
 
 
 		int round = message.getRound();
+		// FIXME (dsa): shouldn't I stop as soon as I notice that round != this.ri ?
 		int senderId = message.getSenderId();
 
 		PrepareMessage prepareMessage = message.deserializePrepareMessage();
@@ -230,41 +255,56 @@ public class Instanbul {
 		prepareMessages.addMessage(message);
 
 		// Set instance value
-		if (!this.instanceInfo.isPresent()) {
-			this.instanceInfo = Optional.of(new InstanceInfo(value));	
+		// if (!this.instanceInfo.isPresent()) {
+		// 	this.instanceInfo = Optional.of(new InstanceInfo(value));	
+		// }
+		if (!this.inputValuei.isPresent()) {
+			this.inputValuei = Optional.of(value);
 		}
 
 		// Within an instance of the algorithm, each upon rule is triggered at most once
 		// for any round r
 		// Late prepare (consensus already ended for other nodes) only reply to him (as
 		// an ACK)
-		if (instanceInfo.get().getPreparedRound() >= round) {
+		
+		// After preparing for round r, I don't want to prepare for a round r' with r' < r
+		// (i.e. PREPARES must be of current round)
+		// TODO (dsa): don't we also need round = this.ri ?
+		if (this.pri.isPresent() && this.pri.get() >= round) {
+		// if (instanceInfo.get().getPreparedRound() >= round) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
 						"{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, "
 						+ "replying again to make sure it reaches the initial sender",
 						config.getId(), this.lambda, round));
 
+			// FIXME (dsa): why are we sure we have a commit message?
 			// Reply back to sender with PREPARE message
-			ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-				.setConsensusInstance(this.lambda)
-				.setRound(round)
-				.setReplyTo(senderId)
-				.setReplyToMessageId(message.getMessageId())
-				.setMessage(instanceInfo.get().getCommitMessage().toJson())
-				.setReceiver(senderId)
-				.build();
+			// ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+			// 	.setConsensusInstance(this.lambda)
+			// 	.setRound(round)
+			// 	.setReplyTo(senderId)
+			// 	.setReplyToMessageId(message.getMessageId())
+			// 	.setMessage(instanceInfo.get().getCommitMessage().toJson())
+			// 	.setReceiver(senderId)
+			// 	.build();
 
-			return Collections.singletonList(m);
+			// return Collections.singletonList(m);
+			return new ArrayList<>();
 		}
 
 		// Find value with valid quorum
 		Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), this.lambda, round);
-		if (preparedValue.isPresent() && instanceInfo.get().getPreparedRound() < round) {
+
+		// FIXME (dsa): second condition seems irrelevant (already checked previously)
+		// if (preparedValue.isPresent() && (instanceInfo.get().getPreparedRound() < round)) { 
+		
+		// If quorum of valid PREPARE(lambda, ri, value)
+		if (preparedValue.isPresent()) {
 
 			// Prepare for this instance
-			instanceInfo.get().setPreparedValue(preparedValue.get());
-			instanceInfo.get().setPreparedRound(round);
+			this.pri = Optional.of(round);
+			this.pvi = Optional.of(preparedValue.get());
 
 			// Must reply to prepare message senders
 			// Only send COMMIT to the ones that sent PREPARE to
@@ -273,24 +313,27 @@ public class Instanbul {
 			Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(this.lambda, round)
 				.values();
 
-			CommitMessage c = new CommitMessage(preparedValue.get());
-			instanceInfo.get().setCommitMessage(c);
+			this.commitMessage = Optional.of(new CommitMessage(preparedValue.get()));
+
+			// FIXME (dsa): don't understand why it's not sent to everyone
+			// List<ConsensusMessage> output = new ArrayList<>();
+			// sendersMessage.forEach(senderMessage -> {
+			// 		output.add(
+			// 			new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+			// 				.setConsensusInstance(this.lambda)
+			// 				.setRound(round)
+			// 				.setReplyTo(senderMessage.getSenderId())
+			// 				.setReplyToMessageId(senderMessage.getMessageId())
+			// 				.setMessage(this.commitMessage.get().toJson())
+			// 				.setReceiver(senderMessage.getSenderId())
+			// 				.build());
+			// 		});
 
 
-			List<ConsensusMessage> output = new ArrayList<>();
-			sendersMessage.forEach(senderMessage -> {
-					output.add(
-						new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-							.setConsensusInstance(this.lambda)
-							.setRound(round)
-							.setReplyTo(senderMessage.getSenderId())
-							.setReplyToMessageId(senderMessage.getMessageId())
-							.setMessage(c.toJson())
-							.setReceiver(senderMessage.getSenderId())
-							.build());
-					});
-
-			return output;
+			return IntStream.range(0, this.config.getN())
+				.mapToObj(receiver -> 
+					createCommitMessage(this.lambda, round, receiver, this.commitMessage.get().toJson()))
+				.collect(Collectors.toList());
 		}
 
 		return new ArrayList<>();
@@ -311,31 +354,36 @@ public class Instanbul {
 
 		commitMessages.addMessage(message);
 
-		if (!instanceInfo.isPresent()) {
-			// Should never happen because only receives commit as a response to a prepare message
-			MessageFormat.format(
-					"{0} - CRITICAL: Received COMMIT message from {1}: Consensus Instance {2}, Round {3} BUT NO INSTANCE INFO",
-					config.getId(), message.getSenderId(), this.lambda, round);
-
-			return new ArrayList<>();
-		}
+		// FIXME (dsa): why does this even matter?
+		// if (!instanceInfo.isPresent()) {
+		// 	// Should never happen because only receives commit as a response to a prepare message
+		// 	MessageFormat.format(
+		// 			"{0} - CRITICAL: Received COMMIT message from {1}: Consensus Instance {2}, Round {3} BUT NO INSTANCE INFO",
+		// 			config.getId(), message.getSenderId(), this.lambda, round);
+		//
+		// 	return new ArrayList<>();
+		// }
 
 		// Within an instance of the algorithm, each upon rule is triggered at most once
 		// for any round r
-		if (instanceInfo.get().getCommittedRound() >= round) {
-			LOGGER.log(Level.INFO,
-					MessageFormat.format(
-						"{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
-						config.getId(), this.lambda, round));
-			return new ArrayList<>();
-		}
+		// TODO (dsa): why would this even happen?
+		// if (instanceInfo.get().getCommittedRound() >= round) {
+		// 	LOGGER.log(Level.INFO,
+		// 			MessageFormat.format(
+		// 				"{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
+		// 				config.getId(), this.lambda, round));
+		// 	return new ArrayList<>();
+		// }
 
 		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
 				this.lambda, round);
 
-		if (commitValue.isPresent() && instanceInfo.get().getCommittedRound() < round) {
+		// TODO (dsa): how can instanceInfo.getCommitedRound() < round if we just
+		// check that it's not?
+		// if (commitValue.isPresent() && instanceInfo.get().getCommittedRound() < round) {
+		if (commitValue.isPresent()) {
 
-			instanceInfo.get().setCommittedRound(round);
+			// instanceInfo.get().setCommittedRound(round);
 
 			String value = commitValue.get();
 
@@ -345,6 +393,7 @@ public class Instanbul {
 					MessageFormat.format(
 						"{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
 						config.getId(), this.lambda, round, true));
+
 			return new ArrayList<>();
 		}
 
@@ -376,6 +425,21 @@ public class Instanbul {
 	// TODO (dsa): add stuff for round change
 
 	public void decide(String value) {
+		if (this.decision.isPresent()) {
+
+			if (!this.decision.get().equals(value)) {
+				throw new RuntimeException(
+					String.format(
+						"QBFT decided two different values (%s and %s)",
+						value,
+						this.decision.get()));
+			}
+
+			return;
+		}
+
+		this.decision = Optional.of(value);
+
 		for (Consumer obs: observers) {
 			obs.accept(value);
 		}
