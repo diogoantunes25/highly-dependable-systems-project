@@ -1,13 +1,13 @@
-package pt.ulisboa.tecnico.hdsledger.service.models;
+package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 public class MessageBucket {
@@ -16,7 +16,7 @@ public class MessageBucket {
     // Quorum size
     private final int quorumSize;
     // Instance -> Round -> Sender ID -> Consensus message
-    private final Map<Integer, Map<Integer, Map<String, ConsensusMessage>>> bucket = new ConcurrentHashMap<>();
+    private final Map<Integer, Map<Integer, Map<Integer, ConsensusMessage>>> bucket = new ConcurrentHashMap<>();
 
     public MessageBucket(int nodeCount) {
         int f = Math.floorDiv(nodeCount - 1, 3);
@@ -39,7 +39,7 @@ public class MessageBucket {
         bucket.get(consensusInstance).get(round).put(message.getSenderId(), message);
     }
 
-    public Optional<String> hasValidPrepareQuorum(String nodeId, int instance, int round) {
+    public Optional<String> hasValidPrepareQuorum(int nodeId, int instance, int round) {
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
@@ -57,7 +57,7 @@ public class MessageBucket {
         }).findFirst();
     }
 
-    public Optional<String> hasValidCommitQuorum(String nodeId, int instance, int round) {
+    public Optional<String> hasValidCommitQuorum(int nodeId, int instance, int round) {
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
@@ -75,7 +75,7 @@ public class MessageBucket {
         }).findFirst();
     }
 
-    public Map<String, ConsensusMessage> getMessages(int instance, int round) {
+    public Map<Integer, ConsensusMessage> getMessages(int instance, int round) {
         return bucket.get(instance).get(round);
     }
 }

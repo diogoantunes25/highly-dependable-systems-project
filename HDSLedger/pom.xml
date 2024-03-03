@@ -10,6 +10,7 @@
     <version>1.0-SNAPSHOT</version>
     <modules>
         <module>PKI</module>
+        <module>Consensus</module>
         <module>Service</module>
         <module>Utilities</module>
         <module>Communication</module>

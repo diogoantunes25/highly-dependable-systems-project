@@ -1,7 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
-import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
+import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -21,25 +22,24 @@ public class Node {
 
         try {
             // Command line arguments
-            String id = args[0];
+            int id = Integer.valueOf(args[0]);
             nodesConfigPath += args[1];
 
             // Create configuration instances
             ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
             ProcessConfig leaderConfig = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findAny().get();
-            ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId().equals(id)).findAny().get();
+            ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId() == id).findAny().get();
 
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}",
                     nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(),
                     nodeConfig.isLeader()));
 
             // Abstraction to send and receive messages
-            Link linkToNodes = new Link(nodeConfig, nodeConfig.getPort(), nodeConfigs,
+            Link linkToNodes = new APLink(nodeConfig, nodeConfig.getPort(), nodeConfigs,
                     ConsensusMessage.class);
 
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(linkToNodes, nodeConfig, leaderConfig,
-                    nodeConfigs);
+            NodeService nodeService = new NodeService(linkToNodes, nodeConfig, nodeConfigs);
 
             nodeService.listen();
 

@@ -1,13 +1,18 @@
-package pt.ulisboa.tecnico.hdsledger.communication;
+package pt.ulisboa.tecnico.hdsledger.consensus.message;
 
 import java.io.Serializable;
 
 public class Message implements Serializable {
 
     // Sender identifier
-    private String senderId;
+    private int senderId;
+
+    // Receiver identifier
+    private int receiverId;
+
     // Message identifier
     private int messageId;
+
     // Message type
     private Type type;
 
@@ -15,17 +20,25 @@ public class Message implements Serializable {
         APPEND, PRE_PREPARE, PREPARE, COMMIT, ACK, IGNORE;
     }
 
-    public Message(String senderId, Type type) {
+    public Message(int senderId, Type type) {
         this.senderId = senderId;
         this.type = type;
     }
 
-    public String getSenderId() {
+    public int getSenderId() {
         return senderId;
     }
 
-    public void setSenderId(String senderId) {
+    public void setSenderId(int senderId) {
         this.senderId = senderId;
+    }
+
+    public int getReceiver() {
+        return receiverId;
+    }
+
+    public void setReceiver(int receiverId) {
+        this.receiverId = receiverId;
     }
 
     public int getMessageId() {
