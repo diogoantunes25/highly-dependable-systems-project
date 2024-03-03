@@ -58,7 +58,7 @@ public class NodeService implements UDPService {
     // Stores input values for each instance that start/is planned to start
     private Map<Integer, String> inputs = new ConcurrentHashMap<>();
 
-    // Stores input values for each instance that start/is planned to start
+    // Callback to call when a new input is finalized by consensus
     private Queue<BiConsumer<Integer, String>> observers = new ConcurrentLinkedQueue<>();
 
     public NodeService(Link link, ProcessConfig config,
