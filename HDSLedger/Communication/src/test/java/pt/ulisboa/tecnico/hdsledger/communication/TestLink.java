@@ -1,14 +1,11 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.text.MessageFormat;
 import java.util.List;
 import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.LogManager;
 
 public class TestLink implements Link {
     /**
