@@ -11,6 +11,16 @@ public class ProcessConfig {
         this.N = N;
     }
 
+    public ProcessConfig(boolean isLeader, String hostname, int id, int port, int N, String publicKeyPath, String privateKeyPath) {
+        this.isLeader = isLeader;
+        this.hostname = hostname;
+        this.id = id;
+        this.port = port;
+        this.N = N;
+        this.publicKeyPath = publicKeyPath;
+        this.privateKeyPath = privateKeyPath;
+    }
+
     // dsa: not sure why this is part of the process configuration
     private boolean isLeader;
 
@@ -21,6 +31,10 @@ public class ProcessConfig {
     private int port;
 
     private int N;
+
+    private String publicKeyPath;
+
+    private String privateKeyPath;
 
     public boolean isLeader() {
         return isLeader;
@@ -41,4 +55,8 @@ public class ProcessConfig {
     public int getN() {
         return N;
     }
+
+    public String getPublicKey() { return publicKeyPath; }
+
+    public String getPrivateKey() { return privateKeyPath; }
 }

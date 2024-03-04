@@ -7,7 +7,9 @@ public enum ErrorMessage {
     SocketSendingError("Error while sending message"),
     CannotOpenSocket("Error while opening socket"),
 
-    CannotParseMessage("Error while parsing message");
+    CannotParseMessage("Error while parsing message"),
+
+    SigningError("Error while signing message");
 
     private final String message;
 
