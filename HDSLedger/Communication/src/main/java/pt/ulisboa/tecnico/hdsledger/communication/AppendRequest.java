@@ -8,12 +8,12 @@ public class AppendRequest extends Message {
     private String value;
 
     //nonce
-    private Integer nonce;
+    private Integer sequenceNumber;
 
-    public AppendRequest(int senderId, Type type, String value, Integer nonce) {
+    public AppendRequest(int senderId, Type type, String value, Integer sequenceNumber) {
         super(senderId, type);
         this.value = value;
-        this.nonce = nonce;
+        this.sequenceNumber = sequenceNumber;
     }
 
     public String getValue() {
@@ -24,11 +24,11 @@ public class AppendRequest extends Message {
         this.value = value;
     }
 
-    public Integer getNonce() {
-        return nonce;
+    public Integer getSequenceNumber() {
+        return sequenceNumber;
     }
 
-    public void setNonce(Integer nonce) {
-        this.nonce = nonce;
+    public void setSequenceNumber(Integer sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
     }
 }

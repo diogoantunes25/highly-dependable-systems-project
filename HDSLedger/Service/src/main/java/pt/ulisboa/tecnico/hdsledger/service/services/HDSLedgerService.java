@@ -36,8 +36,8 @@ public class HDSLedgerService implements UDPService {
     // Node service that allows start consensus instances
     private final NodeService nodeService;
 
-    // Request queue
-    private Queue<AppendRequest> requests = new LinkedList<>();
+    // Confirmed queue
+    private Queue<String> confirmed = new LinkedList<>();
 
     public HDSLedgerService(ProcessConfig[] clientConfigs, Link link, ProcessConfig config, NodeService nodeService) {
         this.clientsConfig = clientConfigs;
@@ -47,8 +47,12 @@ public class HDSLedgerService implements UDPService {
     }
 
     public void append(AppendRequest request) {
-        // Add request to queue
-        requests.add(request);
+        // Send the value to the consensus service
+        int sequenceNumber = request.getSequenceNumber();
+        int clientId = request.getSenderId();
+        String value = request.getValue();
+        String nonce = Integer.toString(clientId) + ":" + Integer.toString(sequenceNumber);
+        nodeService.startConsensus(nonce, value);
     }
 
 
