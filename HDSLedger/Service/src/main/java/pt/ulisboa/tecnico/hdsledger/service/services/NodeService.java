@@ -240,7 +240,7 @@ public class NodeService implements UDPService {
                     Map<String, Slot> history = new HashMap<>();
 
                     // input values for which the observers where already notified
-                    Set<String> notifiedObservers = new HashSet();
+                    Set<String> acketToObserver = new HashSet();
 
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
@@ -255,11 +255,11 @@ public class NodeService implements UDPService {
                             // if not notified observers, notify
                             // (it's possible for a value to be processed, but
                             // the clients not notified if the input came late)
-                            if (!notifiedObservers.contains(input)) {
+                            if (!acketToObserver.contains(input)) {
                                 for (Consumer<Slot> obs: this.observers) {
                                     obs.accept(history.get(input));
                                 }
-                                notifiedObservers.add(input);
+                                acketToObserver.add(input);
                             }
 
                             input = this.inputs.take(); // blocking
@@ -302,13 +302,6 @@ public class NodeService implements UDPService {
                             // update state
                             int slotId = updateState(cmd);
                             Slot slot = new Slot(slotId, nonce, cmd);
-
-                            // if not notified observers, notify
-                            if (!notifiedObservers.contains(value)) {
-                                this.observers.forEach(o -> o.accept(slot));
-                                notifiedObservers.add(input);
-                            }
-
                             history.put(value, slot);
                         }
                     }
