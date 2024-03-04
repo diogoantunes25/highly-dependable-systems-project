@@ -203,6 +203,7 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
+		// Start consensus with different order - first half starts the first consensus instance with cmd1, second half with cmd2
 		services.forEach(service -> {
 			if (service.getId() < n/2) {
 				service.startConsensus(nonce1, cmd1);

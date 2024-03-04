@@ -74,7 +74,7 @@ public class NodeService implements UDPService {
     private AtomicBoolean listening = new AtomicBoolean(false);
 
     // Running threads (warning: can't remove listening property before of 
-    // thread safety, which is not provided by this threads property)
+    // thread safety, which is not provided by this thread's property)
     private Optional<List<Thread>> threads = Optional.empty();
     
     public NodeService(Link link, ProcessConfig config,

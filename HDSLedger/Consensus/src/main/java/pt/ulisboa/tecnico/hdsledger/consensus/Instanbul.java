@@ -56,7 +56,7 @@ public class Instanbul {
 	// Callbacks to be called on deliver
 	private final List<Consumer<String>> observers = new ArrayList();
 
-	// Wheter start was called already
+	// Whether start was called already
 	private boolean started = false;
 
 	// FIXME (dsa): I'm not sure that this is needed
@@ -184,9 +184,9 @@ public class Instanbul {
 
 	/*
 	 * Handle pre prepare messages and if the message
-	 * came from leader and is justified them broadcast prepare
+	 * came from leader and is justified then broadcast prepare
 	 *
-	 * @param message Message to be handled
+	 * @param Message message to be handled
 	 */
 	private List<ConsensusMessage> prePrepare(ConsensusMessage message) {
 
@@ -246,10 +246,9 @@ public class Instanbul {
 	/*
 	 * Handle prepare messages and if there is a valid quorum broadcast commit
 	 *
-	 * @param message Message to be handled
+	 * @param Message message to be handled
 	 */
 	private List<ConsensusMessage> prepare(ConsensusMessage message) {
-
 
 		int round = message.getRound();
 		int senderId = message.getSenderId();
@@ -321,7 +320,7 @@ public class Instanbul {
 	/*
 	 * Handle commit messages and decide if there is a valid quorum
 	 *
-	 * @param message Message to be handled
+	 * @param Message message to be handled
 	 */
 	private List<ConsensusMessage> commit(ConsensusMessage message) {
 
