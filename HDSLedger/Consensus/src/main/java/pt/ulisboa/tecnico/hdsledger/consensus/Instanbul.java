@@ -65,6 +65,13 @@ public class Instanbul {
 	// Decided value
 	private Optional<String> decision;
 
+	// PRE-PREPARE messages from future rounds (round -> list of messages)
+	private Map<Integer, List<ConsensusMessage>> stashedPrePrepare = new HashMap<>();
+
+	// PREPARE message from future rounds
+	private Map<Integer, List<ConsensusMessage>> stashedPrepare = new HashMap<>();
+	
+
 	public Instanbul(ProcessConfig config, int lambda) {
 		this.lambda = lambda;
 		this.config = config;
@@ -190,6 +197,15 @@ public class Instanbul {
 		
 		int round = message.getRound();
 		int senderId = message.getSenderId();
+
+		if (round != this.ri) {
+			LOGGER.log(Level.WARNING,
+					MessageFormat.format(
+						"{0} - Shouldn't process PREPARE message from {1}: Consensus Instance {2}, Round {3} at round {4}",
+						config.getId(), senderId, this.lambda, round, this.ri));
+			throw new RuntimeException("Should not be processing PREPARE message in wrong round");
+		}
+
 		int senderMessageId = message.getMessageId();
 
 		PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
@@ -239,8 +255,15 @@ public class Instanbul {
 
 
 		int round = message.getRound();
-		// FIXME (dsa): shouldn't I stop as soon as I notice that round != this.ri ?
 		int senderId = message.getSenderId();
+
+		if (round != this.ri) {
+			LOGGER.log(Level.WARNING,
+					MessageFormat.format(
+						"{0} - Shouldn't process PREPARE message from {1}: Consensus Instance {2}, Round {3} at round {4}",
+						config.getId(), senderId, this.lambda, round, this.ri));
+			throw new RuntimeException("Should not be processing PREPARE message in wrong round");
+		}
 
 		PrepareMessage prepareMessage = message.deserializePrepareMessage();
 
@@ -255,80 +278,39 @@ public class Instanbul {
 		prepareMessages.addMessage(message);
 
 		// Set instance value
-		// if (!this.instanceInfo.isPresent()) {
-		// 	this.instanceInfo = Optional.of(new InstanceInfo(value));	
-		// }
 		if (!this.inputValuei.isPresent()) {
 			this.inputValuei = Optional.of(value);
 		}
 
-		// Within an instance of the algorithm, each upon rule is triggered at most once
-		// for any round r
-		// Late prepare (consensus already ended for other nodes) only reply to him (as
-		// an ACK)
-		
-		// After preparing for round r, I don't want to prepare for a round r' with r' < r
-		// (i.e. PREPARES must be of current round)
-		// TODO (dsa): don't we also need round = this.ri ?
-		if (this.pri.isPresent() && this.pri.get() >= round) {
-		// if (instanceInfo.get().getPreparedRound() >= round) {
+		// If already prepared, won't prepare again
+		if (this.pri.isPresent()) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
 						"{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, "
-						+ "replying again to make sure it reaches the initial sender",
+						+ "ignoring PREPARE that was just received",
 						config.getId(), this.lambda, round));
 
-			// FIXME (dsa): why are we sure we have a commit message?
-			// Reply back to sender with PREPARE message
-			// ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-			// 	.setConsensusInstance(this.lambda)
-			// 	.setRound(round)
-			// 	.setReplyTo(senderId)
-			// 	.setReplyToMessageId(message.getMessageId())
-			// 	.setMessage(instanceInfo.get().getCommitMessage().toJson())
-			// 	.setReceiver(senderId)
-			// 	.build();
-
-			// return Collections.singletonList(m);
 			return new ArrayList<>();
 		}
 
 		// Find value with valid quorum
 		Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), this.lambda, round);
-
-		// FIXME (dsa): second condition seems irrelevant (already checked previously)
-		// if (preparedValue.isPresent() && (instanceInfo.get().getPreparedRound() < round)) { 
 		
-		// If quorum of valid PREPARE(lambda, ri, value)
 		if (preparedValue.isPresent()) {
+
+			LOGGER.log(Level.INFO,
+					MessageFormat.format(
+						"{0} - Found quorum of PREPARE messages for Consensus Instance {1}, Round {2}",
+						config.getId(), this.lambda, round));
 
 			// Prepare for this instance
 			this.pri = Optional.of(round);
 			this.pvi = Optional.of(preparedValue.get());
 
-			// Must reply to prepare message senders
-			// Only send COMMIT to the ones that sent PREPARE to
-			// avoid nodes that don't know anything about the 
-			// round getting COMMIT
 			Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(this.lambda, round)
 				.values();
 
 			this.commitMessage = Optional.of(new CommitMessage(preparedValue.get()));
-
-			// FIXME (dsa): don't understand why it's not sent to everyone
-			// List<ConsensusMessage> output = new ArrayList<>();
-			// sendersMessage.forEach(senderMessage -> {
-			// 		output.add(
-			// 			new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-			// 				.setConsensusInstance(this.lambda)
-			// 				.setRound(round)
-			// 				.setReplyTo(senderMessage.getSenderId())
-			// 				.setReplyToMessageId(senderMessage.getMessageId())
-			// 				.setMessage(this.commitMessage.get().toJson())
-			// 				.setReceiver(senderMessage.getSenderId())
-			// 				.build());
-			// 		});
-
 
 			return IntStream.range(0, this.config.getN())
 				.mapToObj(receiver -> 
@@ -354,36 +336,10 @@ public class Instanbul {
 
 		commitMessages.addMessage(message);
 
-		// FIXME (dsa): why does this even matter?
-		// if (!instanceInfo.isPresent()) {
-		// 	// Should never happen because only receives commit as a response to a prepare message
-		// 	MessageFormat.format(
-		// 			"{0} - CRITICAL: Received COMMIT message from {1}: Consensus Instance {2}, Round {3} BUT NO INSTANCE INFO",
-		// 			config.getId(), message.getSenderId(), this.lambda, round);
-		//
-		// 	return new ArrayList<>();
-		// }
-
-		// Within an instance of the algorithm, each upon rule is triggered at most once
-		// for any round r
-		// TODO (dsa): why would this even happen?
-		// if (instanceInfo.get().getCommittedRound() >= round) {
-		// 	LOGGER.log(Level.INFO,
-		// 			MessageFormat.format(
-		// 				"{0} - Already received COMMIT message for Consensus Instance {1}, Round {2}, ignoring",
-		// 				config.getId(), this.lambda, round));
-		// 	return new ArrayList<>();
-		// }
-
 		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
 				this.lambda, round);
 
-		// TODO (dsa): how can instanceInfo.getCommitedRound() < round if we just
-		// check that it's not?
-		// if (commitValue.isPresent() && instanceInfo.get().getCommittedRound() < round) {
 		if (commitValue.isPresent()) {
-
-			// instanceInfo.get().setCommittedRound(round);
 
 			String value = commitValue.get();
 
@@ -401,15 +357,51 @@ public class Instanbul {
 	}
 
 	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+		int mround = message.getRound();
+
 		return switch (message.getType()) {
-			case PRE_PREPARE ->
-				prePrepare((ConsensusMessage) message);
+			case PRE_PREPARE -> {
+				if (mround == this.ri) {
+					yield prePrepare(message);
+				} else if (message.getRound() < this.ri) {
+					// PRE-PREPARES from previous rounds can be dropped
+					yield new ArrayList<>();
+				} else {
+					// PRE-PREPARE from future rounds can't processed right
+					// now, but should be processed when we change rounds
+					LOGGER.log(Level.INFO,
+							MessageFormat.format(
+								"{0} - Stashed PRE-PREPARE at instance {1}, Round {2} (message was for {3})",
+						config.getId(), this.lambda, this.ri, mround));
+					this.stashedPrePrepare.putIfAbsent(mround, new ArrayList<>());
+					List<ConsensusMessage> stashed = stashedPrePrepare.get(mround);
+					stashed.add(message);
+					yield new ArrayList<>();
+				}
+			}
 
-			case PREPARE ->
-				prepare((ConsensusMessage) message);
+			case PREPARE -> {
+				if (mround == this.ri) {
+					yield prepare(message);
+				} else if (message.getRound() < this.ri) {
+					// PREPARES from previous rounds can be dropped
+					yield new ArrayList<>();
+				} else {
+					// PREPARE from future rounds can't processed right
+					// now, but should be processed when round is changed
+					LOGGER.log(Level.INFO,
+							MessageFormat.format(
+								"{0} - Stashed PRE-PREPARE at instance {1}, Round {2} (message was for {3})",
+						config.getId(), this.lambda, this.ri, mround));
+					this.stashedPrepare.putIfAbsent(mround, new ArrayList<>());
+					List<ConsensusMessage> stashed = stashedPrepare.get(mround);
+					stashed.add(message);
+					yield new ArrayList<>();
+				}
+			}
 
-			case COMMIT ->
-				commit((ConsensusMessage) message);
+			case COMMIT -> 
+				commit(message);
 
 			default -> {
 				LOGGER.log(Level.INFO,
