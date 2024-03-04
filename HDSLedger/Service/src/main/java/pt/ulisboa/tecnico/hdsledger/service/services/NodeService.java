@@ -110,7 +110,7 @@ public class NodeService implements UDPService {
     /*
      * Starts a new consensus instance.
      * Does not check that there's not other ongoing instances.
-     * Not thread-safe.
+     * Thread-safe.
      *
      * @param lambda
      */
@@ -129,7 +129,8 @@ public class NodeService implements UDPService {
      * just queues input to be evetually added to state.
      * Thread-safe.
      *
-     * @param inputValue
+     * @param cmd value to append to state
+     * @param nonce should be unique and not contain `::`
      */
     public synchronized void startConsensus(String nonce, String cmd) {
         // note: add must be used instead of put as it's non-blocking
@@ -142,7 +143,7 @@ public class NodeService implements UDPService {
      * @param message Consensus message
      * Thread-safe.
      */
-    private synchronized void handleMessage(ConsensusMessage message) {
+    private void handleMessage(ConsensusMessage message) {
         // TODO: synchronize in a per instance basis
 
         int lambda = message.getConsensusInstance();
@@ -205,7 +206,7 @@ public class NodeService implements UDPService {
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                     "{0} - Current Ledger: {1}",
-                    config.getId(), String.join("", ledger)));
+                    config.getId(), String.join("|", ledger)));
 
         return ledger.size();
     }
@@ -230,7 +231,7 @@ public class NodeService implements UDPService {
                         // in creating a new thread to handle each message
                         switch (message.getType()) {
 
-                            case PRE_PREPARE, PREPARE, COMMIT ->
+                            case PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE ->
                                 handleMessage((ConsensusMessage) message);
 
                             case ACK ->
