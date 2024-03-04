@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Optional;
@@ -57,10 +58,11 @@ public class HDSLedgerService implements UDPService {
 
 
     @Override
-    public void listen() {
+    public List<Thread> listen() {
+        List<Thread> threads = new ArrayList<>();
         try {
             // Thread to listen on every request
-            new Thread(() -> {
+            Thread t = new Thread(() -> {
                 try {
                     while (true) {
                         Message message = link.receive();
@@ -83,10 +85,14 @@ public class HDSLedgerService implements UDPService {
                 } catch (IOException | ClassNotFoundException e) {
                     e.printStackTrace();
                 }
-            }).start();
+            });
+            t.start();
+            threads.add(t);
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        return threads;
     }
 
 }

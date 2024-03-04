@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import java.util.List;
+
 public interface UDPService {
-    void listen();
+    public List<Thread> listen();
 }

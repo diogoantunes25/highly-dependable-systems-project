@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.function.Consumer;
 import java.util.Queue;
@@ -41,7 +42,7 @@ public class NodeService implements UDPService {
     // Nodes configurations
     private final ProcessConfig[] nodesConfig;
 
-    // FIXME (dsa): my config ?
+    // My configuration
     private final ProcessConfig config;
     
     // Link to communicate with nodes
@@ -65,6 +66,9 @@ public class NodeService implements UDPService {
 
     // Blocking queue of decisions (thread-safe)
     private BlockingQueue<Decision> decisions = new LinkedBlockingQueue<>(); 
+
+    // Whether listen has been called
+    private AtomicBoolean listening = new AtomicBoolean(false);
     
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig) {
@@ -99,6 +103,7 @@ public class NodeService implements UDPService {
     /*
      * Starts a new consensus instance.
      * Does not check that there's not other ongoing instances.
+     * Not thread-safe.
      *
      * @param lambda
      */
@@ -108,13 +113,18 @@ public class NodeService implements UDPService {
         // Input into state machine
         List<ConsensusMessage> output = instance.start(value);
 
+        System.out.printf("Output has size %d\n", output.size());
         // Dispatch messages
-        output.forEach(m -> link.send(m.getReceiver(), m));
+        output.forEach(m -> {
+            System.out.println("Dispatching message");
+            link.send(m.getReceiver(), m);
+        });
     }
 
     /*
      * Start an instance of consensus for a cmd if one is not ongoing, otherwise
      * just queues input to be evetually added to state.
+     * Thread-safe.
      *
      * @param inputValue
      */
@@ -127,9 +137,12 @@ public class NodeService implements UDPService {
     /**
      * Handle consensus message 
      * @param message Consensus message
+     * Thread-safe.
      */
     private synchronized void handleMessage(ConsensusMessage message) {
         // TODO: synchronize in a per instance basis
+
+        System.out.println("Dispatching message");
 
         int lambda = message.getConsensusInstance();
         Instanbul instance = getInstance(lambda);
@@ -144,8 +157,9 @@ public class NodeService implements UDPService {
     /**
      * Handle decision for instance lambda
      * Just register decision
+     * Thread-safe.
      */
-    private synchronized void decided(int lambda, String value) {
+    private void decided(int lambda, String value) {
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
@@ -159,6 +173,7 @@ public class NodeService implements UDPService {
     /**
      * Registers observer for confirmation of finalization of inputted values
      * @param observer Callback function
+     * Thread-safe.
      */
     public void registerObserver(Consumer<Slot> observer) {
         this.observers.add(observer);
@@ -182,6 +197,7 @@ public class NodeService implements UDPService {
 
     /**
      * Updates state and returns slot position for value
+     * Non thread-safe.
      */
     public int updateState(String value) {
         ledger.add(value);
@@ -194,10 +210,15 @@ public class NodeService implements UDPService {
     }
 
     @Override
-    public void listen() {
+    public List<Thread> listen() {
+        if (this.listening.getAndSet(true)) {
+            throw new RuntimeException("NodeService.listen already called for this service instance");
+        }
+
+        List<Thread> threads = new ArrayList<>();
         try {
             // Thread to listen on every request
-            new Thread(() -> {
+            Thread networkListener = new Thread(() -> {
                 try {
                     while (true) {
                         Message message = link.receive();
@@ -227,10 +248,10 @@ public class NodeService implements UDPService {
                 } catch (IOException | ClassNotFoundException e) {
                     e.printStackTrace();
                 }
-            }).start();
+            });
 
             // Thread to take pending inputs from clients and input them into consensus
-            new Thread(() -> {
+            Thread driver = new Thread(() -> {
                 try {
                     int currentLambda = 0;
                     DecisionBucket bucket = new DecisionBucket();
@@ -242,9 +263,16 @@ public class NodeService implements UDPService {
                     // input values for which the observers where already notified
                     Set<String> acketToObserver = new HashSet();
 
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format("{0} Driver - Waiting for input",
+                                config.getId()));
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
                     String input = this.inputs.take();
+
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format("{0} Driver - Got input {1}",
+                                config.getId(), input));
 
 
                     while (true) {
@@ -262,29 +290,58 @@ public class NodeService implements UDPService {
                                 acketToObserver.add(input);
                             }
 
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} Driver - Waiting for input",
+                                        config.getId()));
+                            // take must be used instead of remove because it's blocking.
                             input = this.inputs.take(); // blocking
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} Driver - Got input {1}",
+                                        config.getId(), input));
+
                             continue;
                         }
 
                         // start new instance (can't be after take, because 
                         // take's value might already be finalized as well)
                         currentLambda += 1;
+                        LOGGER.log(Level.INFO,
+                                MessageFormat.format("{0} Driver - Inputting into consensus {1} value {2}",
+                                    config.getId(), currentLambda, input));
                         actuallyInput(currentLambda, input);
+
+                        LOGGER.log(Level.INFO,
+                                MessageFormat.format("{0} Driver - Inputted, now I wait for decision",
+                                    config.getId()));
 
                         // check if this instance was already decided upon. if it
                         // was, then no need to wait, otherwise wait for more
                         // decisions
                         Decision d;
-                        if (bucket.contains(currentLambda)) {
-                            d = bucket.get(currentLambda);
-                        } else {
+                        while (!bucket.contains(currentLambda)) {
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} Driver - Decision for instance {1} has not yet been reached",
+                                        config.getId(), currentLambda));
+
                             // take must be used instead of remove because it's blocking
                             d = decisions.take();
                             bucket.save(d);
+
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} Driver - Decision for instance {1} was reached",
+                                        config.getId(), d.getLambda()));
+
                         }
+
+                        LOGGER.log(Level.INFO,
+                                MessageFormat.format("{0} Driver - Finally decision for my instance ({1}) was reached",
+                                    config.getId(), currentLambda));
+                        d = bucket.get(currentLambda);
+
 
                         // at this point, we have decision for instance currentLambda,
                         // we just need to process it
+
 
                         // if this consensus output is duplicate, there's nothing
                         // to be done
@@ -305,13 +362,23 @@ public class NodeService implements UDPService {
                             history.put(value, slot);
                         }
                     }
+
+
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-            }).start();
+            });
+
+            networkListener.start();
+            driver.start();
+
+            threads.add(networkListener);
+            threads.add(driver);
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        return threads;
     }
 
     /**
