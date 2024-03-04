@@ -9,15 +9,18 @@ import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Deque;
 import java.util.ArrayList;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class NodeServiceTest {
 
@@ -63,33 +66,67 @@ public class NodeServiceTest {
 		return services;
 	}
 
+	private static Map<Integer, Deque<Slot>> genSlotMap(int n) {
+		Map<Integer, Deque<Slot>> confirmedSlots = new ConcurrentHashMap<>();
+		for (int i = 0; i < n; i++) {
+			confirmedSlots.put(i, new LinkedBlockingDeque());
+		}
+
+		return confirmedSlots;
+	}
+
+	private static void printSlotMap(Map<Integer, Deque<Slot>> confirmedSlots) {
+		for (int i = 0; i < confirmedSlots.size(); i++) {
+			for (Slot s: confirmedSlots.get(i)) {
+				System.out.printf("%d: %s\n", i, s);
+			}
+		}
+	}
+
 	@Test
 	void singleExecutionTest() {
 		int n = 4;
 		int basePort = 10000;
 		String nonce = "123";
 		String cmd = "a";
-		Deque<Slot> confirmedSlots = new LinkedBlockingDeque<>();
-		Consumer<Slot> observer = s -> confirmedSlots.add(s);
+		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
 		List<NodeService> services = setupServices(n, basePort);
 		services.forEach(service -> service.listen());
-		services.forEach(service -> service.registerObserver(observer));
+		services.forEach(service -> {
+			final int id = service.getId();
+			Consumer<Slot> observer = s -> confirmedSlots.get(id).add(s);
+			service.registerObserver(observer);
+		});
 
 		services.forEach(service -> service.startConsensus(nonce, cmd));
 
-		while (confirmedSlots.size() != n) {
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		// FIXME (dsa): don't like this, but don't know how to do check
+		// without assuming stuff about some correctness
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 
 		services.forEach(service -> service.stopAndWait());
 
-		for (Slot s: confirmedSlots) {
-			System.out.println(s);
+		printSlotMap(confirmedSlots);
+
+		// Check output to clients is what was expected
+		for (int i = 0; i < n; i++) {
+			assertEquals(1, confirmedSlots.get(i).size());
+			Slot s = confirmedSlots.get(i).removeFirst();
+			assertEquals(s.getSlotId(), 1);
+			assertEquals(s.getNonce(), nonce);
+			assertEquals(s.getMessage(), cmd);
+		}
+		
+		// Check state is what was expected
+		for (NodeService service: services) {
+			List<String> ledger = service.getLedger();
+			assertEquals(ledger.size(), 1);
+			assertEquals(ledger.get(0), cmd);
 		}
 	}
 
@@ -102,28 +139,48 @@ public class NodeServiceTest {
 		String nonce2 = "1234";
 		String cmd2 = "b";
 
-		Deque<Slot> confirmedSlots = new LinkedBlockingDeque<>();
-		Consumer<Slot> observer = s -> confirmedSlots.add(s);
+		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
 		List<NodeService> services = setupServices(n, basePort);
 		services.forEach(service -> service.listen());
-		services.forEach(service -> service.registerObserver(observer));
+		services.forEach(service -> {
+			final int id = service.getId();
+			Consumer<Slot> observer = s -> confirmedSlots.get(id).add(s);
+			service.registerObserver(observer);
+		});
 
 		services.forEach(service -> service.startConsensus(nonce1, cmd1));
 		services.forEach(service -> service.startConsensus(nonce2, cmd2));
 
-		while (confirmedSlots.size() != 2 * n) {
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		// FIXME (dsa): don't like this, but don't know how to do check
+		// without assuming stuff about some correctness
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 
 		services.forEach(service -> service.stopAndWait());
 
-		for (Slot s: confirmedSlots) {
-			System.out.println(s);
+		printSlotMap(confirmedSlots);
+
+		// Check output to clients is what was expected
+		for (int i = 0; i < n; i++) {
+			assertEquals(2, confirmedSlots.get(i).size());
+			Slot s1 = confirmedSlots.get(i).removeFirst();
+			Slot s2 = confirmedSlots.get(i).removeFirst();
+			assertEquals(nonce1, s1.getNonce());
+			assertEquals(nonce2, s2.getNonce());
+			assertEquals(cmd1, s1.getMessage());
+			assertEquals(cmd2, s2.getMessage());
+		}
+		
+		// Check state is what was expected
+		for (NodeService service: services) {
+			List<String> ledger = service.getLedger();
+			assertEquals(ledger.size(), 2);
+			assertEquals(ledger.get(0), cmd1);
+			assertEquals(ledger.get(1), cmd2);
 		}
 	}
 
@@ -136,12 +193,15 @@ public class NodeServiceTest {
 		String nonce2 = "1234";
 		String cmd2 = "b";
 
-		Deque<Slot> confirmedSlots = new LinkedBlockingDeque<>();
-		Consumer<Slot> observer = s -> confirmedSlots.add(s);
+		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
 		List<NodeService> services = setupServices(n, basePort);
 		services.forEach(service -> service.listen());
-		services.forEach(service -> service.registerObserver(observer));
+		services.forEach(service -> {
+			final int id = service.getId();
+			Consumer<Slot> observer = s -> confirmedSlots.get(id).add(s);
+			service.registerObserver(observer);
+		});
 
 		services.forEach(service -> {
 			if (service.getId() < n/2) {
@@ -152,22 +212,56 @@ public class NodeServiceTest {
 				service.startConsensus(nonce1, cmd1);
 			}
 		});
-		services.forEach(service -> service.startConsensus(nonce2, cmd2));
 
-		while (confirmedSlots.size() != 2 * n) {
-			try {
-				Thread.sleep(1000);
-				System.out.printf("[test] confirmedSlots.size() = %d", confirmedSlots.size());
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		// FIXME (dsa): don't like this, but don't know how to do check
+		// without assuming stuff about some correctness
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 
 		services.forEach(service -> service.stopAndWait());
 
-		for (Slot s: confirmedSlots) {
-			System.out.println(s);
+		printSlotMap(confirmedSlots);
+
+		// Note that here acks can come out in either order
+
+		// Check output to clients is what was expected
+		assertEquals(2, confirmedSlots.get(0).size());
+		Slot s1_0 = confirmedSlots.get(0).removeFirst();
+		Slot s2_0 = confirmedSlots.get(0).removeFirst();
+		for (int i = 1; i < n; i++) {
+			assertEquals(2, confirmedSlots.get(i).size());
+			Slot s1 = confirmedSlots.get(i).removeFirst();
+			Slot s2 = confirmedSlots.get(i).removeFirst();
+
+			assert(
+				(s1_0.getNonce().equals(s1.getNonce()) &&
+				s1_0.getMessage().equals(s1.getMessage()) &&
+				s2_0.getNonce().equals(s2.getNonce()) &&
+				s2_0.getMessage().equals(s2.getMessage()))
+				||
+				(s2_0.getNonce().equals(s1.getNonce()) &&
+				s2_0.getMessage().equals(s1.getMessage()) &&
+				s1_0.getNonce().equals(s2.getNonce()) &&
+				s1_0.getMessage().equals(s2.getMessage()))
+			);
 		}
+		
+		// Check state is what was expected
+		for (NodeService service: services) {
+			List<String> ledger = service.getLedger();
+			assertEquals(ledger.size(), 2);
+			assert(
+				(ledger.get(0).equals(s1_0.getMessage()) &&
+				ledger.get(1).equals(s2_0.getMessage()))
+				||
+				(ledger.get(1).equals(s1_0.getMessage()) &&
+				ledger.get(0).equals(s2_0.getMessage()))
+			);
+		}
+
 	}
 
 	@Test
@@ -179,12 +273,15 @@ public class NodeServiceTest {
 		String nonce2 = "1234";
 		String cmd2 = "b";
 
-		Deque<Slot> confirmedSlots = new LinkedBlockingDeque<>();
-		Consumer<Slot> observer = s -> confirmedSlots.add(s);
+		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
 		List<NodeService> services = setupServices(n, basePort);
 		services.forEach(service -> service.listen());
-		services.forEach(service -> service.registerObserver(observer));
+		services.forEach(service -> {
+			final int id = service.getId();
+			Consumer<Slot> observer = s -> confirmedSlots.get(id).add(s);
+			service.registerObserver(observer);
+		});
 
 		services.forEach(service -> {
 			if (service.getId() != 0) {
@@ -193,13 +290,13 @@ public class NodeServiceTest {
 			}
 		});
 
-		// wait for all but 0 to output
-		while (confirmedSlots.size() != 2 * (n-1)) {
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		
+		// FIXME (dsa): don't like this, but don't know how to do check
+		// without assuming stuff about some correctness
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 
 		System.out.println("[test] all but 0 got somewhere");
@@ -207,19 +304,53 @@ public class NodeServiceTest {
 		services.get(0).startConsensus(nonce2, cmd2);
 		services.get(0).startConsensus(nonce1, cmd1);
 
-		// wait 0 to output as well
-		while (confirmedSlots.size() != 2 * n) {
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		// FIXME (dsa): don't like this, but don't know how to do check
+		// without assuming stuff about some correctness
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
 		}
 
 		services.forEach(service -> service.stopAndWait());
 
-		for (Slot s: confirmedSlots) {
-			System.out.println(s);
+		printSlotMap(confirmedSlots);
+
+		// Check output to clients is what was expected
+		// Replica 0 is the only that might output in different order
+
+		// Check replica 0
+		Slot s1_0 = confirmedSlots.get(0).removeFirst();
+		Slot s2_0 = confirmedSlots.get(0).removeFirst();
+		assert(
+				(nonce1.equals(s1_0.getNonce()) &&
+				 cmd1.equals(s1_0.getMessage()) &&
+				 nonce2.equals(s2_0.getNonce()) &&
+				 cmd2.equals(s2_0.getMessage()))
+				||
+				(nonce2.equals(s1_0.getNonce()) &&
+				 cmd2.equals(s1_0.getMessage()) &&
+				 nonce1.equals(s2_0.getNonce()) &&
+				 cmd1.equals(s2_0.getMessage()))
+			  );
+
+		// Check other replicas
+		for (int i = 1; i < n; i++) {
+			assertEquals(2, confirmedSlots.get(i).size());
+			Slot s1 = confirmedSlots.get(i).removeFirst();
+			Slot s2 = confirmedSlots.get(i).removeFirst();
+			assertEquals(nonce1, s1.getNonce());
+			assertEquals(nonce2, s2.getNonce());
+			assertEquals(cmd1, s1.getMessage());
+			assertEquals(cmd2, s2.getMessage());
+		}
+		
+		// Check state is what was expected
+		for (NodeService service: services) {
+			List<String> ledger = service.getLedger();
+			assertEquals(ledger.size(), 2);
+			assertEquals(ledger.get(0), cmd1);
+			assertEquals(ledger.get(1), cmd2);
 		}
 	}
 }
