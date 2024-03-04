@@ -15,7 +15,7 @@ public class RSAKeyGenerator {
 
         // check args
         if (args.length != 3) {
-            System.err.println("Usage: RSAKeyGenerator [r|w] <priv-key-file> <pub-key-file>");
+            System.err.println("Usage: [r|w] <path-to-priv-key-id>.priv <path-to-pub-key-id>.pub");
             return;
         }
 
@@ -23,13 +23,18 @@ public class RSAKeyGenerator {
         final String privkeyPath = args[1];
         final String pubkeyPath = args[2];
 
-        if (mode.toLowerCase().startsWith("w")) {
-            System.out.println("Generate and save keys");
-            write(privkeyPath, pubkeyPath);
-        } else {
-            System.out.println("Load keys");
-            read(privkeyPath, "priv");
-            read(pubkeyPath, "pub");
+        switch (mode.toLowerCase()) {
+            case "r":
+                System.out.println("Load keys");
+                read(privkeyPath, "priv");
+                read(pubkeyPath, "pub");
+                break;
+            case "w":
+                System.out.println("Generate and save keys");
+                write(privkeyPath, pubkeyPath);
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid mode. Usage: [r|w] <path-to-priv-key-id>.priv <path-to-pub-key-id>.pub");
         }
 
         System.out.println("Done.");

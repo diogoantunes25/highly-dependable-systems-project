@@ -17,6 +17,25 @@ have the same state.
 
 ---
 
+# Public Key Infrastructure
+The nodes and clients within the blockchain system should employ self-generated public and private keys, 
+distributed in advance before the system's initiation. The `PKI` module is responsible for generating these 
+keys.
+
+The steps to generate the keys are as follows:
+
+### Install PKI module
+```bash
+cd PKI/
+mvn clean install
+```
+
+### Generate keys
+```bash
+mvn compile exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
+```
+
+
 # Configuration Files
 
 ### Node configuration
