@@ -2,8 +2,7 @@ package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig; import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 import java.text.MessageFormat;
 import java.util.Optional;
@@ -18,13 +17,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Instance of Instanbul consensus protocol
- * It's assumed that a single thread executes an instance at each moment. 
+ * It's thread safe (per instance) - this is ensured by having all public methods
+ * be synchronized (or do simple operations on thread safe objects)
  */
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
+
+
+	// Milliseconds
+	private static final int INITIAL_TIMEOUT = 10;
 
 	// Process configuration (includes its id)
 	private final ProcessConfig config;
@@ -57,7 +62,7 @@ public class Instanbul {
 	private final List<Consumer<String>> observers = new ArrayList();
 
 	// Wheter start was called already
-	private boolean started = false;
+	private AtomicBoolean started = new AtomicBoolean(false);
 
 	// FIXME (dsa): I'm not sure that this is needed
 	private Optional<CommitMessage> commitMessage;
@@ -70,7 +75,16 @@ public class Instanbul {
 
 	// PREPARE message from future rounds
 	private Map<Integer, List<ConsensusMessage>> stashedPrepare = new HashMap<>();
-	
+
+	// Timer required by IBFT
+	private Optional<Timer> timer;
+
+	// Timer ids for each round
+	// The semantics are:
+	//	- if there's no entry for r, timer not stopped
+	//	- if there's a non-empty entry for r, timer running with the id inside the optinal
+	//	- if there's an empty entry for r, timer stopped
+	private Map<Integer, Optional<Integer>> roundTimerId = new HashMap<>();
 
 	public Instanbul(ProcessConfig config, int lambda) {
 		this.lambda = lambda;
@@ -83,9 +97,23 @@ public class Instanbul {
 		this.decision = Optional.empty();
 
 		this.commitMessage = Optional.empty();
-		// this.instanceInfo = Optional.empty();
 		this.prepareMessages = new MessageBucket(config.getN());
 		this.commitMessages = new MessageBucket(config.getN());
+	}
+
+	/**
+	 * Sets timer to be used by protocol
+	 */
+	public void setTimer(Timer timer) {
+		this.timer = Optional.of(timer);
+	}
+
+	/**
+	 * Encapsulates timer schedule (in paper represented by function t)
+	 */
+	private int getTimeout(int round) {
+		// Exponential backoff
+		return (1 << round) * INITIAL_TIMEOUT;
 	}
 
 	/**
@@ -96,6 +124,47 @@ public class Instanbul {
 	 */
 	public void registerObserver(Consumer<String> observer) {
 		observers.add(observer);	
+	}
+
+	/**
+	 * Start timer with provided timeout for current round
+	 * If timer was already stopped, it's not started again
+	 */
+	private void startTimer(int timeout) {
+		// If I have a timer
+		if (this.timer.isPresent()) {
+
+			// TODO (dsa): need to make sure I haven't stopped the timer for round i
+			// If I haven't started a timer for this round
+			if (!roundTimerId.containsKey(this.ri)) {
+				int timerId = this.timer.get().setTimerToRunning(timeout);
+				roundTimerId.put(this.ri, Optional.of(timerId));
+			}
+		} else {
+			LOGGER.log(Level.WARNING, MessageFormat.format("{0} - No timer available - liveness cannot be guaranteed",
+						config.getId(), this.lambda));
+		}
+	}
+
+	/**
+	 * Stop timer for provided round
+	 */
+	private void stopTimer(int round) {
+		// If I have a timer
+		if (this.timer.isPresent()) {
+			// If I haven't started a timer for this round
+			if (!roundTimerId.containsKey(round)) {
+				// nothing to stop in this case, because it was not running
+			} else {
+				// actually stop timer
+				this.timer.get().setTimerToStopped(roundTimerId.get(round).get());
+			}
+
+			roundTimerId.put(round, Optional.empty());
+		} else {
+			LOGGER.log(Level.WARNING, MessageFormat.format("{0} - No timer available - liveness cannot be guaranteed",
+						config.getId(), this.lambda));
+		}
 	}
 
 	/**
@@ -152,18 +221,19 @@ public class Instanbul {
 	 *
 	 * @param inputValue Value to value agreed upon
 	 */
-	public List<ConsensusMessage> start(String inputValue) {
-		if (started) {
+	public synchronized List<ConsensusMessage> start(String inputValue) {
+		if (started.getAndSet(true)) {
 			LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
 						config.getId(), this.lambda));
 			return new ArrayList<>();
-		} else {
-			started = true;
 		}
 
 		if (!this.inputValuei.isPresent()) {
 			this.inputValuei = Optional.of(inputValue);
 		}
+
+		// Start timer for this round
+		this.startTimer(getTimeout(this.ri));
 
 		// Leader broadcasts PRE-PREPARE message
 		if (isLeader(this.lambda, this.ri, this.config.getId())) {
@@ -220,9 +290,6 @@ public class Instanbul {
 		}
 
 		// Set instance value
-		// if (!this.instanceInfo.isPresent()) {
-		// 	this.instanceInfo = Optional.of(new InstanceInfo(value));	
-		// }
 		if (!this.inputValuei.isPresent()) {
 			this.inputValuei = Optional.of(value);
 		}
@@ -236,6 +303,7 @@ public class Instanbul {
 						+ "replying again to make sure it reaches the initial sender",
 						config.getId(), this.lambda, round));
 		}
+
 
 		// Broadcast Prepare (labmda, round, value)
 		return IntStream.range(0, this.config.getN())
@@ -283,7 +351,7 @@ public class Instanbul {
 		if (this.pri.isPresent()) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
-						"{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, "
+						"{0} - Already prepared for Consensus Instance {1}, Round {2}, "
 						+ "ignoring PREPARE that was just received",
 						config.getId(), this.lambda, round));
 
@@ -353,7 +421,24 @@ public class Instanbul {
 		return new ArrayList<>();
 	}
 
-	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+	/**
+	 * Handles timer expiration and returns messages to be sent over the network
+	 */
+	public synchronized List<ConsensusMessage> handleTimeout(int timerId) {
+		// TODO	(dsa)
+		
+		LOGGER.log(Level.INFO,
+				MessageFormat.format(
+					"{0} - Timeout on Consensus Instance {1}, Round {2}",
+					config.getId(), this.lambda, this.ri));
+
+		return new ArrayList<>();
+	}
+
+	/**
+	 * Handles protocol messages and returns messages to be sent over the network
+	 */
+	public synchronized List<ConsensusMessage> handleMessage(ConsensusMessage message) {
 		int mround = message.getRound();
 
 		return switch (message.getType()) {
@@ -410,10 +495,9 @@ public class Instanbul {
 		};
 	}
 
-
 	// TODO (dsa): add stuff for round change
 
-	public void decide(String value) {
+	private void decide(String value) {
 		if (this.decision.isPresent()) {
 
 			if (!this.decision.get().equals(value)) {
@@ -445,6 +529,7 @@ public class Instanbul {
 	 * Returns node id
 	 */
 	public int getId() {
+		// Doesn't need synchronization because is read only
 		return this.config.getId();
 	}
 
@@ -452,6 +537,6 @@ public class Instanbul {
 	 * Returns whether input was already called
 	 */
 	public boolean hasStarted() {
-		return started;
+		return started.get();
 	}
 }

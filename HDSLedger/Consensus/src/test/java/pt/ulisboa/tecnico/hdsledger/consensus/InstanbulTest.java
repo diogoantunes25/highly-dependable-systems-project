@@ -7,9 +7,10 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBu
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
-import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
+import java.util.function.Consumer;
+import java.util.List;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.Map;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 public class InstanbulTest {
 
@@ -32,7 +34,7 @@ public class InstanbulTest {
 		).collect(Collectors.toList());
 	}
 
-	private List<Instanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda) {
+	private List<Instanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages) {
 
 		List<ProcessConfig> configs = defaultConfigs(n);
 		List<Instanbul> instances = configs.stream()
@@ -49,6 +51,24 @@ public class InstanbulTest {
 				return i;
 			}).collect(Collectors.toList());
 
+		for (int i = 0; i < n; i++) {
+			Instanbul instance = instances.get(i);
+
+			// Create a callaback that handles timeout and stores messages
+			Consumer<Integer> callback = timerId -> {
+				List<ConsensusMessage> output = instance.handleTimeout(timerId);
+				for (ConsensusMessage m: output) {
+					messages.addLast(m);	
+				}
+			};
+
+			// Create timer with that callback
+			Timer timer = new SimpleTimer();
+			timer.registeTimeoutCallback(callback);
+
+			// Register timer as the one to be used by instance
+			instance.setTimer(timer);
+		}
 		return instances;
 	}
 	/**
@@ -92,11 +112,11 @@ public class InstanbulTest {
 		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
-
 		// Backlog of messages
-		Deque<ConsensusMessage> messages = new LinkedList();
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -136,11 +156,11 @@ public class InstanbulTest {
 		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
-
 		// Backlog of messages
-		Deque<ConsensusMessage> messages = new LinkedList();
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -183,11 +203,11 @@ public class InstanbulTest {
 		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
-
 		// Backlog of messages
-		Deque<ConsensusMessage> messages = new LinkedList();
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -235,11 +255,11 @@ public class InstanbulTest {
 		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
-
 		// Backlog of messages
-		Deque<ConsensusMessage> messages = new LinkedList();
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -286,11 +306,11 @@ public class InstanbulTest {
 		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
-
 		// Backlog of messages
-		Deque<ConsensusMessage> messages = new LinkedList();
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -329,11 +349,11 @@ public class InstanbulTest {
 		// Stores the values confirmed by each replica
 		Map<Integer, List<String>> confirmed = new HashMap<>();
 
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda);
-
 		// Backlog of messages
-		Deque<ConsensusMessage> messages = new LinkedList();
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -355,6 +375,61 @@ public class InstanbulTest {
 			if (receiver == n-1) continue;
 			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
 			output.forEach(m -> messages.addLast(m));
+		}
+
+		// Crashed node is node expected to output anything
+		confirmed.remove(n-1);
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
+	/**
+	 * Runs an instance of consensus with 4 nodes where one node that is
+	 * the first leader crashes
+	 */
+	@Test
+	public void leaderCrashesN4() {
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			if (instance.getId() != 0) {
+				String value = String.format("a%d", instance.getId());
+				List<ConsensusMessage> output = instance.start(value);
+				// Store all messages to be processed
+				output.forEach(m -> messages.addLast(m));
+			}
+		});
+
+		// Run for at most 2 seconds
+		long startTime = System.currentTimeMillis();
+        long duration = 0;
+		while (duration < 5000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				// FIXME (dsa): don't hard code the leader
+				if (receiver == 0) continue;
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages.addLast(m));
+			}
+
+			duration = System.currentTimeMillis() - startTime;
 		}
 
 		// Crashed node is node expected to output anything
