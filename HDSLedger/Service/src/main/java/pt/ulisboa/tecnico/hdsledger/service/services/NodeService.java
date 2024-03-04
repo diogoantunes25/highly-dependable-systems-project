@@ -67,8 +67,15 @@ public class NodeService implements UDPService {
     // Blocking queue of decisions (thread-safe)
     private BlockingQueue<Decision> decisions = new LinkedBlockingQueue<>(); 
 
+    // Whether service is running
+    private AtomicBoolean running = new AtomicBoolean(false);
+
     // Whether listen has been called
     private AtomicBoolean listening = new AtomicBoolean(false);
+
+    // Running threads (warning: can't remove listening property before of 
+    // thread safety, which is not provided by this threads property)
+    private Optional<List<Thread>> threads = Optional.empty();
     
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig) {
@@ -113,12 +120,8 @@ public class NodeService implements UDPService {
         // Input into state machine
         List<ConsensusMessage> output = instance.start(value);
 
-        System.out.printf("Output has size %d\n", output.size());
         // Dispatch messages
-        output.forEach(m -> {
-            System.out.println("Dispatching message");
-            link.send(m.getReceiver(), m);
-        });
+        output.forEach(m -> link.send(m.getReceiver(), m));
     }
 
     /*
@@ -141,8 +144,6 @@ public class NodeService implements UDPService {
      */
     private synchronized void handleMessage(ConsensusMessage message) {
         // TODO: synchronize in a per instance basis
-
-        System.out.println("Dispatching message");
 
         int lambda = message.getConsensusInstance();
         Instanbul instance = getInstance(lambda);
@@ -210,17 +211,19 @@ public class NodeService implements UDPService {
     }
 
     @Override
-    public List<Thread> listen() {
+    public void listen() {
         if (this.listening.getAndSet(true)) {
             throw new RuntimeException("NodeService.listen already called for this service instance");
         }
+
+        this.running.set(true);
 
         List<Thread> threads = new ArrayList<>();
         try {
             // Thread to listen on every request
             Thread networkListener = new Thread(() -> {
                 try {
-                    while (true) {
+                    while (this.running.get()) {
                         Message message = link.receive();
 
                         // If all upon rules are synchronized, there's no point
@@ -231,20 +234,21 @@ public class NodeService implements UDPService {
                                 handleMessage((ConsensusMessage) message);
 
                             case ACK ->
-                                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",
+                                LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Received ACK message from {1}",
                                         config.getId(), message.getSenderId()));
 
                             case IGNORE ->
                                 LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} - Received IGNORE message from {1}",
+                                        MessageFormat.format("{0} Message listener - Received IGNORE message from {1}",
                                                 config.getId(), message.getSenderId()));
 
                             default ->
                                 LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} - Received unknown message from {1}",
+                                        MessageFormat.format("{0} Message listener - Received unknown message from {1}",
                                                 config.getId(), message.getSenderId()));
                         }
                     }
+
                 } catch (IOException | ClassNotFoundException e) {
                     e.printStackTrace();
                 }
@@ -275,7 +279,7 @@ public class NodeService implements UDPService {
                                 config.getId(), input));
 
 
-                    while (true) {
+                    while (this.running.get()) {
                         // if input was already processed after agreement, there's
                         // nothing to do besides getting a new value
                         if (history.containsKey(input)) {
@@ -284,8 +288,12 @@ public class NodeService implements UDPService {
                             // (it's possible for a value to be processed, but
                             // the clients not notified if the input came late)
                             if (!acketToObserver.contains(input)) {
+                                Slot slot = history.get(input);
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
+                                            config.getId(), input, slot.getSlotId()));
                                 for (Consumer<Slot> obs: this.observers) {
-                                    obs.accept(history.get(input));
+                                    obs.accept(slot);
                                 }
                                 acketToObserver.add(input);
                             }
@@ -346,6 +354,10 @@ public class NodeService implements UDPService {
                         // if this consensus output is duplicate, there's nothing
                         // to be done
                         if (history.containsKey(d.getValue())) {
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} Driver - History already contained ({1}), skipping for this reason",
+                                        config.getId(), d.getValue()));
+
                             continue;
                         }
 
@@ -360,13 +372,22 @@ public class NodeService implements UDPService {
                             int slotId = updateState(cmd);
                             Slot slot = new Slot(slotId, nonce, cmd);
                             history.put(value, slot);
+                        } else {
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} Driver - Bad value format (should be nonce::cmd), discarding",
+                                        config.getId(), d.getValue()));
                         }
                     }
 
 
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    // interrup is used to stop thread
+                } finally {
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format("{0} Driver - finished",
+                                config.getId()));
                 }
+
             });
 
             networkListener.start();
@@ -378,7 +399,28 @@ public class NodeService implements UDPService {
             e.printStackTrace();
         }
 
-        return threads;
+        this.threads = Optional.of(threads);
+    }
+
+    @Override
+    public void stopAndWait() {
+        // FIXME (dsa): it's a bit cursed to have the local variable have
+        // the same name as the property
+        
+        if (!listening.get() || !this.threads.isPresent()) {
+            return;
+        }
+
+        List<Thread> threads = this.threads.get();
+        this.running.set(false);
+        for (Thread t: threads) {
+            try {
+                t.interrupt();
+                t.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     /**
@@ -444,5 +486,10 @@ public class NodeService implements UDPService {
         Decision get(int lambda) {
             return bucket.get(lambda);
         }
+    }
+
+    // Mostly for testing purposes
+    public int getId() {
+        return this.config.getId();
     }
 }

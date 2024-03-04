@@ -28,4 +28,13 @@ public class Slot {
     public String getMessage() {
         return message;
     }
+
+    @Override
+    public String toString() {
+        return "Slot{" +
+                "slotId=" + slotId +
+                ", nonce='" + nonce + '\'' +
+                ", message='" + message + '\'' +
+                '}';
+    }
 }

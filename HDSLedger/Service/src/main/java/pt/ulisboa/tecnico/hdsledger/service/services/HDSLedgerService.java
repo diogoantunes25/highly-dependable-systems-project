@@ -58,7 +58,7 @@ public class HDSLedgerService implements UDPService {
 
 
     @Override
-    public List<Thread> listen() {
+    public void listen() {
         List<Thread> threads = new ArrayList<>();
         try {
             // Thread to listen on every request
@@ -91,9 +91,11 @@ public class HDSLedgerService implements UDPService {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        return threads;
     }
 
+    @Override
+    public void stopAndWait() {
+        // TODO (dsa)
+    }
 }
 

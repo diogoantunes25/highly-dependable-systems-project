@@ -161,9 +161,6 @@ public class Instanbul {
 			started = true;
 		}
 
-		// if (!this.instanceInfo.isPresent()) {
-		// 	this.instanceInfo = Optional.of(new InstanceInfo(inputValue));	
-		// }
 		if (!this.inputValuei.isPresent()) {
 			this.inputValuei = Optional.of(inputValue);
 		}
