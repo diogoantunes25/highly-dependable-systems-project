@@ -73,8 +73,12 @@ public class Instanbul {
 	// PRE-PREPARE messages from future rounds (round -> list of messages)
 	private Map<Integer, List<ConsensusMessage>> stashedPrePrepare = new HashMap<>();
 
-	// PREPARE message from future rounds
+	// PREPARE messages from future rounds (round -> list of messages)
 	private Map<Integer, List<ConsensusMessage>> stashedPrepare = new HashMap<>();
+
+	// ROUND-CHANGE messages from other rounds (round -> list of messages)
+	// TODO (dsa): not sure I'll need this, but I feel like I do
+	private Map<Integer, List<ConsensusMessage>> stashedRoundChange = new HashMap<>();
 
 	// Timer required by IBFT
 	private Optional<Timer> timer;
@@ -168,12 +172,25 @@ public class Instanbul {
 	}
 
 	/**
+	 * Returns round that started timer with provided timerId
+	*/
+	private Optional<Integer> getRoundWithTimerId(int timerId) {
+		for (Map.Entry<Integer, Optional<Integer>> entry : roundTimerId.entrySet()) {
+			Optional<Integer> value = entry.getValue();
+			if (value.isPresent() && value.get() == timerId) {
+				return Optional.of(entry.getKey());
+			}
+		}
+		return Optional.empty(); // Value not found	
+	}
+
+	/**
 	 * Utility to create PrePrepareMessages
 	 */
 	private ConsensusMessage createPrePrepareMessage(String value, int instance, int round, int receiver) {
 		PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
 
-		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PRE_PREPARE)
+		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(this.config.getId(), Message.Type.PRE_PREPARE)
 			.setConsensusInstance(instance)
 			.setRound(round)
 			.setMessage(prePrepareMessage.toJson())
@@ -189,7 +206,7 @@ public class Instanbul {
 	private ConsensusMessage createPrepareMessage(PrePrepareMessage prePrepareMessage, String value, int instance, int round, int receiver, int senderId, int senderMessageId) {
 		PrepareMessage prepareMessage = new PrepareMessage(prePrepareMessage.getValue());
 
-		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PREPARE)
+		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(this.config.getId(), Message.Type.PREPARE)
 			.setConsensusInstance(instance)
 			.setRound(round)
 			.setMessage(prepareMessage.toJson())
@@ -205,7 +222,7 @@ public class Instanbul {
 	 * Utility to create CommitMessages
 	 */
 	private ConsensusMessage createCommitMessage(int instance, int round, int receiver, String commitMessageJson) {
-		return new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+		return new ConsensusMessageBuilder(this.config.getId(), Message.Type.COMMIT)
 			.setConsensusInstance(instance)
 			.setRound(round)
 			.setMessage(commitMessageJson)
@@ -213,6 +230,19 @@ public class Instanbul {
 			.build();
 	}
 
+	/**
+	 * Utility to create RoundChangeMessages
+	 */
+	private ConsensusMessage createRoundChangeMessage(int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri) {
+		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri);
+
+		return new ConsensusMessageBuilder(this.config.getId(), Message.Type.ROUND_CHANGE)
+			.setConsensusInstance(instance)
+			.setRound(round)
+			.setMessage(roundChangeMessage.toJson())
+			.setReceiver(receiver)
+			.build();
+	}
 
 	/*
 	 * Start an instance of consensus for a value
@@ -261,7 +291,6 @@ public class Instanbul {
 	private List<ConsensusMessage> prePrepare(ConsensusMessage message) {
 
 		// TODO (dsa): horrible, refactor message structure
-		
 		int round = message.getRound();
 		int senderId = message.getSenderId();
 
@@ -421,18 +450,46 @@ public class Instanbul {
 		return new ArrayList<>();
 	}
 
+	/*
+	 * Handle round change messages
+	 *
+	 * @param message Message to be handled
+	 */
+	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
+		int round = message.getRound();
+
+		LOGGER.log(Level.INFO,
+				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
+					config.getId(), message.getSenderId(), this.lambda, round));
+
+		return new ArrayList<>();
+	}
+
 	/**
 	 * Handles timer expiration and returns messages to be sent over the network
 	 */
 	public synchronized List<ConsensusMessage> handleTimeout(int timerId) {
-		// TODO	(dsa)
-		
+		Optional<Integer> roundOpt = getRoundWithTimerId(timerId);
+
+		if (!roundOpt.isPresent()) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format(
+						"{0} - Timeout of timer {2} on Consensus Instance {1} that either was stopped or not stated. SHOULD NOT HAPPEN",
+						config.getId(), this.lambda, timerId));
+			return new ArrayList<>();
+		}
+
+		int round = roundOpt.get();
+
 		LOGGER.log(Level.INFO,
 				MessageFormat.format(
 					"{0} - Timeout on Consensus Instance {1}, Round {2}",
-					config.getId(), this.lambda, this.ri));
+					config.getId(), this.lambda, round));
 
-		return new ArrayList<>();
+		// Broadcast RoundChange (labmda, round, pvi, pri)
+		return IntStream.range(0, this.config.getN())
+			.mapToObj(receiver -> this.createRoundChangeMessage(this.lambda, round, receiver, this.pvi, this.pri))
+			.collect(Collectors.toList());
 	}
 
 	/**
@@ -484,6 +541,9 @@ public class Instanbul {
 
 			case COMMIT -> 
 				commit(message);
+
+			case ROUND_CHANGE -> 
+				roundChange(message);
 
 			default -> {
 				LOGGER.log(Level.INFO,
