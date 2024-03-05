@@ -172,33 +172,15 @@ public class HMACLink implements Link {
         new Thread(() -> {
             try {
                 String jsonString = new Gson().toJson(data);
-                Optional<String> signature;
 
-                // Sign message
-                try {
-                    signature = Optional.of(SigningUtils.sign(jsonString, this.config.getPrivateKey()));
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    throw new HDSSException(ErrorMessage.SigningError);
-                }
-
-                SignedMessage signedMessage = new SignedMessage(jsonString, signature.get());
-                String serialize = new Gson().toJson(signedMessage);
-
-                byte[] encryptedData;
-                try {
-                    // try to get appropriate key from sharedKeys
-                    if (sharedKeys.containsKey(data.getReceiver())) {
-                        Key sharedKey = sharedKeys.get(data.getReceiver());
-                        encryptedData = SigningUtils.encryptAES(serialize.getBytes(), sharedKey);
-                        DatagramPacket packet = new DatagramPacket(encryptedData, encryptedData.length, hostname, port);
-                        socket.send(packet);
-                    } else {
-                        // if the node does not yet have a shared key, it does not send the message
-                    }
-                } catch (GeneralSecurityException e) {
-                    e.printStackTrace();
-                    throw new HDSSException(ErrorMessage.EncryptionError);
+                // try to get appropriate key from sharedKeys
+                if (sharedKeys.containsKey(data.getReceiver())) {
+                    Key sharedKey = sharedKeys.get(data.getReceiver());
+                    String hmac = SigningUtils.generateHMAC(jsonString, sharedKey);
+                    HMACMessage hmacMessage = new HMACMessage(jsonString, hmac);
+                    byte[] buf = new Gson().toJson(hmacMessage).getBytes();
+                    DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
+                    socket.send(packet);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -228,19 +210,43 @@ public class HMACLink implements Link {
             socket.receive(response);
 
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
-            serialized = new String(buffer);
-            message = new Gson().fromJson(serialized, Message.class);
 
-            // Verify signature
-            SignedMessage signedMessage = new Gson().fromJson(serialized, SignedMessage.class);
+            // buffer can be either a HMACMessage or a KeyProposal message
 
-            if (!SigningUtils.verifySignature(signedMessage.getMessage(), signedMessage.getSignature(),
-                    this.nodes.get(message.getSenderId()).getPublicKey())) {
-                message.setType(Message.Type.IGNORE);
-                LOGGER.log(Level.WARNING,  MessageFormat.format(
-                        "WARNING: Invalid message signature received from {0}:{1}",
-                        InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
-                return message;
+            // assume that it is a KeyProposal message
+            try {
+                // first we decrypt the message
+                String decryptedData = new String(SigningUtils.decrypt(buffer, config.getPrivateKey()));
+                // decrypted data is a KeyProposal message from the sender, so we need to verify the signature
+                message = new Gson().fromJson(decryptedData, KeyProposal.class);
+                // verify signature
+                if (!SigningUtils.verifySignature(((KeyProposal) message).getKey(),
+                        ((KeyProposal) message).getSignature(),
+                        this.nodes.get(message.getSenderId()).getPublicKey())) {
+                    message.setType(Message.Type.IGNORE);
+                    LOGGER.log(Level.WARNING,  MessageFormat.format(
+                            "WARNING: Invalid message signature received from {0}:{1}",
+                            InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+                    return message;
+                }
+            } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
+                     NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
+                     BadPaddingException e) {
+                // if we catch an exception, we assume that it is a HMACMessage
+                HMACMessage hmacMessage = new Gson().fromJson(new String(buffer), HMACMessage.class);
+                String hmac = hmacMessage.getHmac();
+                String messageString = hmacMessage.getMessage();
+                // try to get appropriate key from sharedKeys
+                if (sharedKeys.containsKey(message.getSenderId())) {
+                    Key sharedKey = sharedKeys.get(message.getSenderId());
+                    if (!hmac.equals(SigningUtils.generateHMAC(messageString, sharedKey))) {
+                        message.setType(Message.Type.IGNORE);
+                        LOGGER.log(Level.WARNING,  MessageFormat.format(
+                                "WARNING: Invalid message signature received from {0}:{1}",
+                                InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+                        return message;
+                    }
+                }
             }
         }
 
@@ -338,26 +344,25 @@ public class HMACLink implements Link {
                     sharedKeys.put(dest.getId(), aesKey);
 
                     String aesKeyString = Base64.getEncoder().encodeToString(aesKey.getEncoded());
-
-                    KeyProposal keyProposal = new KeyProposal(String.valueOf(this.config.getId()), aesKeyString);
-                    keyProposal.setReceiver(dest.getId());
-                    keyProposal.setMessageId(messageCounter.getAndIncrement());
                     Optional<String> signature;
-
                     // Sign message
                     try {
                         // serialize keyProposal
-                        String serizalize = new Gson().toJson(keyProposal);
+                        String serizalize = new Gson().toJson(aesKeyString);
                         signature = Optional.of(SigningUtils.sign(serizalize, this.config.getPrivateKey()));
                     } catch (Exception e) {
                         e.printStackTrace();
                         throw new HDSSException(ErrorMessage.SigningError);
                     }
 
+                    KeyProposal keyProposal = new KeyProposal(this.config.getId(), aesKeyString, signature.get());
+                    keyProposal.setReceiver(dest.getId());
+                    keyProposal.setMessageId(messageCounter.getAndIncrement());
                     // encrypt message with receiver's public key
                     byte[] encryptedData;
                     try {
-                        encryptedData = SigningUtils.encrypt(signature.get().getBytes(), dest.getPublicKey());
+                        String serializedKeyProposal = new Gson().toJson(keyProposal);
+                        encryptedData = SigningUtils.encrypt(serializedKeyProposal.getBytes(), dest.getPublicKey());
                     } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
                              NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
                              BadPaddingException e) {

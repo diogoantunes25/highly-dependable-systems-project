@@ -1,15 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+
 import java.io.Serializable;
 
-public class SignedMessage implements Serializable {
+public class SignedMessage extends Message implements Serializable {
 
     // Message content
     private String signature;
     // Message signature
     private String message;
 
-    public SignedMessage(String message, String signature) {
+    public SignedMessage(int senderId, Type type, String message, String signature) {
+        super(senderId, type);
         this.message = message;
         this.signature = signature;
     }

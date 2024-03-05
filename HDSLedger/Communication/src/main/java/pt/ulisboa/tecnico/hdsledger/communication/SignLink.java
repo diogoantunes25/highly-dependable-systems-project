@@ -170,7 +170,7 @@ public class SignLink implements Link {
                     throw new HDSSException(ErrorMessage.SigningError);
                 }
 
-                SignedMessage signedMessage = new SignedMessage(jsonString, signature.get());
+                SignedMessage signedMessage = new SignedMessage(data.getSenderId(), data.getType(), jsonString, signature.get());
                 byte[] buf = new Gson().toJson(signedMessage).getBytes();
 
                 DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
@@ -204,12 +204,12 @@ public class SignLink implements Link {
 
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             serialized = new String(buffer);
-            message = new Gson().fromJson(serialized, Message.class);
 
             // Verify signature
-            SignedMessage signedMessage = new Gson().fromJson(serialized, SignedMessage.class);
+            message = new Gson().fromJson(serialized, SignedMessage.class);
 
-            if (!SigningUtils.verifySignature(signedMessage.getMessage(), signedMessage.getSignature(),
+            if (!SigningUtils.verifySignature(((SignedMessage) message).getMessage(),
+                    ((SignedMessage) message).getSignature(),
                     this.nodes.get(message.getSenderId()).getPublicKey())) {
                 message.setType(Message.Type.IGNORE);
                 LOGGER.log(Level.WARNING,  MessageFormat.format(

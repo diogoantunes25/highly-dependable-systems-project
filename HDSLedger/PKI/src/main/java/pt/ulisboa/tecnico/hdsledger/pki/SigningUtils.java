@@ -5,10 +5,8 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
+import javax.crypto.*;
+
 public class SigningUtils {
 
     public static byte[] encrypt(byte[] data, String pathToPrivateKey)
@@ -18,17 +16,6 @@ public class SigningUtils {
         PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "priv");
         Cipher encryptCipher = Cipher.getInstance("RSA");
         encryptCipher.init(Cipher.ENCRYPT_MODE, privateKey);
-        byte[] encryptedData = encryptCipher.doFinal(data);
-
-        return encryptedData;
-    }
-
-    public static byte[] encryptAES(byte[] data, Key key)
-            throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
-            IllegalBlockSizeException, BadPaddingException {
-
-        Cipher encryptCipher = Cipher.getInstance("AES");
-        encryptCipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] encryptedData = encryptCipher.doFinal(data);
 
         return encryptedData;
@@ -44,6 +31,16 @@ public class SigningUtils {
         byte[] decryptedData = decryptCipher.doFinal(data);
 
         return decryptedData;
+    }
+    public static String generateHMAC(String data, Key key) {
+        try {
+            Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
+            sha256_HMAC.init(key);
+            byte[] macData = sha256_HMAC.doFinal(data.getBytes());
+            return Base64.getEncoder().encodeToString(macData);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static String digest(String data) throws NoSuchAlgorithmException {
