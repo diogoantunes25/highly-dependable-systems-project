@@ -498,4 +498,7 @@ public class InstanbulTest {
 	}
 
 	// TODO (dsa): test amplification
+	
+	// TODO (dsa): delay commit messages for the round to change and
+	// then allow them to go through
 }
