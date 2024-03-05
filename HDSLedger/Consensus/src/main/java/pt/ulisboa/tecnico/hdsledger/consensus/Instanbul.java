@@ -401,7 +401,7 @@ public class Instanbul {
 		}
 
 		// Find value with valid quorum
-		Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(config.getId(), this.lambda, round);
+		Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(round);
 		
 		if (preparedValue.isPresent()) {
 
@@ -414,7 +414,7 @@ public class Instanbul {
 			this.pri = Optional.of(round);
 			this.pvi = Optional.of(preparedValue.get());
 
-			Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(this.lambda, round)
+			Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(round)
 				.values();
 
 			this.commitMessage = Optional.of(new CommitMessage(preparedValue.get()));
@@ -443,8 +443,7 @@ public class Instanbul {
 
 		commitMessages.addMessage(message);
 
-		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(config.getId(),
-				this.lambda, round);
+		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(round);
 
 		if (commitValue.isPresent()) {
 
@@ -459,8 +458,7 @@ public class Instanbul {
 		}
 
 		// Amplification (if didn't broadcast commit message yet)
-		commitValue = commitMessages.hasValidWeakCommitSupport(config.getId(),
-				this.lambda, round);
+		commitValue = commitMessages.hasValidWeakCommitSupport(round);
 
 		if (commitValue.isPresent() && !commitMessage.isPresent()) {
 			LOGGER.log(Level.INFO,
@@ -479,6 +477,11 @@ public class Instanbul {
 	 */
 	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
 		int round = message.getRound();
+
+		// Round change amplification
+		
+		
+		//
 
 		LOGGER.log(Level.INFO,
 				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
