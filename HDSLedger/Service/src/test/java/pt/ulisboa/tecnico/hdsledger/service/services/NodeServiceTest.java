@@ -353,4 +353,6 @@ public class NodeServiceTest {
 			assertEquals(ledger.get(1), cmd2);
 		}
 	}
+
+	// TODO: add tests with previous round messages
 }

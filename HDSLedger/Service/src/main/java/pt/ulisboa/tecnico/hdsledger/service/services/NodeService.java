@@ -30,6 +30,8 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBu
 import pt.ulisboa.tecnico.hdsledger.consensus.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.consensus.Instanbul;
+import pt.ulisboa.tecnico.hdsledger.consensus.Timer;
+import pt.ulisboa.tecnico.hdsledger.consensus.SimpleTimer;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -73,10 +75,17 @@ public class NodeService implements UDPService {
     // Whether listen has been called
     private AtomicBoolean listening = new AtomicBoolean(false);
 
+    // Current consensus instance
+    private AtomicInteger currentLambda = new AtomicInteger(0);
+
+    // Stashed messages for future rounds (does not need to be thread-safe, because
+    // it'll have synchronization around it)
+    private Map<Integer, List<ConsensusMessage>> stashed = new HashMap<>();
+
     // Running threads (warning: can't remove listening property before of 
     // thread safety, which is not provided by this threads property)
     private Optional<List<Thread>> threads = Optional.empty();
-    
+
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig) {
         this.link = link;
@@ -93,16 +102,34 @@ public class NodeService implements UDPService {
     }
 
     /**
+     * Check that mesage is valid
+     */
+    private boolean checkIsValidMessage(String value) {
+        // TODO (dsa)
+        return true;
+    }
+
+    /**
      * Returns instance with id lambda and creates one if it doesn't exist
      */
     private Instanbul getInstance(int lambda) {
+        // TODO (dsa): check that lambda <= current lambda
+        // if lambda > current lambda (or lambda > current lambda + 1 ?), then
+        // i can't yet decide on the beta predicate to provide (because it depends
+        // on the proposals so far)
+        // beta should check that no value so far is the same as the current
+        // one and that the signature is correct
+ 
         return instances.computeIfAbsent(lambda, l -> {
-            Instanbul instance = new Instanbul(this.config, l);
+            Instanbul instance = new Instanbul(this.config, l, value -> this.checkIsValidMessage(value));
+            // TODO (dsa): probably don't need a timer per instance (one for all is enough)
+            Timer timer = new SimpleTimer();
             Consumer<String> observer = s -> {
                 decided(l, s);
             };
     
             instance.registerObserver(observer);
+            instance.setTimer(timer);
             return instance;
         });
     }
@@ -110,6 +137,7 @@ public class NodeService implements UDPService {
     /*
      * Starts a new consensus instance.
      * Does not check that there's not other ongoing instances.
+     * Does not check that it's the current instance.
      * Thread-safe.
      *
      * @param lambda
@@ -122,6 +150,23 @@ public class NodeService implements UDPService {
 
         // Dispatch messages
         output.forEach(m -> link.send(m.getReceiver(), m));
+
+        // Dispatch all stashed message for round
+        List<ConsensusMessage> messages;
+
+        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Actually starting instance {1} with {2} - getting stashed messages",
+                    config.getId(), lambda, value));
+        synchronized (stashed) {
+            messages = stashed.remove(lambda);
+        }
+
+        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Actually starting instance {1} with {2} - starting to parse stashed messages",
+                    config.getId(), lambda, value));
+
+        // Handle all stashed messages (if there were stashed messages)
+        if (messages != null) {
+            messages.forEach(message -> this.handleMessage(message));
+        }
     }
 
     /*
@@ -225,14 +270,58 @@ public class NodeService implements UDPService {
             Thread networkListener = new Thread(() -> {
                 try {
                     while (this.running.get()) {
+                        LOGGER.log(Level.FINER, MessageFormat.format("{0} Message listener - Trying to get new message",
+                                config.getId()));
+
                         Message message = link.receive();
+
+                        LOGGER.log(Level.FINER, MessageFormat.format("{0} Message listener - Got new message",
+                                config.getId()));
 
                         // If all upon rules are synchronized, there's no point
                         // in creating a new thread to handle each message
                         switch (message.getType()) {
 
-                            case PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE ->
-                                handleMessage((ConsensusMessage) message);
+                            case PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE -> {
+                                ConsensusMessage comessage = (ConsensusMessage) message;
+                                int lambda = comessage.getConsensusInstance();
+
+                                // Only handle message for which we can have a predicate (i.e
+                                // for previous rounds)
+                                // Need to synchronize, otherwise after round check and
+                                // before adding to stashed and messages are effectively
+                                // lost
+
+                                LOGGER.log(Level.FINER, MessageFormat.format("{0} Message listener - Entering stashed lock section",
+                                        config.getId()));
+
+                                synchronized (stashed) {
+                                    int myLambda = this.currentLambda.get();
+                                    if (lambda != myLambda) {
+
+                                        // Stash future messages for later processing
+                                        if (lambda > myLambda) {
+                                            LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Message for future instance {1} while Im at {2}",
+                                                    config.getId(), lambda, myLambda));
+
+                                            this.stashed.putIfAbsent(lambda, new ArrayList<>());
+                                            this.stashed.get(lambda).add(comessage);
+
+                                            LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Stashed message from future instance {1} while Im at {2}",
+                                                    config.getId(), lambda, myLambda));
+                                        } 
+
+                                        // Can drop messages from previous instances
+                                        else {
+                                            LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Dropped message from previous instance {1} while Im at {2}",
+                                                    config.getId(), lambda, myLambda));
+                                        }
+                                        continue;
+                                    }
+                                }
+
+                                handleMessage(comessage);
+                            }
 
                             case ACK ->
                                 LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Received ACK message from {1}",
@@ -258,7 +347,6 @@ public class NodeService implements UDPService {
             // Thread to take pending inputs from clients and input them into consensus
             Thread driver = new Thread(() -> {
                 try {
-                    int currentLambda = 0;
                     DecisionBucket bucket = new DecisionBucket();
 
                     // maps values to the slot they where finalized to (after
@@ -283,6 +371,8 @@ public class NodeService implements UDPService {
                     while (this.running.get()) {
                         // if input was already processed after agreement, there's
                         // nothing to do besides getting a new value
+                        // TODO (dsa): probably no longer need this (because beta
+                        // ensures that accept value was not already decided and is valid)
                         if (history.containsKey(input)) {
 
                             // if not notified observers, notify
@@ -313,11 +403,11 @@ public class NodeService implements UDPService {
 
                         // start new instance (can't be after take, because 
                         // take's value might already be finalized as well)
-                        currentLambda += 1;
+                        currentLambda.incrementAndGet();
                         LOGGER.log(Level.INFO,
                                 MessageFormat.format("{0} Driver - Inputting into consensus {1} value {2}",
-                                    config.getId(), currentLambda, input));
-                        actuallyInput(currentLambda, input);
+                                    config.getId(), currentLambda.get(), input));
+                        actuallyInput(currentLambda.get(), input);
 
                         LOGGER.log(Level.INFO,
                                 MessageFormat.format("{0} Driver - Inputted, now I wait for decision",
@@ -326,11 +416,13 @@ public class NodeService implements UDPService {
                         // check if this instance was already decided upon. if it
                         // was, then no need to wait, otherwise wait for more
                         // decisions
+                        // TODO (dsa): probably no longer need this (because only
+                        // one consensus is executed at a time)
                         Decision d;
-                        while (!bucket.contains(currentLambda)) {
+                        while (!bucket.contains(currentLambda.get())) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Decision for instance {1} has not yet been reached",
-                                        config.getId(), currentLambda));
+                                        config.getId(), currentLambda.get()));
 
                             // take must be used instead of remove because it's blocking
                             d = decisions.take();
@@ -344,8 +436,8 @@ public class NodeService implements UDPService {
 
                         LOGGER.log(Level.INFO,
                                 MessageFormat.format("{0} Driver - Finally decision for my instance ({1}) was reached",
-                                    config.getId(), currentLambda));
-                        d = bucket.get(currentLambda);
+                                    config.getId(), currentLambda.get()));
+                        d = bucket.get(currentLambda.get());
 
 
                         // at this point, we have decision for instance currentLambda,
@@ -374,6 +466,7 @@ public class NodeService implements UDPService {
                             Slot slot = new Slot(slotId, nonce, cmd);
                             history.put(value, slot);
                         } else {
+                            // TODO (dsa): raise exception, because this should not happen
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Bad value format (should be nonce::cmd), discarding",
                                         config.getId(), d.getValue()));

@@ -112,17 +112,17 @@ public class APLink implements Link {
                 if (nodeId == this.config.getId()) {
                     this.localhostQueue.add(data);
 
-                    // LOGGER.log(Level.INFO,
-                    //         MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} successfully",
-                    //                 config.getId(), data.getType(), destAddress, destPort));
+                    LOGGER.log(Level.FINE,
+                            MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} (id={4}) successfully",
+                                    config.getId(), data.getType(), destAddress, destPort, nodeId));
 
                     return;
                 }
 
                 for (;;) {
-                    // LOGGER.log(Level.INFO, MessageFormat.format(
-                    //         "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
-                    //         data.getType(), destAddress, destPort, messageId, count++));
+                    LOGGER.log(Level.FINE, MessageFormat.format(
+                            "{0} - Sending {1} message to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
+                            data.getType(), destAddress, destPort, messageId, count++, nodeId));
 
                     unreliableSend(destAddress, destPort, data);
 
@@ -136,8 +136,8 @@ public class APLink implements Link {
                     sleepTime <<= 1;
                 }
 
-                // LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully",
-                //         config.getId(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.FINE, MessageFormat.format("{0} - Message {1} sent to {2}:{3} (id={4}) successfully",
+                        config.getId(), data.getType(), destAddress, destPort, nodeId));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }

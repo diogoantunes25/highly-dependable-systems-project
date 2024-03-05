@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -26,7 +27,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
-
 
 	// Milliseconds
 	private static final int INITIAL_TIMEOUT = 10;
@@ -81,7 +81,7 @@ public class Instanbul {
 	private Map<Integer, List<ConsensusMessage>> stashedRoundChange = new HashMap<>();
 
 	// Timer required by IBFT
-	private Optional<Timer> timer;
+	private Optional<Timer> timer = Optional.empty();
 
 	// Timer ids for each round
 	// The semantics are:
@@ -90,9 +90,13 @@ public class Instanbul {
 	//	- if there's an empty entry for r, timer stopped
 	private Map<Integer, Optional<Integer>> roundTimerId = new HashMap<>();
 
-	public Instanbul(ProcessConfig config, int lambda) {
+	// Validity verifying function
+	private Predicate<String> beta;
+
+	public Instanbul(ProcessConfig config, int lambda, Predicate<String> beta) {
 		this.lambda = lambda;
 		this.config = config;
+		this.beta = beta;
 
 		this.ri = 0;
 		this.pri = Optional.empty();
@@ -318,10 +322,19 @@ public class Instanbul {
 		    return new ArrayList<>();
 		}
 
-		// Set instance value
-		if (!this.inputValuei.isPresent()) {
-			this.inputValuei = Optional.of(value);
+		// Verify that proposed message is valid
+		if (!this.beta.test(value)) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format(
+						"{0} - PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} is invalid (i.e. failed beta predicate)",
+						config.getId(), senderId, this.lambda, round));
+		    return new ArrayList<>();
 		}
+
+		// Set instance value
+		// if (!this.inputValuei.isPresent()) {
+		// 	this.inputValuei = Optional.of(value);
+		// }
 
 		// Resend in case message hasn't yet reached leader
 		// TODO (dsa): why not return empty list
@@ -331,6 +344,7 @@ public class Instanbul {
 						"{0} - Already received PRE-PREPARE message for Consensus Instance {1}, Round {2}, "
 						+ "replying again to make sure it reaches the initial sender",
 						config.getId(), this.lambda, round));
+			return new ArrayList<>();
 		}
 
 
@@ -346,7 +360,6 @@ public class Instanbul {
 	 * @param message Message to be handled
 	 */
 	private List<ConsensusMessage> prepare(ConsensusMessage message) {
-
 
 		int round = message.getRound();
 		int senderId = message.getSenderId();
@@ -462,8 +475,12 @@ public class Instanbul {
 				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), message.getSenderId(), this.lambda, round));
 
+		// TODO: here must be added the upon rules from algorithm 3
+
 		return new ArrayList<>();
 	}
+
+	// TODO: add stuff from algorithm 4
 
 	/**
 	 * Handles timer expiration and returns messages to be sent over the network
@@ -504,6 +521,10 @@ public class Instanbul {
 					yield prePrepare(message);
 				} else if (message.getRound() < this.ri) {
 					// PRE-PREPARES from previous rounds can be dropped
+					LOGGER.log(Level.INFO,
+							MessageFormat.format(
+								"{0} - Ignored PRE-PREPARE at instance {1}, Round {2} (message was for {3}, which I've already moved from)",
+						config.getId(), this.lambda, this.ri, mround));
 					yield new ArrayList<>();
 				} else {
 					// PRE-PREPARE from future rounds can't processed right

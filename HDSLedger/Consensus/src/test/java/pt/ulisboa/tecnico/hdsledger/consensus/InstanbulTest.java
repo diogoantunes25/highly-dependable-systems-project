@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
@@ -10,6 +11,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.List;
 import java.util.Deque;
 import java.util.LinkedList;
@@ -34,13 +36,19 @@ public class InstanbulTest {
 		).collect(Collectors.toList());
 	}
 
+	/*
+	 * Create set of instances that doen't use external predicate.
+	 */
 	private List<Instanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages) {
+		return defaultInstancesWithPredicate(n, confirmed, lambda, messages, value -> true);
+	}
 
+	private List<Instanbul> defaultInstancesWithPredicate(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages, Predicate<String> beta) {
 		List<ProcessConfig> configs = defaultConfigs(n);
 		List<Instanbul> instances = configs.stream()
 			.map(config -> {
 				// Create instance
-				Instanbul i = new Instanbul(config, lambda);
+				Instanbul i = new Instanbul(config, lambda, beta);
 
 				// Register callback for deliver
 				int id = config.getId();
@@ -437,5 +445,55 @@ public class InstanbulTest {
 
 		// Check that everyone delivered the same and once only
 		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
+	/**
+	 * Runs an instance of consensus with 4 nodes where messages are invalid
+	 */
+	@Test
+	public void badMessageN4() {
+		int n = 4;
+		int lambda = 0;
+		String value = "a";
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstancesWithPredicate(n, confirmed, lambda, messages, s -> false);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			List<ConsensusMessage> output = instance.start(value);
+
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Run for at most 5 seconds
+		long startTime = System.currentTimeMillis();
+        long duration = 0;
+		while (duration < 5000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages.addLast(m));
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		// Check that no one delivered anything
+		for (int i = 0; i < n; i++) {
+			assertEquals(confirmed.get(i).size(), 0);
+		}
 	}
 }
