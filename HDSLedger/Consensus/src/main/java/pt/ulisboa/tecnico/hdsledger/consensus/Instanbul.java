@@ -454,10 +454,19 @@ public class Instanbul {
 
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
-						"{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
-						config.getId(), this.lambda, round, true));
+						"{0} - Decided on Consensus Instance {1}, Round {2}",
+						config.getId(), this.lambda, round));
+		}
 
-			return new ArrayList<>();
+		// Amplification (if didn't broadcast commit message yet)
+		commitValue = commitMessages.hasValidWeakCommitSupport(config.getId(),
+				this.lambda, round);
+
+		if (commitValue.isPresent() && !commitMessage.isPresent()) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format(
+						"{0} - Amplification of COMMIT on Consensus Instance {1}, Round {2}",
+						config.getId(), this.lambda, round, true));
 		}
 
 		return new ArrayList<>();
