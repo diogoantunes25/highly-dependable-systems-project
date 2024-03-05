@@ -1,11 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.pki;
 
 import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 
@@ -22,6 +18,17 @@ public class SigningUtils {
         PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "priv");
         Cipher encryptCipher = Cipher.getInstance("RSA");
         encryptCipher.init(Cipher.ENCRYPT_MODE, privateKey);
+        byte[] encryptedData = encryptCipher.doFinal(data);
+
+        return encryptedData;
+    }
+
+    public static byte[] encryptAES(byte[] data, Key key)
+            throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException,
+            IllegalBlockSizeException, BadPaddingException {
+
+        Cipher encryptCipher = Cipher.getInstance("AES");
+        encryptCipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] encryptedData = encryptCipher.doFinal(data);
 
         return encryptedData;
@@ -68,6 +75,14 @@ public class SigningUtils {
 
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    public static Key generateSimKey() {
+        try {
+            return AESKeyGenerator.generateSimKey();
+        } catch (GeneralSecurityException e) {
+            throw new RuntimeException(e);
         }
     }
 }

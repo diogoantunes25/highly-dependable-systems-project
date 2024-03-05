@@ -17,7 +17,7 @@ public class Message implements Serializable {
     private Type type;
 
     public enum Type {
-        APPEND, PRE_PREPARE, PREPARE, COMMIT, ACK, IGNORE, REPLY;
+        APPEND, PRE_PREPARE, PREPARE, COMMIT, ACK, IGNORE, REPLY, KEY_PROPOSAL;
     }
 
     public Message(int senderId, Type type) {

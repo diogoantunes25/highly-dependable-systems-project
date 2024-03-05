@@ -9,6 +9,12 @@ public enum ErrorMessage {
 
     CannotParseMessage("Error while parsing message"),
 
+    GeneratingKeyError("Error while generating key"),
+
+    EncryptionError("Error while encrypting message"),
+
+    DecryptionError("Error while decrypting message"),
+
     SigningError("Error while signing message");
 
     private final String message;
