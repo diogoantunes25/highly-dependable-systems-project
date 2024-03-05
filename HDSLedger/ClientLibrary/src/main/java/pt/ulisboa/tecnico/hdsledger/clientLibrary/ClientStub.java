@@ -42,7 +42,7 @@ public class ClientStub {
     public List<String> append(String value) {
 
         int currentRequestId = this.requestId.getAndIncrement(); // nonce
-        AppendRequest request = new AppendRequest(config.getId(), Message.Type.APPEND, value, currentRequestId);
+        AppendRequest request = new AppendRequest(config.getId(), Message.Type.APPEND_REQUEST, value, currentRequestId);
 
         this.link.broadcast(request);
         // response and deal with response
@@ -65,7 +65,8 @@ public class ClientStub {
                         Message message = link.receive();
                         // Separate thread to handle each message
                         switch (message.getType()) {
-                            case REPLY -> {
+                            case APPEND_REPLY -> {
+                                //
                                 // add to logger?
 
                                 // Add new values to the blockchain

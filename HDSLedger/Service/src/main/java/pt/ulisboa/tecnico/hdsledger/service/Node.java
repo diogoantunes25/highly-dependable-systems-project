@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.APLink;
+import pt.ulisboa.tecnico.hdsledger.service.services.HDSLedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -16,18 +17,19 @@ public class Node {
 
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
     // Hardcoded path to files
-    private static String nodesConfigPath = "src/main/resources/";
+    private static String configPath = "src/main/resources/";
 
     public static void main(String[] args) {
 
         try {
             // Command line arguments
             int id = Integer.valueOf(args[0]);
-            nodesConfigPath += args[1];
+            String nodesConfigPath = configPath + args[1];
+            String clientsConfigPath = configPath + args[2];
 
             // Create configuration instances
             ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
-            ProcessConfig leaderConfig = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findAny().get();
+            ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
             ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId() == id).findAny().get();
 
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}",
@@ -38,10 +40,18 @@ public class Node {
             Link linkToNodes = new APLink(nodeConfig, nodeConfig.getPort(), nodeConfigs,
                     ConsensusMessage.class);
 
+            Link linkToClients = new APLink(nodeConfig, nodeConfig.getPort(), clientConfigs,
+                    ConsensusMessage.class);
+
             // Services that implement listen from UDPService
             NodeService nodeService = new NodeService(linkToNodes, nodeConfig, nodeConfigs);
 
+            HDSLedgerService hdsLedgerService = new HDSLedgerService(clientConfigs, linkToClients, nodeConfig, nodeService);
+            
             nodeService.listen();
+
+            hdsLedgerService.listen();
+
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -13,10 +13,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
+import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -45,6 +47,7 @@ public class HDSLedgerService implements UDPService {
         this.link = link;   
         this.config = config;
         this.nodeService = nodeService;
+        nodeService.registerObserver(s -> decided(s));
     }
 
     public void append(AppendRequest request) {
@@ -55,6 +58,31 @@ public class HDSLedgerService implements UDPService {
         String nonce = Integer.toString(clientId) + ":" + Integer.toString(sequenceNumber);
         nodeService.startConsensus(nonce, value);
     }
+
+    /**
+     * Receive decided value from consensus service
+     * Notify the client with the decided slot
+    */
+    private void decided(Slot slot) {
+
+        int slotId = slot.getSlotId();
+        String nonce = slot.getNonce();
+        String value = slot.getMessage();
+        String[] parts = value.split("_");
+        int clientId = Integer.parseInt(parts[0]);
+        int sequenceNumber = Integer.parseInt(parts[1]);
+
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - Decided on slot {1} value {2} and nonce {3}",
+                        config.getId(), slotId, value, nonce));
+
+        // Send the decided value to the client
+        Message reply = new AppendReply(config.getId(), Message.Type.APPEND_REPLY, value, sequenceNumber, slotId);
+        link.send(clientId, reply);
+        
+    }
+
 
 
     @Override
@@ -70,7 +98,7 @@ public class HDSLedgerService implements UDPService {
                         new Thread(() -> {
                             switch (message.getType()) {
 
-                                case APPEND ->
+                                case APPEND_REQUEST ->
                                     append((AppendRequest) message);
 
                                 default ->
