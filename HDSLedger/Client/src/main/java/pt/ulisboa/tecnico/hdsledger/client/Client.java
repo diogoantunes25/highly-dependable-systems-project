@@ -62,8 +62,12 @@ public class Client {
                 case "append":
                     String string = tokens[1];
                     System.out.println("Appending <" + string + ">...");
-                    List<String> blockchain = stub.append(string);
-                    stub.printBlockchain(blockchain);
+                    try {
+                        int slotId = stub.append(string);
+                        System.out.println("Appended <" + string + ">..." + " Slot ID: " + slotId);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                     break;
                 case "exit":
                     System.out.println("Exiting...");

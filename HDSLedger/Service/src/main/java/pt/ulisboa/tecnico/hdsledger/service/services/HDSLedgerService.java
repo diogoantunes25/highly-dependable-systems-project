@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.Map;
@@ -55,7 +56,7 @@ public class HDSLedgerService implements UDPService {
         int sequenceNumber = request.getSequenceNumber();
         int clientId = request.getSenderId();
         String value = request.getValue();
-        String nonce = Integer.toString(clientId) + ":" + Integer.toString(sequenceNumber);
+        String nonce = String.format("%s_%s", clientId, sequenceNumber);
         nodeService.startConsensus(nonce, value);
     }
 
@@ -124,6 +125,6 @@ public class HDSLedgerService implements UDPService {
     @Override
     public void stopAndWait() {
         // TODO (dsa)
-    }
+    }   
 }
 
