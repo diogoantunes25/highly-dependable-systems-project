@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.consensus.message;
 import com.google.gson.Gson;
 
 import java.util.Optional;
+import java.util.List;
 
 public class RoundChangeMessage {
 
@@ -12,14 +13,18 @@ public class RoundChangeMessage {
     // Prepare round
     private int pri;
 
+    // Justifications for prepared values
+    private List<ConsensusMessage> justification;
+
     // Whether is bottom
     // Very, very bad. Done because Gson doesn't support Optionals :|
     private boolean present = false;
 
-    public RoundChangeMessage(Optional<String> pvi, Optional<Integer> pri) {
+    public RoundChangeMessage(Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
         if (pvi.isPresent()) {
             this.pvi = pvi.get();
             this.pri = pri.get();
+            this.justification = justification.get();
             this.present = true;
         }
     }
@@ -35,6 +40,14 @@ public class RoundChangeMessage {
         if (present) {
             return Optional.of(pri);
         }
+        return Optional.empty();
+    }
+
+    public Optional<List<ConsensusMessage>> getJustification() {
+        if (present) {
+            return Optional.of(justification);
+        }
+
         return Optional.empty();
     }
 

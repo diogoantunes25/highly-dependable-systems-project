@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.List;
+import java.util.Optional;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.Map;
@@ -22,7 +24,42 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
+import javafx.util.Pair;
+
 public class InstanbulTest {
+
+	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
+		PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
+
+		return new ConsensusMessageBuilder(id, Message.Type.PREPARE)
+			.setConsensusInstance(instance)
+			.setRound(round)
+			.setMessage(prePrepareMessage.toJson())
+			.setReceiver(receiver)
+			.build();
+	}
+
+	private ConsensusMessage createCommitMessage(int id, String value, int instance, int round, int receiver) {
+		CommitMessage commitMessage = new CommitMessage(value);
+
+		return new ConsensusMessageBuilder(id, Message.Type.COMMIT)
+			.setConsensusInstance(instance)
+			.setRound(round)
+			.setMessage(commitMessage.toJson())
+			.setReceiver(receiver)
+			.build();
+	}
+
+	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
+		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri, justification);
+
+		return new ConsensusMessageBuilder(id, Message.Type.ROUND_CHANGE)
+			.setConsensusInstance(instance)
+			.setRound(round)
+			.setMessage(roundChangeMessage.toJson())
+			.setReceiver(receiver)
+			.build();
+	}
 
 	private List<ProcessConfig> defaultConfigs(int n) {
 		return IntStream.range(0, n).mapToObj(i ->
@@ -497,8 +534,87 @@ public class InstanbulTest {
 		}
 	}
 
-	// TODO (dsa): test amplification
-	
 	// TODO (dsa): delay commit messages for the round to change and
 	// then allow them to go through
+	
+	/**
+	 * Tests highest prepared where no one prepared yet (so there are no justifications)
+	 */
+	@Test
+	public void highestPreparedTestAllEmpty() {
+		int n = 4;
+		int lambda = 0;
+		int nextRound = 1;
+		int me = 0;
+		List<ConsensusMessage> Qrc = IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(me, 0, nextRound, i, Optional.empty(), Optional.empty(), Optional.empty()))
+			.collect(Collectors.toList());
+
+		Optional<Pair<String, Integer>> optPair = Instanbul.highestPrepared(Qrc); 
+		assert(optPair.isEmpty());
+	}
+
+	/**
+	 * Tests highest prepared where all prepared to same value and provide the
+	 * same justification
+	 */
+	@Test
+	public void highestPreparedTestAllAgreeOnValue() {
+		int n = 4;
+		int lambda = 0;
+		int nextRound = 1;
+		int me = 0;
+		String value = "a";
+		int round = 3;
+
+		List<ConsensusMessage> prepares = IntStream.range(0, n)
+			.mapToObj(i -> createPrepareMessage(me, value, lambda, round, i))
+			.collect(Collectors.toList());
+
+		List<ConsensusMessage> Qrc = IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(me, 0, nextRound, i, Optional.of(value), Optional.of(round), Optional.of(prepares)))
+			.collect(Collectors.toList());
+
+		Optional<Pair<String, Integer>> optPair = Instanbul.highestPrepared(Qrc); 
+		assert(optPair.isPresent());
+		assertEquals(optPair.get().getKey(), value);
+		assertEquals(optPair.get().getValue(), round);
+	}
+
+	/**
+	 * Tests highest prepared where all prepared to different values and provide a
+	 * justification for that
+	 */
+	@Test
+	public void highestPreparedTestMultiplePrepareRounds() {
+		int n = 4;
+		int lambda = 0;
+		int nextRound = n+10;
+		int me = 0;
+		String value = "a";
+		int round = 3;
+
+		List<ConsensusMessage> prepares = IntStream.range(0, n)
+			.mapToObj(i -> createPrepareMessage(me, String.format("a%d", i), lambda, i, i))
+			.collect(Collectors.toList());
+
+		List<ConsensusMessage> Qrc = IntStream.range(0, n)
+			.mapToObj(i -> {
+				int pr = i;
+				String pv = String.format("value_%d", i);
+
+				// Get justification for prepared value for round i
+				List<ConsensusMessage> justification = IntStream.range(0, n)
+					.mapToObj(j -> createPrepareMessage(me, value, lambda, i, j))
+					.collect(Collectors.toList());
+
+				return createRoundChangeMessage(me, 0, nextRound, i, Optional.of(pv), Optional.of(pr), Optional.of(justification));
+				})
+			.collect(Collectors.toList());
+
+		Optional<Pair<String, Integer>> optPair = Instanbul.highestPrepared(Qrc); 
+		assert(optPair.isPresent());
+		assertEquals(optPair.get().getKey(), String.format("value_%d", n-1));
+		assertEquals(optPair.get().getValue(), n-1);
+	}
 }
