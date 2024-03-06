@@ -156,6 +156,57 @@ public class MessageBucket {
         return Optional.empty();
     }
 
+    /**
+     * Checks the existence of f+1 messages ROUND-CHANGE messages that satisfy
+     * conditions in lines 5-7 for algorithm 3 (from the IBFT's paper)
+     * Returns the smallest round in the set found or empty if not appropriate
+     * set was found
+     * @param round current round (return is larger than this)
+     */
+    public Optional<Integer> hasValidWeakRoundChangeSupport(int round) {
+        // Consider all messages, not only from round provided
+        List<ConsensusMessage> messages = this.bucket
+            .entrySet()
+            .stream()
+            .flatMap(e ->
+                    e.getValue()
+                        .entrySet()
+                        .stream()
+                        .map(e2 -> e2.getValue()))
+            .filter(s -> s.getType() == Message.Type.ROUND_CHANGE)
+            .filter(m -> m.getRound() > round)
+            .collect(Collectors.toList());
+
+        // If there's not f+1 good ROUND-CHANGE messages, give up
+        if (messages.size() < weakSupport) {
+            return Optional.empty();
+        }
+
+        int rmin = messages.stream().map(m -> m.getRound()).min(Integer::compare).get();
+
+        return Optional.of(rmin);
+    }
+
+    /**
+     * Checks the exists a quorum of messages ROUND-CHANGE messages
+     */
+    public Optional<List<ConsensusMessage>> hasValidRoundChangeQuorum(int round) {
+        // Get all messages for this round
+        List<ConsensusMessage> messages = this.bucket.getOrDefault(round, new HashMap<>())
+                                                                .entrySet()
+                                                                .stream()
+                                                                .map(e -> e.getValue())
+                                                                .filter(s -> s.getType() == Message.Type.ROUND_CHANGE)
+                                                                .filter(s -> s.getRound() == round)
+                                                                .collect(Collectors.toList());
+
+        if (messages.size() < quorumSize) {
+            return Optional.empty();
+        }
+
+        return Optional.of(messages);
+    }
+
     public Map<Integer, ConsensusMessage> getMessages(int round) {
         return bucket.get(round);
     }
