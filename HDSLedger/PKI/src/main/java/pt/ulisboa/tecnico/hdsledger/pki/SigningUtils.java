@@ -59,7 +59,7 @@ public class SigningUtils {
     public static String generateHMAC(String data, Key key) {
         try {
             Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
-            sha256_HMAC.init(key);54
+            sha256_HMAC.init(key);
             byte[] macData = sha256_HMAC.doFinal(data.getBytes());
             return Base64.getEncoder().encodeToString(macData);
         } catch (Exception e) {
