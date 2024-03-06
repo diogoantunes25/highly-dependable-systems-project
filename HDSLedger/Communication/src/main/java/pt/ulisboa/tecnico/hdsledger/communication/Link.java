@@ -41,19 +41,6 @@ public interface Link {
     public void send(int nodeId, Message data);
 
     /*
-     * Sends a message to a specific node without guarantee of delivery
-     * Mainly used to send ACKs, if they are lost, the original message will be
-     * resent
-     *
-     * @param address The address of the destination node
-     *
-     * @param port The port of the destination node
-     *
-     * @param data The message to be sent
-     */
-    public void unreliableSend(InetAddress hostname, int port, Message data);
-
-    /*
      * Receives a message from any node in the network (blocking)
      */
     public Message receive() throws IOException, ClassNotFoundException;

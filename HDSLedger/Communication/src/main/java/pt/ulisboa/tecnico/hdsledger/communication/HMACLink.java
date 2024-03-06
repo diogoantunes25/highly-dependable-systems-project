@@ -53,12 +53,16 @@ public class HMACLink implements Link {
     // Set of shared keys with other nodes
     private final Map<Integer, Key> sharedKeys = new ConcurrentHashMap<>();
 
+    private final APLink apLink;
+
     public HMACLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, false, 200);
     }
 
     public HMACLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
                     boolean activateLogs, int baseSleepTime) {
+
+        this.apLink = new APLink(self, port, nodes, messageClass, activateLogs, baseSleepTime);
 
         this.config = self;
         this.messageClass = messageClass;
@@ -103,90 +107,26 @@ public class HMACLink implements Link {
      * @param data The message to be sent
      */
     public void send(int nodeId, Message data) {
-
-        // Spawn a new thread to send the message
-        // To avoid blocking while waiting for ACK
         new Thread(() -> {
-            try {
-                ProcessConfig node = nodes.get(nodeId);
-                if (node == null)
-                    throw new HDSSException(ErrorMessage.NoSuchNode);
-
-                data.setMessageId(messageCounter.getAndIncrement());
-
-                // If the message is not ACK, it will be resent
-                InetAddress destAddress = InetAddress.getByName(node.getHostname());
-                int destPort = node.getPort();
-                int count = 1;
-                int messageId = data.getMessageId();
-                int sleepTime = BASE_SLEEP_TIME;
-
-                // Send message to local queue instead of using network if destination in self
-                if (nodeId == this.config.getId()) {
-                    this.localhostQueue.add(data);
-
-                    // LOGGER.log(Level.INFO,
-                    //         MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} successfully",
-                    //                 config.getId(), data.getType(), destAddress, destPort));
-
-                    return;
+            int backoff = 10;
+            while (sharedKeys.get(nodeId) == null) {
+                try {
+                    // exponential backoff
+                    Thread.sleep(backoff);
+                    backoff *= 2;
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
-
-                for (;;) {
-                    // LOGGER.log(Level.INFO, MessageFormat.format(
-                    //         "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
-                    //         data.getType(), destAddress, destPort, messageId, count++));
-
-                    unreliableSend(destAddress, destPort, data);
-
-                    // Wait (using exponential back-off), then look for ACK
-                    Thread.sleep(sleepTime);
-
-                    // Receive method will set receivedAcks when sees corresponding ACK
-                    if (receivedAcks.contains(messageId))
-                        break;
-
-                    sleepTime <<= 1;
-                }
-
-                // LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully",
-                //         config.getId(), data.getType(), destAddress, destPort));
-            } catch (InterruptedException | UnknownHostException e) {
-                e.printStackTrace();
             }
+            String dataString = new Gson().toJson(data);
+            Key sharedKey = sharedKeys.get(data.getReceiver());
+            String hmac = SigningUtils.generateHMAC(dataString, sharedKey);
+            HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), data.getType(), dataString, hmac);
+            apLink.send(nodeId, hmacMessage);
         }).start();
     }
 
-    /*
-     * Sends a message to a specific node without guarantee of delivery
-     * Mainly used to send ACKs, if they are lost, the original message will be
-     * resent
-     *
-     * @param address The address of the destination node
-     *
-     * @param port The port of the destination node
-     *
-     * @param data The message to be sent
-     */
-    public void unreliableSend(InetAddress hostname, int port, Message data) {
-        new Thread(() -> {
-            try {
-                String jsonString = new Gson().toJson(data);
-
-                // try to get appropriate key from sharedKeys
-                if (sharedKeys.containsKey(data.getReceiver())) {
-                    Key sharedKey = sharedKeys.get(data.getReceiver());
-                    String hmac = SigningUtils.generateHMAC(jsonString, sharedKey);
-                    HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), data.getType(), jsonString, hmac);
-                    byte[] buf = new Gson().toJson(hmacMessage).getBytes();
-                    DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
-                    socket.send(packet);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-                throw new HDSSException(ErrorMessage.SocketSendingError);
-            }
-        }).start();
+    public void unreliableSend(InetAddress address, int port, Message data) {
     }
 
     /*
@@ -233,9 +173,11 @@ public class HMACLink implements Link {
                 }
             } else {  // if we do not have a sharedKey than the message probably is a Key Proposal
                 try {
-                    String decryptedData = new String(SigningUtils.decrypt(buffer, config.getPrivateKey()));
-                    // decrypted data is a KeyProposal message from the sender, so we need to verify the signature
-                    message = new Gson().fromJson(decryptedData, KeyProposal.class);
+                    // the received data is a Key Proposal object with the fields encrypted
+                    message = new Gson().fromJson(new String(buffer), KeyProposal.class);
+                    // decrypt keyProposal fields
+                    ((KeyProposal) message).setKey(SigningUtils.decrypt(((KeyProposal) message).getKey().getBytes(), this.config.getPrivateKey()));
+                    ((KeyProposal) message).setSignature(SigningUtils.decrypt(((KeyProposal) message).getSignature().getBytes(), this.config.getPrivateKey()));
                     // verify signature
                     if (!SigningUtils.verifySignature(((KeyProposal) message).getKey(),
                             ((KeyProposal) message).getSignature(),
@@ -311,9 +253,8 @@ public class HMACLink implements Link {
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
             case KEY_PROPOSAL -> {
-                KeyProposal keyProposal = (KeyProposal) message;
-                Key aesKey = new SecretKeySpec(keyProposal.getKey().getBytes(),
-                        0, keyProposal.getKey().getBytes().length, "AES");
+                Key aesKey = new SecretKeySpec(((KeyProposal) message).getKey().getBytes(),
+                        0, ((KeyProposal) message).getKey().getBytes().length, "AES");
 
                 sharedKeys.put(message.getSenderId(), aesKey);
                 return message;
@@ -346,56 +287,39 @@ public class HMACLink implements Link {
     }
 
     public void setup(ProcessConfig self, ProcessConfig[] nodes) {
-        new Thread(() -> {
-            // setup shared keys between channels
-            for (ProcessConfig dest : nodes) {
-                if (dest.getId() < self.getId()) {
-                    // only send key proposal to nodes with higher id
-                    continue;
-                }
-
-                try {
-                    Key aesKey = SigningUtils.generateSimKey();
-                    // store key in sharedKeys
-                    sharedKeys.put(dest.getId(), aesKey);
-
-                    String aesKeyString = Base64.getEncoder().encodeToString(aesKey.getEncoded());
-                    Optional<String> signature;
-                    // Sign message
-                    try {
-                        // serialize keyProposal
-                        String serizalize = new Gson().toJson(aesKeyString);
-                        signature = Optional.of(SigningUtils.sign(serizalize, this.config.getPrivateKey()));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        throw new HDSSException(ErrorMessage.SigningError);
-                    }
-
-                    KeyProposal keyProposal = new KeyProposal(this.config.getId(), aesKeyString, signature.get());
-                    keyProposal.setReceiver(dest.getId());
-                    keyProposal.setMessageId(messageCounter.getAndIncrement());
-                    // encrypt message with receiver's public key
-                    byte[] encryptedData;
-                    try {
-                        String serializedKeyProposal = new Gson().toJson(keyProposal);
-                        encryptedData = SigningUtils.encrypt(serializedKeyProposal.getBytes(), dest.getPublicKey());
-                    } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
-                             NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
-                             BadPaddingException e) {
-                        e.printStackTrace();
-                        throw new HDSSException(ErrorMessage.EncryptionError);
-                    }
-
-                    DatagramPacket packet = new DatagramPacket(encryptedData, encryptedData.length, InetAddress.getByName(dest.getHostname()), dest.getPort());
-                    socket.send(packet);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    throw new HDSSException(ErrorMessage.SocketSendingError);
-                } catch (RuntimeException e) {
-                    e.printStackTrace();
-                    throw new HDSSException(ErrorMessage.GeneratingKeyError);
-                }
+        // setup shared keys between channels
+        for (ProcessConfig dest : nodes) {
+            if (dest.getId() < self.getId()) {
+                // only send key proposal to nodes with higher id
+                continue;
             }
-        } ).start();
+
+            try {
+                Key aesKey = SigningUtils.generateSimKey();
+                // store key in sharedKeys
+                sharedKeys.put(dest.getId(), aesKey);
+
+                String aesKeyString = Base64.getEncoder().encodeToString(aesKey.getEncoded());
+                Optional<String> signature;
+                // Sign message
+                try {
+                    // serialize keyProposal
+                    String serialize = new Gson().toJson(aesKeyString);
+                    signature = Optional.of(SigningUtils.sign(serialize, this.config.getPrivateKey()));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    throw new HDSSException(ErrorMessage.SigningError);
+                }
+
+                KeyProposal keyProposal = new KeyProposal(this.config.getId(), aesKeyString, signature.get(), dest.getPublicKey());
+                keyProposal.setReceiver(dest.getId());
+                keyProposal.setMessageId(messageCounter.getAndIncrement());
+
+                apLink.send(dest.getId(), keyProposal);
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+                throw new HDSSException(ErrorMessage.GeneratingKeyError);
+            }
+        }
     }
 }

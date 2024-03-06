@@ -9,7 +9,7 @@ import javax.crypto.*;
 
 public class SigningUtils {
 
-    public static byte[] encrypt(byte[] data, String pathToPrivateKey)
+    public static String encrypt(byte[] data, String pathToPrivateKey)
         throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
         NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
@@ -18,10 +18,10 @@ public class SigningUtils {
         encryptCipher.init(Cipher.ENCRYPT_MODE, privateKey);
         byte[] encryptedData = encryptCipher.doFinal(data);
 
-        return encryptedData;
+        return Base64.getEncoder().encodeToString(encryptedData);
     }
 
-    public static byte[] decrypt(byte[] data, String pathToPublicKey)
+    public static String decrypt(byte[] data, String pathToPublicKey)
             throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
             NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
@@ -30,7 +30,7 @@ public class SigningUtils {
         decryptCipher.init(Cipher.DECRYPT_MODE, publicKey);
         byte[] decryptedData = decryptCipher.doFinal(data);
 
-        return decryptedData;
+        return new String(decryptedData);
     }
     public static String generateHMAC(String data, Key key) {
         try {
@@ -57,8 +57,7 @@ public class SigningUtils {
             NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException {
 
         String digest = digest(data);
-        byte[] digestEncrypted = encrypt(digest.getBytes(), pathToPrivateKey);
-        String digestBase64 = Base64.getEncoder().encodeToString(digestEncrypted);
+        String digestBase64 = encrypt(digest.getBytes(), pathToPrivateKey);
 
         return digestBase64;
     }

@@ -6,7 +6,7 @@ import java.io.Serializable;
 
 public class HMACMessage extends Message implements Serializable {
 
-    // Message content
+    // Serialized Message content
     private String message;
     // Message signature
     private String hmac;
