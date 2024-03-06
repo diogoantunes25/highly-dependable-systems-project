@@ -42,6 +42,9 @@ public class Instanbul {
 	// Process configuration (includes its id)
 	private final ProcessConfig config;
 
+	// Other processes configuration (includes its id)
+	private final List<ProcessConfig> others;
+
 	// The identifier of the consensus instance
 	private final int lambda;
 
@@ -107,14 +110,15 @@ public class Instanbul {
 	// Validity verifying function
 	private Predicate<String> beta;
 
-	public Instanbul(ProcessConfig config, int lambda, Predicate<String> beta) {
+	public Instanbul(List<ProcessConfig> others, ProcessConfig config, int lambda, Predicate<String> beta) {
 		int n = config.getN();
 		int f = Math.floorDiv(n - 1, 3);
-        this.quorumSize = Math.floorDiv(n + f, 2) + 1; // works because 4f+1 is odd
-        this.weakSupport = f+1;
+		this.quorumSize = Math.floorDiv(n + f, 2) + 1; // works because 4f+1 is odd
+		this.weakSupport = f+1;
 
 		this.lambda = lambda;
 		this.config = config;
+		this.others = others;
 		this.beta = beta;
 
 		this.ri = 0;
@@ -128,6 +132,9 @@ public class Instanbul {
 		this.prepareMessages = new MessageBucket(n);
 		this.commitMessages = new MessageBucket(n);
 		this.roundChangeMessages = new MessageBucket(n);
+
+		LOGGER.log(Level.INFO, MessageFormat.format("{0} - Public key at {1} and private key at {2}",
+					config.getId(), config.getPublicKey(), config.getPrivateKey()));
 	}
 
 	/**
@@ -240,6 +247,8 @@ public class Instanbul {
 			.setReceiver(receiver)
 			.build();
 
+		consensusMessage.signSelf(this.config.getPrivateKey());
+
 		return consensusMessage;
 	}
 
@@ -344,6 +353,10 @@ public class Instanbul {
 		
 		// Verify if pre-prepare was sent by leader
 		if (!isLeader(round, senderId)) {
+			LOGGER.log(Level.WARNING,
+					MessageFormat.format(
+						"{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} - WRONG LEADER",
+					config.getId(), senderId, this.lambda, round));
 		    return new ArrayList<>();
 		}
 
@@ -355,11 +368,6 @@ public class Instanbul {
 						config.getId(), senderId, this.lambda, round));
 		    return new ArrayList<>();
 		}
-
-		// Set instance value
-		// if (!this.inputValuei.isPresent()) {
-		// 	this.inputValuei = Optional.of(value);
-		// }
 
 		// Resend in case message hasn't yet reached leader
 		// TODO (dsa): why not return empty list
@@ -405,6 +413,15 @@ public class Instanbul {
 				MessageFormat.format(
 					"{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), senderId, this.lambda, round));
+
+		// Message signature check is done as late as possible
+		if (!message.checkConsistentSig(this.others.get(senderId).getPublicKey())) {
+			LOGGER.log(Level.WARNING,
+					MessageFormat.format(
+						"{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} - BAD SIGNATURE",
+						config.getId(), senderId, this.lambda, round));
+		    return new ArrayList<>();
+		}
 
 		// Doesn't add duplicate messages
 		prepareMessages.addMessage(message);
@@ -490,8 +507,8 @@ public class Instanbul {
 	 * Checks that a round change message is properly signed
 	 */
 	boolean prepareSignedIsValid(ConsensusMessage message) {
-		// TODO (dsa): fixme
-		return true;
+		int senderId = message.getSenderId();
+		return message.checkConsistentSig(this.others.get(senderId).getPublicKey());
 	}
 
 	/**
@@ -663,8 +680,6 @@ public class Instanbul {
 
 		return messages;
 	}
-
-	// TODO: add stuff from algorithm 4
 
 	/**
 	 * Handles timer expiration and returns messages to be sent over the network

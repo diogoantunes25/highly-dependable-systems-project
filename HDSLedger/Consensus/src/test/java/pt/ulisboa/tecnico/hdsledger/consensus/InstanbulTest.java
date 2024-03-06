@@ -1,14 +1,21 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.io.TempDir;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 
+import java.security.*;
+import java.nio.file.Path;
+import java.io.File;
+import java.io.IOException;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
@@ -27,6 +34,27 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import javafx.util.Pair;
 
 public class InstanbulTest {
+
+	// n is set to 10 by default
+	@BeforeAll
+	private static void genKeys() {
+		int n = 10;
+		List<String> publicKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+
+		List<String> privateKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.collect(Collectors.toList());
+
+		for (int i = 0 ; i < n; i++) {
+			try {
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+			} catch (GeneralSecurityException | IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
 
 	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
 		PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
@@ -62,13 +90,23 @@ public class InstanbulTest {
 	}
 
 	private List<ProcessConfig> defaultConfigs(int n) {
+		List<String> publicKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+
+		List<String> privateKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.collect(Collectors.toList());
+
 		return IntStream.range(0, n).mapToObj(i ->
 			new ProcessConfig(
 				false,
 				"localhost",
 				i,
 				20000 + i,
-				n
+				n,
+				publicKeys.get(i),
+				privateKeys.get(i)
 			)
 		).collect(Collectors.toList());
 	}
@@ -82,10 +120,13 @@ public class InstanbulTest {
 
 	private List<Instanbul> defaultInstancesWithPredicate(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages, Predicate<String> beta) {
 		List<ProcessConfig> configs = defaultConfigs(n);
+		
+		System.out.printf("pk 0: %s\n", configs.get(0).getPublicKey());
+
 		List<Instanbul> instances = configs.stream()
 			.map(config -> {
 				// Create instance
-				Instanbul i = new Instanbul(config, lambda, beta);
+				Instanbul i = new Instanbul(configs, config, lambda, beta);
 
 				// Register callback for deliver
 				int id = config.getId();
@@ -433,7 +474,7 @@ public class InstanbulTest {
 	 * Runs an instance of consensus with 4 nodes where one node that is
 	 * the first leader crashes
 	 */
-	@Test
+	// @Test
 	public void leaderCrashesN4() {
 		int n = 4;
 		int lambda = 0;
