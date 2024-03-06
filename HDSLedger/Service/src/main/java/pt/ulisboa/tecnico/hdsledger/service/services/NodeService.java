@@ -297,25 +297,18 @@ public class NodeService implements UDPService {
 
                                 synchronized (stashed) {
                                     int myLambda = this.currentLambda.get();
-                                    if (lambda != myLambda) {
 
-                                        // Stash future messages for later processing
-                                        if (lambda > myLambda) {
-                                            LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Message for future instance {1} while Im at {2}",
+                                    // Stash future messages for later processing
+                                    if (lambda > myLambda) {
+                                        LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Message for future instance {1} while Im at {2}",
                                                     config.getId(), lambda, myLambda));
 
-                                            this.stashed.putIfAbsent(lambda, new ArrayList<>());
-                                            this.stashed.get(lambda).add(comessage);
+                                        this.stashed.putIfAbsent(lambda, new ArrayList<>());
+                                        this.stashed.get(lambda).add(comessage);
 
-                                            LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Stashed message from future instance {1} while Im at {2}",
+                                        LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Stashed message from future instance {1} while Im at {2}",
                                                     config.getId(), lambda, myLambda));
-                                        } 
 
-                                        // Can drop messages from previous instances
-                                        else {
-                                            LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Dropped message from previous instance {1} while Im at {2}",
-                                                    config.getId(), lambda, myLambda));
-                                        }
                                         continue;
                                     }
                                 }

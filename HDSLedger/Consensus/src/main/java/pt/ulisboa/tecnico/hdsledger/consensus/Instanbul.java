@@ -416,7 +416,6 @@ public class Instanbul {
 
 			Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(round)
 				.values();
-
 			this.commitMessage = Optional.of(new CommitMessage(preparedValue.get()));
 
 			return IntStream.range(0, this.config.getN())
@@ -455,16 +454,8 @@ public class Instanbul {
 					MessageFormat.format(
 						"{0} - Decided on Consensus Instance {1}, Round {2}",
 						config.getId(), this.lambda, round));
-		}
 
-		// Amplification (if didn't broadcast commit message yet)
-		commitValue = commitMessages.hasValidWeakCommitSupport(round);
-
-		if (commitValue.isPresent() && !commitMessage.isPresent()) {
-			LOGGER.log(Level.INFO,
-					MessageFormat.format(
-						"{0} - Amplification of COMMIT on Consensus Instance {1}, Round {2}",
-						config.getId(), this.lambda, round, true));
+			return new ArrayList<>();
 		}
 
 		return new ArrayList<>();
@@ -478,16 +469,27 @@ public class Instanbul {
 	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
 		int round = message.getRound();
 
-		// Round change amplification
-		
-		
-		//
-
 		LOGGER.log(Level.INFO,
 				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), message.getSenderId(), this.lambda, round));
 
-		// TODO: here must be added the upon rules from algorithm 3
+
+		// Amplification (if didn't broadcast ROUND-CHANGE message yet)
+		if (false) {
+			// update round
+			// start timer
+			// broadcast stuff
+		}
+
+		// Check existance of quorum
+		if (false) {
+
+			// If leader for new round
+			if (false) {
+				// lines 12 - 16 of protocol
+			}
+
+		}
 
 		return new ArrayList<>();
 	}

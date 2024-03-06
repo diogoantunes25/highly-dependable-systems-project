@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -41,6 +42,17 @@ public class MessageBucketTest {
 			.setConsensusInstance(instance)
 			.setRound(round)
 			.setMessage(commitMessage.toJson())
+			.setReceiver(receiver)
+			.build();
+	}
+
+	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri) {
+		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri);
+
+		return new ConsensusMessageBuilder(id, Type.ROUND_CHANGE)
+			.setConsensusInstance(instance)
+			.setRound(round)
+			.setMessage(roundChangeMessage.toJson())
 			.setReceiver(receiver)
 			.build();
 	}
@@ -262,4 +274,152 @@ public class MessageBucketTest {
 		assert(optValue.isPresent());
 		assertEquals(optValue.get(), good);
 	}
+
+	/**
+	 * Test weak support for round change message when all agree on next round (which
+	 * is round+1)
+	 */
+	@Test
+	public void allAgreeRoundChangeWeakSupportBucketTest() {
+		int n = 4;
+		int f = Math.floorDiv(n - 1, 3);
+		int quorumSize = Math.floorDiv(n + f, 2) + 1;
+		Optional<Integer> pri = Optional.empty();
+		Optional<String> pvi = Optional.empty();
+		int instance = 0;
+		int round = 0;
+		int receiver = 0; // irrelevant
+		MessageBucket bucket = new MessageBucket(n);
+		IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1, receiver, pvi, pri))
+			.forEach(m -> bucket.addMessage(m));
+
+		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
+		assert(optValue.isPresent());
+		assertEquals(optValue.get(), round+1);
+	}
+
+	/**
+	 * Test weak support for round change message when all are trying to change to previous or
+	 * current round
+	 */
+	@Test
+	public void allStaleRoundChangeWeakSupportBucketTest() {
+		int n = 4;
+		int f = Math.floorDiv(n - 1, 3);
+		int quorumSize = Math.floorDiv(n + f, 2) + 1;
+		Optional<Integer> pri = Optional.empty();
+		Optional<String> pvi = Optional.empty();
+		int instance = 0;
+		int round = 5;
+		int receiver = 0; // irrelevant
+		MessageBucket bucket = new MessageBucket(n);
+		IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri))
+			.forEach(m -> bucket.addMessage(m));
+
+		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
+		assert(!optValue.isPresent());
+	}
+
+	/**
+	 * Test weak support for round change message when all are trying to change
+	 * to future but different rounds
+	 */
+	@Test
+	public void allDisagreeNoStaleRoundChangeWeakSupportBucketTest() {
+		int n = 4;
+		int f = Math.floorDiv(n - 1, 3);
+		int quorumSize = Math.floorDiv(n + f, 2) + 1;
+		Optional<Integer> pri = Optional.empty();
+		Optional<String> pvi = Optional.empty();
+		int instance = 0;
+		int round = 5;
+		int receiver = 0; // irrelevant
+		MessageBucket bucket = new MessageBucket(n);
+		IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1+i, receiver, pvi, pri))
+			.forEach(m -> bucket.addMessage(m));
+
+		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
+		assert(optValue.isPresent());
+		assertEquals(optValue.get(), round+1); // should be the minimum that was seen
+	}
+
+	/**
+	 * Test weak support for round change message when all are trying to change
+	 * but only f+1 are in the future
+	 */
+	@Test
+	public void allDisagreeSomeStaleRoundChangeWeakSupportBucketTest() {
+		int n = 4;
+		int f = Math.floorDiv(n - 1, 3);
+		int quorumSize = Math.floorDiv(n + f, 2) + 1;
+		Optional<Integer> pri = Optional.empty();
+		Optional<String> pvi = Optional.empty();
+		int instance = 0;
+		int round = n+10;
+		int receiver = 0; // irrelevant
+		MessageBucket bucket = new MessageBucket(n);
+
+		// 2f request are stale
+		IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+(i+1), receiver, pvi, pri))
+			.forEach(m -> bucket.addMessage(m));
+
+		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
+		assert(optValue.isPresent());
+		assertEquals(optValue.get(), round+1); // should be the minimum that was seen
+	}
+
+	/**
+	 * Test weak support for round change message when all are trying to change
+	 * but only f are in the future
+	 */
+	@Test
+	public void allDisagreeTooManyStaleRoundChangeWeakSupportBucketTest() {
+		int n = 4;
+		int f = Math.floorDiv(n - 1, 3);
+		int quorumSize = Math.floorDiv(n + f, 2) + 1;
+		Optional<Integer> pri = Optional.empty();
+		Optional<String> pvi = Optional.empty();
+		int instance = 0;
+		int round = n+10;
+		int receiver = 0; // irrelevant
+		MessageBucket bucket = new MessageBucket(n);
+
+		// 2f+1 request are stale
+		IntStream.range(0, n)
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+i, receiver, pvi, pri))
+			.forEach(m -> bucket.addMessage(m));
+
+		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
+		assert(!optValue.isPresent());
+	}
+
+	/**
+	 * Checks if there's a quorum when only exactly a quorum sent messages
+	 */
+	@Test
+	public void quorumRoundChangeBucketTest() {
+		int n = 4;
+		int f = Math.floorDiv(n - 1, 3);
+		int quorumSize = Math.floorDiv(n + f, 2) + 1;
+		String value = "a";
+		int instance = 0;
+		int round = 0;
+		Optional<Integer> pri = Optional.empty();
+		Optional<String> pvi = Optional.empty();
+		int receiver = 0; // irrelevant
+		
+		MessageBucket bucket = new MessageBucket(n);
+		IntStream.range(0, quorumSize)
+					.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri))
+					.forEach(m -> bucket.addMessage(m));
+	
+		Optional<List<ConsensusMessage>> optLst = bucket.hasValidRoundChangeQuorum(round);	
+		assert(optLst.isPresent());
+	}
+
+	// TODO (dsa): add tests for hasValidRoundChangeQuorum
 }
