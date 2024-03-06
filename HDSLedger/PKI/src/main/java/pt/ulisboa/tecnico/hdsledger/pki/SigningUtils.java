@@ -21,6 +21,18 @@ public class SigningUtils {
         return Base64.getEncoder().encodeToString(encryptedData);
     }
 
+    public static String encryptWithPublic(byte[] data, String pathToPublicKey)
+            throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
+            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+
+        PublicKey publicKey = (PublicKey) RSAKeyGenerator.read(pathToPublicKey, "pub");
+        Cipher encryptCipher = Cipher.getInstance("RSA");
+        encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        byte[] encryptedData = encryptCipher.doFinal(data);
+
+        return Base64.getEncoder().encodeToString(encryptedData);
+    }
+
     public static String decrypt(byte[] data, String pathToPublicKey)
             throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
             NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
@@ -32,10 +44,22 @@ public class SigningUtils {
 
         return new String(decryptedData);
     }
+
+    public static String decryptwithPrivate(byte[] data, String pathToPrivateKey)
+            throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
+            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+
+        PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "pub");
+        Cipher decryptCipher = Cipher.getInstance("RSA");
+        decryptCipher.init(Cipher.DECRYPT_MODE, privateKey);
+        byte[] decryptedData = decryptCipher.doFinal(data);
+
+        return new String(decryptedData);
+    }
     public static String generateHMAC(String data, Key key) {
         try {
             Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
-            sha256_HMAC.init(key);
+            sha256_HMAC.init(key);54
             byte[] macData = sha256_HMAC.doFinal(data.getBytes());
             return Base64.getEncoder().encodeToString(macData);
         } catch (Exception e) {

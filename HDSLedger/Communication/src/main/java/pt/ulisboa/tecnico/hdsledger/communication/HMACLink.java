@@ -81,7 +81,7 @@ public class HMACLink implements Link {
     public void send(int nodeId, Message data) {
         new Thread(() -> {
             int backoff = 10;
-            while (sharedKeys.get(nodeId) == null) {
+            while (sharedKeys.get(data.getReceiver()) == null) {
                 try {
                     // exponential backoff
                     Thread.sleep(backoff);
@@ -133,8 +133,8 @@ public class HMACLink implements Link {
                         byte[] buffer = new Gson().toJson(message).getBytes();
                         message = new Gson().fromJson(new String(buffer), KeyProposal.class);
                         // decrypt keyProposal fields
-                        ((KeyProposal) message).setKey(SigningUtils.decrypt(((KeyProposal) message).getKey().getBytes(), this.config.getPrivateKey()));
-                        ((KeyProposal) message).setSignature(SigningUtils.decrypt(((KeyProposal) message).getSignature().getBytes(), this.config.getPrivateKey()));
+                        ((KeyProposal) message).setKey(SigningUtils.decryptwithPrivate(((KeyProposal) message).getKey().getBytes(), this.config.getPrivateKey()));
+                        // ((KeyProposal) message).setSignature(SigningUtils.decryptwithPrivate(((KeyProposal) message).getSignature().getBytes(), this.config.getPrivateKey()));
                         // verify signature
                         if (!SigningUtils.verifySignature(((KeyProposal) message).getKey(),
                                 ((KeyProposal) message).getSignature(),
@@ -192,6 +192,9 @@ public class HMACLink implements Link {
                 // only send key proposal to nodes with higher id
                 continue;
             }
+
+            LOGGER.log(Level.INFO, MessageFormat.format("Sending key proposal to {0}:{1}",
+                    dest.getHostname(), dest.getPort()));
 
             try {
                 Key aesKey = SigningUtils.generateSimKey();

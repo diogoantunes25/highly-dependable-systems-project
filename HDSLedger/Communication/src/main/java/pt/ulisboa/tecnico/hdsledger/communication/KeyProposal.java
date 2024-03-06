@@ -24,7 +24,7 @@ public class KeyProposal extends Message implements Serializable {
     public KeyProposal(int nodeID, String key, String signature, String receiverPublicKey) {
         super(nodeID, Type.KEY_PROPOSAL);
         this.key = encrypt(key, receiverPublicKey);
-        this.signature = encrypt(signature, receiverPublicKey);
+        this.signature = signature;
     }
 
     public String getKey() { return key; }
@@ -39,7 +39,7 @@ public class KeyProposal extends Message implements Serializable {
         // encrypt message with receiver's public key
         String encryptedData;
         try {
-            encryptedData = SigningUtils.encrypt(message.getBytes(), publicKey);
+            encryptedData = SigningUtils.encryptWithPublic(message.getBytes(), publicKey);
             return encryptedData;
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
                  NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
