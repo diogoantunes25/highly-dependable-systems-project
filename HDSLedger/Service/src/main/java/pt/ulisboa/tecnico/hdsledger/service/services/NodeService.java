@@ -42,7 +42,7 @@ public class NodeService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
 
     // Nodes configurations
-    private final ProcessConfig[] nodesConfig;
+    private final List<ProcessConfig> others;
 
     // My configuration
     private final ProcessConfig config;
@@ -90,7 +90,7 @@ public class NodeService implements UDPService {
             ProcessConfig[] nodesConfig) {
         this.link = link;
         this.config = config;
-        this.nodesConfig = nodesConfig;
+        this.others = Arrays.asList(nodesConfig);
     }
 
     public ProcessConfig getConfig() {
@@ -121,7 +121,7 @@ public class NodeService implements UDPService {
         // one and that the signature is correct
  
         return instances.computeIfAbsent(lambda, l -> {
-            Instanbul instance = new Instanbul(this.config, l, value -> this.checkIsValidMessage(value));
+            Instanbul instance = new Instanbul(this.others, this.config, l, value -> this.checkIsValidMessage(value));
             // TODO (dsa): probably don't need a timer per instance (one for all is enough)
             Timer timer = new SimpleTimer();
             Consumer<String> observer = s -> {
