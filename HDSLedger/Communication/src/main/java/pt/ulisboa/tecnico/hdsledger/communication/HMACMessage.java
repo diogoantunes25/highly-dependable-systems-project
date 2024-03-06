@@ -1,15 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+
 import java.io.Serializable;
 
-public class HMACMessage implements Serializable {
+public class HMACMessage extends Message implements Serializable {
 
     // Message content
     private String message;
     // Message signature
     private String hmac;
 
-    public HMACMessage(String message, String hmac) {
+    public HMACMessage(int nodeID, Type type, String message, String hmac) {
+        super(nodeID, type);
         this.message = message;
         this.hmac = hmac;
     }

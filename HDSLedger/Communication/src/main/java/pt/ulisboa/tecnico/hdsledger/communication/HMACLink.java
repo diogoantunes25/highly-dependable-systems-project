@@ -12,8 +12,8 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
+import java.lang.management.MemoryUsage;
 import java.net.*;
-import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
@@ -177,7 +177,7 @@ public class HMACLink implements Link {
                 if (sharedKeys.containsKey(data.getReceiver())) {
                     Key sharedKey = sharedKeys.get(data.getReceiver());
                     String hmac = SigningUtils.generateHMAC(jsonString, sharedKey);
-                    HMACMessage hmacMessage = new HMACMessage(jsonString, hmac);
+                    HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), data.getType(), jsonString, hmac);
                     byte[] buf = new Gson().toJson(hmacMessage).getBytes();
                     DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
                     socket.send(packet);
@@ -212,40 +212,56 @@ public class HMACLink implements Link {
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
 
             // buffer can be either a HMACMessage or a KeyProposal message
+            // assume that it is an HMAC message as it is cheaper to check
 
-            // assume that it is a KeyProposal message
-            try {
-                // first we decrypt the message
-                String decryptedData = new String(SigningUtils.decrypt(buffer, config.getPrivateKey()));
-                // decrypted data is a KeyProposal message from the sender, so we need to verify the signature
-                message = new Gson().fromJson(decryptedData, KeyProposal.class);
-                // verify signature
-                if (!SigningUtils.verifySignature(((KeyProposal) message).getKey(),
-                        ((KeyProposal) message).getSignature(),
-                        this.nodes.get(message.getSenderId()).getPublicKey())) {
+            // try to get appropriate key from sharedKeys
+            if (sharedKeys.containsKey(message.getSenderId())) {
+                // If we already have the key than it is probably a HMACMessage, it is unlikely that we receive a KeyProposal
+                // if it is an HMAC Message, but we do not have the key, we ignore the message as there's nothing we can do ?
+                message = new Gson().fromJson(new String(buffer), HMACMessage.class);
+                // verify hmac
+                String hmac = ((HMACMessage) message).getHmac();
+                String messageString = ((HMACMessage) message).getMessage();
+                Key sharedKey = sharedKeys.get(message.getSenderId());
+                if (!hmac.equals(SigningUtils.generateHMAC(messageString, sharedKey))) {
+                    // if the hmac is invalid, we ignore the message as it is not valid
                     message.setType(Message.Type.IGNORE);
-                    LOGGER.log(Level.WARNING,  MessageFormat.format(
-                            "WARNING: Invalid message signature received from {0}:{1}",
+                    LOGGER.log(Level.WARNING, MessageFormat.format(
+                            "WARNING: Invalid message HMAC received from {0}:{1}",
                             InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
                     return message;
                 }
-            } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
-                     NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
-                     BadPaddingException e) {
-                // if we catch an exception, we assume that it is a HMACMessage
-                HMACMessage hmacMessage = new Gson().fromJson(new String(buffer), HMACMessage.class);
-                String hmac = hmacMessage.getHmac();
-                String messageString = hmacMessage.getMessage();
-                // try to get appropriate key from sharedKeys
-                if (sharedKeys.containsKey(message.getSenderId())) {
-                    Key sharedKey = sharedKeys.get(message.getSenderId());
-                    if (!hmac.equals(SigningUtils.generateHMAC(messageString, sharedKey))) {
+            } else {  // if we do not have a sharedKey than the message probably is a Key Proposal
+                try {
+                    String decryptedData = new String(SigningUtils.decrypt(buffer, config.getPrivateKey()));
+                    // decrypted data is a KeyProposal message from the sender, so we need to verify the signature
+                    message = new Gson().fromJson(decryptedData, KeyProposal.class);
+                    // verify signature
+                    if (!SigningUtils.verifySignature(((KeyProposal) message).getKey(),
+                            ((KeyProposal) message).getSignature(),
+                            this.nodes.get(message.getSenderId()).getPublicKey())) {
+                        // if the signature is invalid, we ignore the message as it is not valid
                         message.setType(Message.Type.IGNORE);
-                        LOGGER.log(Level.WARNING,  MessageFormat.format(
+                        LOGGER.log(Level.WARNING, MessageFormat.format(
                                 "WARNING: Invalid message signature received from {0}:{1}",
                                 InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
                         return message;
                     }
+                } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
+                         NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
+                         BadPaddingException e) {
+                    // if we cannot decrypt the message, we ignore the message as it is not valid
+                    // it can be either a KeyProposal or a HMACMessage
+                    // if it is a KeyProposal and we cannot decrypt it, it probably is because the message is corrupted
+                    // or the sender is not using the correct public key to encrypt the message, so there's nothing we can do
+
+                    // if it is a HMACMessage we cannot decrypt something that is not encrypted
+                    // so an exception is thrown, and we ignore the message as we do not have the key to check the hmac
+                    message.setType(Message.Type.IGNORE);
+                    LOGGER.log(Level.WARNING, MessageFormat.format(
+                            "WARNING: Error decrypting message received from {0}:{1}",
+                            InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+                    return message;
                 }
             }
         }
@@ -296,9 +312,8 @@ public class HMACLink implements Link {
             }
             case KEY_PROPOSAL -> {
                 KeyProposal keyProposal = (KeyProposal) message;
-                String key = keyProposal.getKey();
-                byte[] keyBytes = key.getBytes();
-                Key aesKey = new SecretKeySpec(keyBytes, 0, keyBytes.length, "AES");
+                Key aesKey = new SecretKeySpec(keyProposal.getKey().getBytes(),
+                        0, keyProposal.getKey().getBytes().length, "AES");
 
                 sharedKeys.put(message.getSenderId(), aesKey);
                 return message;
@@ -334,7 +349,8 @@ public class HMACLink implements Link {
         new Thread(() -> {
             // setup shared keys between channels
             for (ProcessConfig dest : nodes) {
-                if (dest.getId() < self.getId()) {  // only send to nodes with higher id
+                if (dest.getId() < self.getId()) {
+                    // only send key proposal to nodes with higher id
                     continue;
                 }
 
