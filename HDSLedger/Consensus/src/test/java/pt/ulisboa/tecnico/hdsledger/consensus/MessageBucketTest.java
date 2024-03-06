@@ -25,12 +25,12 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 public class MessageBucketTest {
 	// TODO (dsa): also exists in Instanbul class, factor out to some utils type thing
 	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
-		PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
+		PrepareMessage prepareMessage = new PrepareMessage(value);
 
 		return new ConsensusMessageBuilder(id, Type.PREPARE)
 			.setConsensusInstance(instance)
 			.setRound(round)
-			.setMessage(prePrepareMessage.toJson())
+			.setMessage(prepareMessage.toJson())
 			.setReceiver(receiver)
 			.build();
 	}
