@@ -15,7 +15,7 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 /**
- * Container for messages. Each replica can only have a single message stored.
+ * Container for messages. Each replica can only have a single message stored for each round.
  * Not thread-safe.
  * Should be used for messages of same type.
  */
@@ -112,7 +112,8 @@ public class MessageBucket {
     }
 
     /**
-     * Checks the exists a quorum of messages PREPARE messages
+     * Checks the existence a quorum of messages PREPARE messages
+     * Returns the value of the prepares.
      */
     public Optional<String> hasValidPrepareQuorum(int round) {
         Optional<List<ConsensusMessage>> messages = this.hasValidQuorum(round, Message.Type.PREPARE);
@@ -124,6 +125,17 @@ public class MessageBucket {
         }
 
         return Optional.empty();
+    }
+
+    // TODO(dsa): refactor. call getPrepareQuorumJustification after
+    // hasValidPrepareQuorum are redundant
+    
+    /**
+     * Checks the existence a quorum of messages PREPARE messages
+     * Returns the list of the prepares.
+     */
+    public Optional<List<ConsensusMessage>> getPrepareQuorumJustification(int round) {
+        return this.hasValidQuorum(round, Message.Type.PREPARE);
     }
 
     /**

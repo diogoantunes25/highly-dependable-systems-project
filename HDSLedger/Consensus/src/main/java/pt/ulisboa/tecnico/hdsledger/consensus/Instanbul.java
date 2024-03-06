@@ -20,6 +20,8 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javafx.util.Pair;
+
 /**
  * Instance of Instanbul consensus protocol
  * It's thread safe (per instance) - this is ensured by having all public methods
@@ -27,6 +29,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
+
+    // Weak support
+    private final int weakSupport;
+    
+    // Quorum size (i.e. strong support)
+    private final int quorumSize;
 
 	// Milliseconds
 	private static final int INITIAL_TIMEOUT = 10;
@@ -46,14 +54,20 @@ public class Instanbul {
 	// The value for which the process has prepared
 	private Optional<String> pvi;
 
+	// The set of messages that justify my prepared state
+	private Optional<List<ConsensusMessage>> preparationJustification;
+
 	// The value passed as input to this instance
 	private Optional<String> inputValuei;
 
-	// Consensus instance -> Round -> List of prepare messages
+	// Consensus Round -> List of prepare messages
 	private final MessageBucket prepareMessages;
 
-	// Consensus instance -> Round -> List of commit messages
+	// Consensus Round -> List of commit messages
 	private final MessageBucket commitMessages;
+
+	// Consensus Round -> List of round change messages
+	private final MessageBucket roundChangeMessages;
 
 	// Store if already received pre-prepare for a given round
 	private final Map<Integer, Boolean> receivedPrePrepare = new HashMap<>();
@@ -94,6 +108,11 @@ public class Instanbul {
 	private Predicate<String> beta;
 
 	public Instanbul(ProcessConfig config, int lambda, Predicate<String> beta) {
+		int n = config.getN();
+		int f = Math.floorDiv(n - 1, 3);
+        this.quorumSize = Math.floorDiv(n + f, 2) + 1; // works because 4f+1 is odd
+        this.weakSupport = f+1;
+
 		this.lambda = lambda;
 		this.config = config;
 		this.beta = beta;
@@ -101,12 +120,14 @@ public class Instanbul {
 		this.ri = 0;
 		this.pri = Optional.empty();
 		this.pvi = Optional.empty();
+		this.preparationJustification = Optional.empty();
 		this.inputValuei = Optional.empty();
 		this.decision = Optional.empty();
 
 		this.commitMessage = Optional.empty();
-		this.prepareMessages = new MessageBucket(config.getN());
-		this.commitMessages = new MessageBucket(config.getN());
+		this.prepareMessages = new MessageBucket(n);
+		this.commitMessages = new MessageBucket(n);
+		this.roundChangeMessages = new MessageBucket(n);
 	}
 
 	/**
@@ -237,8 +258,8 @@ public class Instanbul {
 	/**
 	 * Utility to create RoundChangeMessages
 	 */
-	private ConsensusMessage createRoundChangeMessage(int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri) {
-		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri);
+	private ConsensusMessage createRoundChangeMessage(int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
+		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri, justification);
 
 		return new ConsensusMessageBuilder(this.config.getId(), Message.Type.ROUND_CHANGE)
 			.setConsensusInstance(instance)
@@ -270,10 +291,14 @@ public class Instanbul {
 		this.startTimer(getTimeout(this.ri));
 
 		// Leader broadcasts PRE-PREPARE message
-		if (isLeader(this.lambda, this.ri, this.config.getId())) {
+		if (isLeader(this.ri, this.config.getId())) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
 
+			// Note that I should broadcast even if we're already on a later round
+			// because if I was elected leader and didn't have input, that means
+			// I'm still on time to try to finish of the round
+			
 			// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
 			return IntStream.range(0, this.config.getN())
 				.mapToObj(receiver -> this.createPrePrepareMessage(inputValue, this.lambda, this.ri, receiver))
@@ -318,7 +343,7 @@ public class Instanbul {
 				config.getId(), senderId, this.lambda, round));
 		
 		// Verify if pre-prepare was sent by leader
-		if (!isLeader(this.lambda, round, senderId)) {
+		if (!isLeader(round, senderId)) {
 		    return new ArrayList<>();
 		}
 
@@ -404,7 +429,6 @@ public class Instanbul {
 		Optional<String> preparedValue = prepareMessages.hasValidPrepareQuorum(round);
 		
 		if (preparedValue.isPresent()) {
-
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
 						"{0} - Found quorum of PREPARE messages for Consensus Instance {1}, Round {2}",
@@ -413,6 +437,7 @@ public class Instanbul {
 			// Prepare for this instance
 			this.pri = Optional.of(round);
 			this.pvi = Optional.of(preparedValue.get());
+			this.preparationJustification = prepareMessages.getPrepareQuorumJustification(round);
 
 			Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(round)
 				.values();
@@ -461,37 +486,182 @@ public class Instanbul {
 		return new ArrayList<>();
 	}
 
+	/**
+	 * Checks that a round change message is properly signed
+	 */
+	boolean prepareSignedIsValid(ConsensusMessage message) {
+		// TODO (dsa): fixme
+		return true;
+	}
+
+	/**
+	 * Does basic verification for validity of round change message, namely
+	 *	- checks that either all pri, pvi are set or non is
+	 *	- if pri, pvi and justification are set, checks signatures on justification
+	 */
+	private boolean sanityCheckRoundChangeMessage(RoundChangeMessage message) {
+		// If three fields aren't either all set or none set, bad behaviour
+		if (!(message.getPvi().isPresent() && message.getPri().isPresent() && message.getJustification().isPresent())
+				&& !(!message.getPvi().isPresent() && !message.getPri().isPresent() && !message.getJustification().isPresent())) {
+			return false;
+		}
+
+		// If there's no prepared value, nothing to justify
+		if (!message.getPvi().isPresent()) {
+			return true;
+		}
+
+		return message.getJustification()
+			.get()
+			.stream()
+			.allMatch(m -> prepareSignedIsValid(m));
+	}
+
+	/**
+	 * Helper function from paper
+	 * @param Qrc list of round change messages
+	 */
+	static Optional<Pair<String, Integer>> highestPrepared(List<ConsensusMessage> Qrc) {
+
+		// Get all messages that have some prepared value and reverse sort by round
+		Optional<ConsensusMessage> message = Qrc.stream()
+			.filter(m -> m.deserializeRoundChangeMessage().getPvi().isPresent())
+			.sorted((m1, m2) -> 
+				Integer.compare(m2.deserializeRoundChangeMessage().getPri().get(),
+								m1.deserializeRoundChangeMessage().getPri().get()))
+			.findFirst();
+
+		if (!message.isPresent()) {
+			return Optional.empty();
+		}
+
+		RoundChangeMessage roundChangeMessage = message.get().deserializeRoundChangeMessage();
+
+		return Optional.of(
+				new Pair<>(roundChangeMessage.getPvi().get(),
+							roundChangeMessage.getPri().get()));
+	}
+
+	/**
+	 * Approximation of JUSTIFYROUNDCHANGE from paper
+	 * Assumes each round change message was already verifies
+	 * @param Qrc list of round change messages
+	 *
+	 */
+	boolean justifyRoundChange(List<ConsensusMessage> Qrc) {
+		if (Qrc.size() < this.quorumSize) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format("{0} - justification of round change was askes for a quorum with less than required size {1} < {2} (which is strange)",
+						config.getId(), Qrc.size(), this.quorumSize));
+
+			return false;
+		}
+
+		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
+		// satisfies J1
+		if (!optPair.isPresent()) {
+			return true;
+		}
+
+		String pv = optPair.get().getKey();
+		int pr = optPair.get().getValue();
+
+		// Get all PREPARE values with justification for round pr with value pv
+		long matches = Qrc.stream()
+			.map(m -> m.deserializeRoundChangeMessage().getJustification())
+			.filter(opt -> opt.isPresent())
+			.flatMap(opt -> opt.get().stream())
+			.filter(m -> m.getRound() == pr)
+			.map(m -> m.deserializePrepareMessage().getValue())
+			.filter(v -> v.equals(pv))
+			.count();
+
+		// whether J2 is satisfied
+		return matches >= this.quorumSize;
+	}
+
 	/*
 	 * Handle round change messages
 	 *
 	 * @param message Message to be handled
 	 */
 	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
+		List<ConsensusMessage> messages = new ArrayList<>();
+
 		int round = message.getRound();
+		RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
 
 		LOGGER.log(Level.INFO,
 				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), message.getSenderId(), this.lambda, round));
 
+		if (!sanityCheckRoundChangeMessage(roundChangeMessage)) {
+			LOGGER.log(Level.WARNING,
+					MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
+						config.getId(), message.getSenderId(), this.lambda, round));
 
-		// Amplification (if didn't broadcast ROUND-CHANGE message yet)
-		if (false) {
-			// update round
+			return messages;
+		}
+
+		roundChangeMessages.addMessage(message);
+
+		// Amplification
+		Optional<Integer> optNextRound = roundChangeMessages.hasValidWeakRoundChangeSupport(this.ri);
+		if (optNextRound.isPresent()) {
+			// update round (ri <- rmin)
+			this.ri = optNextRound.get();
+
+			// No need to check whether I already broadcasted a ROUND-CHANGE (because
+			// I just changed rounds)
+
 			// start timer
-			// broadcast stuff
+			startTimer(getTimeout(this.ri));
+
+			// broadcast ROUND-CHANGE(ri, pri, pvi)
+			messages.addAll(IntStream.range(0, this.config.getN())
+				.mapToObj(receiver -> 
+					createRoundChangeMessage(this.lambda, this.ri, receiver, this.pvi, this.pri, this.preparationJustification))
+				.collect(Collectors.toList()));
+		}
+
+		// no point in collecting quorum, if I'm not the leader for the next round
+		if (!isLeader(this.ri, this.config.getId())) {
+			return messages;
 		}
 
 		// Check existance of quorum
-		if (false) {
+		Optional<List<ConsensusMessage>> optQrc = roundChangeMessages.hasValidRoundChangeQuorum(this.ri);
+		if (optQrc.isPresent() && justifyRoundChange(optQrc.get())) {
+			Optional<Pair<String, Integer>> optPair = highestPrepared(optQrc.get());
 
-			// If leader for new round
-			if (false) {
-				// lines 12 - 16 of protocol
+			// lines 12 - 16 of protocol
+			Optional<String> v;
+			if (optPair.isPresent()) {
+				v = Optional.of(optPair.get().getKey());
+			} else {
+				v = inputValuei;
 			}
 
+			if (v.isPresent()) {
+				// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
+				messages.addAll(IntStream.range(0, this.config.getN())
+					.mapToObj(receiver -> this.createPrePrepareMessage(v.get(), this.lambda, this.ri, receiver))
+					.collect(Collectors.toList()));
+			} else {
+				// TODO (dsa): check that this is the case
+				// if v is not present, that means that no input has been made
+				// to this replica
+				// if this is the case, it's ok for the replica not to start
+				// the broadcast even though it's the leader (it will just
+				// be round-changed)
+
+				LOGGER.log(Level.WARNING,
+						MessageFormat.format("{0} -  I (replica {1}) was just \"elected\", but I don't have any input: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
+							config.getId(), message.getSenderId(), this.lambda, round));
+			}
 		}
 
-		return new ArrayList<>();
+		return messages;
 	}
 
 	// TODO: add stuff from algorithm 4
@@ -519,7 +689,7 @@ public class Instanbul {
 
 		// Broadcast RoundChange (labmda, round, pvi, pri)
 		return IntStream.range(0, this.config.getN())
-			.mapToObj(receiver -> this.createRoundChangeMessage(this.lambda, round, receiver, this.pvi, this.pri))
+			.mapToObj(receiver -> this.createRoundChangeMessage(this.lambda, round, receiver, this.pvi, this.pri, this.preparationJustification))
 			.collect(Collectors.toList());
 	}
 
@@ -615,8 +785,8 @@ public class Instanbul {
 
 	// TODO (dsa): factor out to schedule class (to test with different
 	// schedules)
-	private boolean isLeader(int lambda, int round, int id) {
-		int leader = (lambda + round) % config.getN();
+	private boolean isLeader(int round, int id) {
+		int leader = (this.lambda + round) % config.getN();
 		return leader == id;
 	}
 

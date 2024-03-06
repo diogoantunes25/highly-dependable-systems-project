@@ -46,8 +46,8 @@ public class MessageBucketTest {
 			.build();
 	}
 
-	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri) {
-		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri);
+	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
+		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri, justification);
 
 		return new ConsensusMessageBuilder(id, Type.ROUND_CHANGE)
 			.setConsensusInstance(instance)
@@ -286,12 +286,13 @@ public class MessageBucketTest {
 		int quorumSize = Math.floorDiv(n + f, 2) + 1;
 		Optional<Integer> pri = Optional.empty();
 		Optional<String> pvi = Optional.empty();
+		Optional<List<ConsensusMessage>> justification = Optional.empty();
 		int instance = 0;
 		int round = 0;
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1, receiver, pvi, pri))
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -310,12 +311,13 @@ public class MessageBucketTest {
 		int quorumSize = Math.floorDiv(n + f, 2) + 1;
 		Optional<Integer> pri = Optional.empty();
 		Optional<String> pvi = Optional.empty();
+		Optional<List<ConsensusMessage>> justification = Optional.empty();
 		int instance = 0;
 		int round = 5;
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri))
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -333,12 +335,13 @@ public class MessageBucketTest {
 		int quorumSize = Math.floorDiv(n + f, 2) + 1;
 		Optional<Integer> pri = Optional.empty();
 		Optional<String> pvi = Optional.empty();
+		Optional<List<ConsensusMessage>> justification = Optional.empty();
 		int instance = 0;
 		int round = 5;
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1+i, receiver, pvi, pri))
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1+i, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -357,6 +360,7 @@ public class MessageBucketTest {
 		int quorumSize = Math.floorDiv(n + f, 2) + 1;
 		Optional<Integer> pri = Optional.empty();
 		Optional<String> pvi = Optional.empty();
+		Optional<List<ConsensusMessage>> justification = Optional.empty();
 		int instance = 0;
 		int round = n+10;
 		int receiver = 0; // irrelevant
@@ -364,7 +368,7 @@ public class MessageBucketTest {
 
 		// 2f request are stale
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+(i+1), receiver, pvi, pri))
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+(i+1), receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -383,6 +387,7 @@ public class MessageBucketTest {
 		int quorumSize = Math.floorDiv(n + f, 2) + 1;
 		Optional<Integer> pri = Optional.empty();
 		Optional<String> pvi = Optional.empty();
+		Optional<List<ConsensusMessage>> justification = Optional.empty();
 		int instance = 0;
 		int round = n+10;
 		int receiver = 0; // irrelevant
@@ -390,7 +395,7 @@ public class MessageBucketTest {
 
 		// 2f+1 request are stale
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+i, receiver, pvi, pri))
+			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+i, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -410,11 +415,12 @@ public class MessageBucketTest {
 		int round = 0;
 		Optional<Integer> pri = Optional.empty();
 		Optional<String> pvi = Optional.empty();
+		Optional<List<ConsensusMessage>> justification = Optional.empty();
 		int receiver = 0; // irrelevant
-		
+				  //
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, quorumSize)
-					.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri))
+					.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri, justification))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<List<ConsensusMessage>> optLst = bucket.hasValidRoundChangeQuorum(round);	
