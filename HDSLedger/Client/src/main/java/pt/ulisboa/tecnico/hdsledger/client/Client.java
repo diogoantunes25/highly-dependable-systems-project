@@ -48,7 +48,7 @@ public class Client {
         String line = "";
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
 
-        ClientStub stub = new ClientStub(config, nodeConfigs, clientConfigs, showDebugLogs);
+        ClientStub stub = new ClientStub(config, nodeConfigs, showDebugLogs);
         stub.listen();
 
         while (true) {

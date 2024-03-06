@@ -32,8 +32,7 @@ public class ClientStub {
 
     private final ReceivedSlots receivedSlots;
 
-    public ClientStub(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs,
-                   boolean activateLogs) throws HDSSException {
+    public ClientStub(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs) throws HDSSException {
         this.config = clientConfig;
 
         // Create link to communicate with nodes
