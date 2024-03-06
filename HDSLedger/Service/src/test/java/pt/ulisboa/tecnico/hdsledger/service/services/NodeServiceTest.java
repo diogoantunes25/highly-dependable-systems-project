@@ -7,7 +7,10 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBu
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 
+import java.security.*;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Deque;
@@ -18,21 +21,54 @@ import java.util.function.Consumer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class NodeServiceTest {
 
+	// n is set to 10 by default
+	@BeforeAll
+	private static void genKeys() {
+		int n = 10;
+		List<String> publicKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+
+		List<String> privateKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.collect(Collectors.toList());
+
+		for (int i = 0 ; i < n; i++) {
+			try {
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+			} catch (GeneralSecurityException | IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
+		List<String> publicKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+
+		List<String> privateKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.collect(Collectors.toList());
+
 		return IntStream.range(0, n).mapToObj(i ->
 			new ProcessConfig(
 				false,
 				"localhost",
 				i,
 				basePort + i,
-				n
+				n,
+				publicKeys.get(i),
+				privateKeys.get(i)
 			)
 		).collect(Collectors.toList());
 	}
