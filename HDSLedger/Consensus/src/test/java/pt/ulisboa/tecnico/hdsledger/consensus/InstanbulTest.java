@@ -57,12 +57,12 @@ public class InstanbulTest {
 	}
 
 	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
-		PrePrepareMessage prePrepareMessage = new PrePrepareMessage(value);
+		PrepareMessage prepareMessage = new PrepareMessage(value);
 
 		return new ConsensusMessageBuilder(id, Message.Type.PREPARE)
 			.setConsensusInstance(instance)
 			.setRound(round)
-			.setMessage(prePrepareMessage.toJson())
+			.setMessage(prepareMessage.toJson())
 			.setReceiver(receiver)
 			.build();
 	}
@@ -474,7 +474,7 @@ public class InstanbulTest {
 	 * Runs an instance of consensus with 4 nodes where one node that is
 	 * the first leader crashes
 	 */
-	// @Test
+	@Test
 	public void leaderCrashesN4() {
 		int n = 4;
 		int lambda = 0;
@@ -518,8 +518,77 @@ public class InstanbulTest {
 			duration = System.currentTimeMillis() - startTime;
 		}
 
-		// Crashed node is node expected to output anything
-		confirmed.remove(n-1);
+		// Crashed node is not node expected to output anything
+		confirmed.remove(0);
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
+	/**
+	 * Runs an instance of consensus with 4 nodes where one node that is
+	 * the first leader crashes and later comes back to life (as if network
+	 * partitioned)
+	 */
+	@Test
+	public void leaderCrashesAndComesBackN4() {
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Backlog of messages (after partition)
+		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			if (instance.getId() != 0) {
+				String value = String.format("a%d", instance.getId());
+				List<ConsensusMessage> output = instance.start(value);
+				// Store all messages to be processed
+				output.forEach(m -> messages.addLast(m));
+			}
+		});
+
+		// Run for at most 2 seconds
+		long startTime = System.currentTimeMillis();
+        long duration = 0;
+		while (duration < 5000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				// FIXME (dsa): don't hard code the leader
+				if (receiver == 0) {
+					messages2.addLast(message);
+				};
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages.addLast(m));
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		while (messages2.size() > 0) {
+				ConsensusMessage message = messages2.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages2.addLast(m));
+		}
 
 		// Check that everyone delivered the same and once only
 		checkConfirmed(confirmed); // ignore output value for simplicity

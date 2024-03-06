@@ -20,6 +20,15 @@ public class RoundChangeMessage {
     // Very, very bad. Done because Gson doesn't support Optionals :|
     private boolean present = false;
 
+    public RoundChangeMessage(Optional<String> pvi, Optional<Integer> pri) {
+        if (pvi.isPresent()) {
+            this.pvi = pvi.get();
+            this.pri = pri.get();
+            this.justification = null;
+            this.present = true;
+        }
+    }
+
     public RoundChangeMessage(Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
         if (pvi.isPresent()) {
             this.pvi = pvi.get();
@@ -41,6 +50,18 @@ public class RoundChangeMessage {
             return Optional.of(pri);
         }
         return Optional.empty();
+    }
+
+    public void clearJustification() {
+        this.justification = null;
+    }
+
+    public void setJustification(Optional<List<ConsensusMessage>> justification) {
+        if (justification.isPresent()) {
+            this.justification = justification.get();
+        } else {
+            this.justification = null;
+        }
     }
 
     public Optional<List<ConsensusMessage>> getJustification() {
