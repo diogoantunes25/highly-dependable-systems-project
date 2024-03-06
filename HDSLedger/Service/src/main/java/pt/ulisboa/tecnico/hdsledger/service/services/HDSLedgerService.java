@@ -69,7 +69,7 @@ public class HDSLedgerService implements UDPService {
         int slotId = slot.getSlotId();
         String nonce = slot.getNonce();
         String value = slot.getMessage();
-        String[] parts = value.split("_");
+        String[] parts = nonce.split("_");
         int clientId = Integer.parseInt(parts[0]);
         int sequenceNumber = Integer.parseInt(parts[1]);
 
@@ -99,9 +99,10 @@ public class HDSLedgerService implements UDPService {
                         new Thread(() -> {
                             switch (message.getType()) {
 
-                                case APPEND_REQUEST ->
+                                case APPEND_REQUEST -> {
+                                    System.out.println("Received request: "+ message.getClass().getName());
                                     append((AppendRequest) message);
-
+                                }
                                 default ->
                                     LOGGER.log(Level.INFO,
                                         MessageFormat.format("{0} - Received unknown message from {1}",

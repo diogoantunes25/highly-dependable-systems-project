@@ -36,7 +36,7 @@ public class ClientStub {
         this.config = clientConfig;
 
         // Create link to communicate with nodes
-        this.link = new APLink(clientConfig, clientConfig.getPort(), nodeConfigs, ConsensusMessage.class, activateLogs, 5000);
+        this.link = new APLink(clientConfig, clientConfig.getPort(), nodeConfigs, Message.class, activateLogs, 5000);
         // TODO - ConsensusMessage is not correct i think
 
         this.nodesNumber = nodeConfigs.length;
@@ -107,7 +107,7 @@ public class ClientStub {
         }
 
         public void addSlot(String key, int slotId) {
-            int decidesNeeded = (this.nodesNumber - 1) / 3;
+            int decidesNeeded = (this.nodesNumber - 1) / 3 + 1;
             if (decidedSlots.containsKey(key)) {
                 return;
             }
