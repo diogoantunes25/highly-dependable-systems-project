@@ -571,6 +571,75 @@ public class InstanbulTest {
 				// FIXME (dsa): don't hard code the leader
 				if (receiver == 0) {
 					messages2.addLast(message);
+					continue;
+				};
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages.addLast(m));
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		while (messages2.size() > 0) {
+				ConsensusMessage message = messages2.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages2.addLast(m));
+		}
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
+	/**
+	 * Runs an instance of consensus with 4 nodes where network partitions
+	 * after all prepare
+	 */
+	@Test
+	public void commitsNotGoingThroughInFirstRoundN4() {
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Backlog of messages (after partition)
+		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			String value = String.format("a%d", instance.getId());
+			List<ConsensusMessage> output = instance.start(value);
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Run for at most 5 seconds
+		long startTime = System.currentTimeMillis();
+        long duration = 0;
+		while (duration < 5000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				
+				// Don't allow COMMITs to go through
+				if (message.getType() == Message.Type.COMMIT) {
+					messages2.addLast(message);
+					continue;
 				};
 				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
 				output.forEach(m -> messages.addLast(m));

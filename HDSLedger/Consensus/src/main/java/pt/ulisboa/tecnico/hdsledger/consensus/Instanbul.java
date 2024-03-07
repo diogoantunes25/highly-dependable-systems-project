@@ -7,6 +7,8 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig; import pt.ulisboa.t
 import java.text.MessageFormat;
 import java.util.Optional;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.stream.IntStream;
@@ -40,7 +42,7 @@ public class Instanbul {
 	private final int quorumSize;
 
 	// Milliseconds
-	private static final int INITIAL_TIMEOUT = 500;
+	private static final int INITIAL_TIMEOUT = 1000;
 
 	// Process configuration (includes its id)
 	private final ProcessConfig config;
@@ -75,7 +77,10 @@ public class Instanbul {
 	// Consensus Round -> List of round change messages
 	private final MessageBucket roundChangeMessages;
 
-	// Store if already received pre-prepare for a given round
+	// Rounds for which PRE-PREPARE was already broadcasted
+	private final Set<Integer> prePrepared = new HashSet<>();
+
+	// Whether pre-prepare for a given round was received
 	private final Map<Integer, Boolean> receivedPrePrepare = new HashMap<>();
 
 	// Callbacks to be called on deliver
@@ -95,10 +100,6 @@ public class Instanbul {
 
 	// PREPARE messages from future rounds (round -> list of messages)
 	private Map<Integer, List<ConsensusMessage>> stashedPrepare = new HashMap<>();
-
-	// ROUND-CHANGE messages from other rounds (round -> list of messages)
-	// TODO (dsa): not sure I'll need this, but I feel like I do
-	private Map<Integer, List<ConsensusMessage>> stashedRoundChange = new HashMap<>();
 
 	// Timer required by IBFT
 	private Optional<Timer> timer = Optional.empty();
@@ -173,9 +174,11 @@ public class Instanbul {
 		// If I have a timer
 		if (this.timer.isPresent()) {
 
-			// TODO (dsa): need to make sure I haven't stopped the timer for round i
 			// If I haven't started a timer for this round
 			if (!roundTimerId.containsKey(this.ri)) {
+
+				LOGGER.log(Level.WARNING, MessageFormat.format("{0} - Starting timer for round {1} that expires in {2} milliseconds",
+							config.getId(), this.lambda, timeout));
 				int timerId = this.timer.get().setTimerToRunning(timeout);
 				roundTimerId.put(this.ri, Optional.of(timerId));
 			}
@@ -356,6 +359,9 @@ public class Instanbul {
 			// because if I was elected leader and didn't have input, that means
 			// I'm still on time to try to finish of the round
 			
+			// Mark that broacast of PRE-PREPARE was already made for this round
+			this.prePrepared.add(this.ri);
+
 			// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
 			return IntStream.range(0, this.config.getN())
 				.mapToObj(receiver -> this.createPrePrepareMessage(inputValue, this.lambda, this.ri, receiver, Optional.empty(), Optional.empty()))
@@ -376,7 +382,6 @@ public class Instanbul {
 	 */
 	private List<ConsensusMessage> prePrepare(ConsensusMessage message) {
 
-		// TODO (dsa): horrible, refactor message structure
 		int round = message.getRound();
 		int senderId = message.getSenderId();
 
@@ -549,8 +554,18 @@ public class Instanbul {
 		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(round);
 
 		if (commitValue.isPresent()) {
+			if (this.decision.isPresent()) {
+				LOGGER.log(Level.INFO,
+						MessageFormat.format(
+							"{0} - Already decided on Consensus Instance {1}, Round {2}, ignoring",
+							config.getId(), this.lambda, round));
+				return new ArrayList<>();
+			}
 
 			String value = commitValue.get();
+
+			// Note that round might differ from this.ri
+			stopTimer(round);
 
 			decide(value);
 
@@ -727,7 +742,7 @@ public class Instanbul {
 		int pr = optPair.get().getValue();
 
 		// Get PREPARES for the highest prepared value and check there's
-		// a quorum
+		// a quorum 
 		long count = Qp.stream()
 			.filter(m -> m.getRound() == pr)
 			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv))
@@ -776,13 +791,26 @@ public class Instanbul {
 		int pr = optPair.get().getValue();
 
 		// Get all PREPARE values with justification for round pr with value pv
-		List<ConsensusMessage> prepares = Qrc.stream()
+		//(there can't be any two messages for same sender otherwise
+		// protocol goes O(n3))
+		List<ConsensusMessage> preparesDuplicate = Qrc.stream()
 			.map(m -> m.deserializeRoundChangeMessage().getJustification())
 			.filter(opt -> opt.isPresent())
 			.flatMap(opt -> opt.get().stream())
 			.filter(m -> m.getRound() == pr)
 			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv))
 			.collect(Collectors.toList());
+		
+		// Deduplicate messages from same sender (unfortunately Java Stream API
+		// doesn't strem to provide this facility, so it's done manually)
+		Set<Integer> sendersChecked = new HashSet<>();
+		List<ConsensusMessage> prepares = new ArrayList<>();
+		for (ConsensusMessage message: preparesDuplicate) {
+			if (!sendersChecked.contains(message.getSenderId())) {
+				sendersChecked.add(message.getSenderId());
+				prepares.add(message);
+			}
+		}
 
 		// Get ROUND-CHANGE messages without justifications
 		List<ConsensusMessage> roundChangesNoJustify = Qrc.stream()
@@ -867,12 +895,20 @@ public class Instanbul {
 			return messages;
 		}
 
+
+		if (this.prePrepared.contains(this.ri)) {
+			LOGGER.log(Level.INFO,
+				MessageFormat.format("{0} - Already broadcasted PRE-PREPARE for this round, nothing to do (Consensus Instance {2}, Round {3})",
+					config.getId(), message.getSenderId(), this.lambda, this.ri));
+
+			return messages;
+		}
+
 		LOGGER.log(Level.INFO,
 			MessageFormat.format("{0} - Checking the existence of a good quorum of ROUND-CHANGE messages - Consensus Instance {2}, Round {3}",
 				config.getId(), message.getSenderId(), this.lambda, this.ri));
 
 		// Check existance of quorum
-		// TODO (dsa): check this hasn't been done yet - this rule is being activated multiple times
 		Optional<List<ConsensusMessage>> optQrc = roundChangeMessages.hasValidRoundChangeQuorum(this.ri);
 		if (optQrc.isPresent()) {
 			Optional<Pair<List<ConsensusMessage>, List<ConsensusMessage>>> optJustification = justifyRoundChange(optQrc.get());
@@ -899,8 +935,11 @@ public class Instanbul {
 					List<ConsensusMessage> justificationPrepares = optJustification.get().getValue();
 
 					LOGGER.log(Level.WARNING,
-							MessageFormat.format("{0} -  I (replica {1}) was just \"elected\", sending a PRE-PREPARE with {4} ROUND-CHANGES and {5} PREPARES for justification: Consensus Instance {2}, Round {3}",
-								config.getId(), message.getSenderId(), this.lambda, round, justificationRoundChanges.size(), justificationPrepares.size()));
+							MessageFormat.format("{0} -  I was just \"elected\", sending a PRE-PREPARE with {3} ROUND-CHANGES and {4} PREPARES for justification: Consensus Instance {1}, Round {2}",
+								config.getId(), this.lambda, round, justificationRoundChanges.size(), justificationPrepares.size()));
+
+					// Mark that broacast of PRE-PREPARE was already made for this round
+					this.prePrepared.add(this.ri);
 
 					// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
 					messages.addAll(IntStream.range(0, this.config.getN())
@@ -950,7 +989,7 @@ public class Instanbul {
 
 		LOGGER.log(Level.INFO,
 				MessageFormat.format(
-					"{0} - Moved to round {2} at instance {1}",
+					"{0} - Moved to round {2} at instance {1} due to timeout",
 					config.getId(), this.lambda, this.ri));
 
 
@@ -1027,8 +1066,6 @@ public class Instanbul {
 		};
 	}
 
-	// TODO (dsa): add stuff for round change
-
 	private void decide(String value) {
 		if (this.decision.isPresent()) {
 
@@ -1050,8 +1087,6 @@ public class Instanbul {
 		}
 	}
 
-	// TODO (dsa): factor out to schedule class (to test with different
-	// schedules)
 	private boolean isLeader(int round, int id) {
 		int leader = (this.lambda + round) % config.getN();
 		return leader == id;
