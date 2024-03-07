@@ -12,38 +12,39 @@ import javax.crypto.NoSuchPaddingException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.security.InvalidKeyException;
+import java.security.Key;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.spec.InvalidKeySpecException;
 
 public class KeyProposal extends Message implements Serializable {
 
-    private String key;
+    private byte[] key;
 
     private String signature;
 
-    public KeyProposal(int nodeID, String key, String signature, String receiverPublicKey) {
+    public KeyProposal(int nodeID, Key key, String signature, String receiverPublicKey) {
         super(nodeID, Type.KEY_PROPOSAL);
         this.key = encrypt(key, receiverPublicKey);
         this.signature = signature;
     }
 
-    public String getKey() { return key; }
+    public byte[] getKey() { return key; }
 
-    public void setKey(String key) { this.key = key; }
+    public void setKey(byte[] key) { this.key = key; }
 
     public String getSignature() { return signature; }
 
     public void setSignature(String signature) { this.signature = signature; }
 
-    private String encrypt(String message, String publicKey) {
+    private byte[] encrypt(Key key, String publicKey) {
         // encrypt message with receiver's public key
-        String encryptedData;
+        byte[] encryptedData;
         try {
-            encryptedData = SigningUtils.encryptWithPublic(message.getBytes(), publicKey);
+            encryptedData = SigningUtils.encryptWithPublic(key, publicKey);
             return encryptedData;
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
-                 NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
-                 BadPaddingException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException | NoSuchPaddingException |
+                 InvalidKeyException | IllegalBlockSizeException | BadPaddingException | NoSuchProviderException e) {
             e.printStackTrace();
             throw new HDSSException(ErrorMessage.EncryptionError);
         }

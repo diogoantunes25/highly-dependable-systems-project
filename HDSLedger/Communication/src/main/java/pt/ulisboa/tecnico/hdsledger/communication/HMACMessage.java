@@ -6,14 +6,14 @@ import java.io.Serializable;
 
 public class HMACMessage extends Message implements Serializable {
     // Message signature
-    private String hmac;
+    private byte[] hmac;
 
-    public HMACMessage(int nodeID, Type type, String hmac) {
+    public HMACMessage(int nodeID, Type type, byte[] hmac) {
         super(nodeID, type);
         this.hmac = hmac;
     }
 
-    public String getHmac() { return hmac; }
+    public byte[] getHmac() { return hmac; }
 
-    public void setHmac(String hmac) { this.hmac = hmac; }
+    public void setHmac(byte[] hmac) { this.hmac = hmac; }
 }

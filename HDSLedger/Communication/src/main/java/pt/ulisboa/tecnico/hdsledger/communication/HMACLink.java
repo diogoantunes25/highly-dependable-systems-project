@@ -13,7 +13,9 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 
+import java.lang.reflect.Array;
 import java.net.*;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
@@ -34,6 +36,8 @@ public class HMACLink implements Link {
     private final Map<Integer, ProcessConfig> nodes = new ConcurrentHashMap<>();
     // Reference to the node itself
     private final ProcessConfig config;
+    // Set of received messages from specific node (prevent duplicates)
+    private final Map<Integer, CollapsingSet> receivedMessages = new ConcurrentHashMap<>();
     // Send messages to self by pushing to queue instead of through the network
     private final Map<Integer, Key> sharedKeys = new ConcurrentHashMap<>();
     // APLink reference
@@ -85,6 +89,11 @@ public class HMACLink implements Link {
                 int backoff = 10;
                 while (sharedKeys.get(nodeId) == null) {
                     try {
+                        LOGGER.log(Level.INFO, MessageFormat.format(
+                                "Failed to send message to {0}:{1} with message ID {2} -" +
+                                        "shared key is not ready yet. Waiting {3}ms to retry.",
+                                nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(),
+                                data.getMessageId(), backoff));
                         // exponential backoff
                         Thread.sleep(backoff);
                         backoff *= 2;
@@ -95,21 +104,26 @@ public class HMACLink implements Link {
                 sendWhenKeyIsReady(nodeId, data);
             }).start();
         } else {
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "Key is ready, sending message to {0}:{1} with message ID {2}",
+                    nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(), data.getMessageId()
+            ));
             sendWhenKeyIsReady(nodeId, data);
         }
     }
 
     private void sendWhenKeyIsReady(int nodeId, Message data) {
+        data.setReceiver(nodeId);
         String dataString = new Gson().toJson(data);
         Key sharedKey = sharedKeys.get(nodeId);
-        String hmac = SigningUtils.generateHMAC(dataString, sharedKey);
+        byte[] hmac = SigningUtils.generateHMAC(dataString.getBytes(), sharedKey);
         HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), data.getType(), hmac);
-                /*System.out.println(MessageFormat.format(
+                LOGGER.log(Level.INFO, MessageFormat.format(
                         "Sending message of type {0} to {1}:{2} with message ID {3} -" +
-                                "message has data: {4} with HMAC: {5}",
+                                "with HMAC: {4}",
                         hmacMessage.getType(), nodes.get(nodeId).getHostname(),
                         nodes.get(nodeId).getPort(), hmacMessage.getMessageId(),
-                        hmacMessage.getMessage(), hmacMessage.getHmac()));*/
+                        hmacMessage.getHmac()));
         hmacMessage.setReceiver(nodeId);
         apLink.send(nodeId, hmacMessage);
     }
@@ -120,31 +134,47 @@ public class HMACLink implements Link {
         Message message;
         while (true) {
             message = apLink.receiveAndDeserializeWith(HMACMessage.class);
-            if (!message.getType().equals(Message.Type.IGNORE)) {
-                if (sharedKeys.containsKey(message.getSenderId()) && !message.getType().equals(Type.KEY_PROPOSAL) && !message.getType().equals(Type.ACK)) {
-                    System.out.println("PROCESSING HMAC MESSAGE");
+            if (sharedKeys.containsKey(message.getSenderId())) {
+                if (!message.getType().equals(Type.KEY_PROPOSAL) && !message.getType().equals(Type.ACK)
+                        && !message.getType().equals(Type.IGNORE)) {
                     message = processHMACMessage(message);
+                    break;
                 } else if (message.getType().equals(Type.KEY_PROPOSAL)) {  // if we do not have a sharedKey than the message probably is a Key Proposal
                     message = processKeyProposal(message);
+                    break;
                 }
+            } else {
+                message.setType(Message.Type.IGNORE);
                 break;
             }
         }
 
+        if (!message.getType().equals(Type.IGNORE)) {
+            // If we did not set the message to IGNORE, we send an ACK
+            // this is done because sometimes we might not have the necessary key to check the hmac,
+            // so we want to ignore the message in order to force the sending node to resend the message
+            InetAddress address = InetAddress.getByName(nodes.get(message.getSenderId()).getHostname());
+            int port = nodes.get(message.getSenderId()).getPort();
+
+            Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
+            responseMessage.setMessageId(message.getMessageId());
+            responseMessage.setReceiver(message.getSenderId());
+
+            apLink.unreliableSend(address, port, responseMessage);
+        }
         return message;
     }
 
     private Message processHMACMessage(Message message) throws UnknownHostException {
         // If we already have the key than it is probably a HMACMessage, it is unlikely that we receive a KeyProposal
         // if it is an HMAC Message, but we do not have the key, we ignore the message as there's nothing we can do
-        byte[] buffer = new Gson().toJson(message).getBytes();
-        message = new Gson().fromJson(new String(buffer), HMACMessage.class);
         // verify hmac
-        String hmac = ((HMACMessage) message).getHmac();
+        byte[] hmac = ((HMACMessage) message).getHmac();
         Message msg = new Message(message.getSenderId(), message.getType());
+        msg.setReceiver(message.getReceiver());
         String messageString = new Gson().toJson(msg);
         Key sharedKey = sharedKeys.get(message.getSenderId());
-        if (!hmac.equals(SigningUtils.generateHMAC(messageString, sharedKey))) {
+        if (!Arrays.equals(hmac, SigningUtils.generateHMAC(messageString.getBytes(), sharedKey))) {
             // if the hmac is invalid, we ignore the message as it is not valid
             message.setType(Message.Type.IGNORE);
             LOGGER.log(Level.WARNING, MessageFormat.format(
@@ -153,15 +183,21 @@ public class HMACLink implements Link {
                     nodes.get(message.getSenderId()).getPort()));
             return message;
         }
+        LOGGER.log(Level.INFO, MessageFormat.format(
+                "Received message from {0}:{1} of type {2} with hmac {3}, and hmac is correct",
+                InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
+                nodes.get(message.getSenderId()).getPort(), message.getType(), hmac));
         return message;
     }
 
     private Message processKeyProposal(Message message) throws UnknownHostException {
         try {
-            String encryptedKey = ((KeyProposal) message).getKey();
-            String decryptedKey = SigningUtils.decryptWithPrivate(encryptedKey.getBytes(), this.config.getPrivateKey());
+            byte[] encryptedKey = ((KeyProposal) message).getKey();
+            byte[] decryptedKey = SigningUtils.decryptWithPrivate(encryptedKey, this.config.getPrivateKey());
+            Key aesKey = new SecretKeySpec(decryptedKey, 0, decryptedKey.length, "AES");
+            String aesKeyString = Base64.getEncoder().encodeToString(aesKey.getEncoded());
             // verify signature
-            if (!SigningUtils.verifySignature(decryptedKey,
+            if (!SigningUtils.verifySignature(aesKeyString,
                     ((KeyProposal) message).getSignature(),
                     this.nodes.get(message.getSenderId()).getPublicKey())) {
                 // if the signature is invalid, we ignore the message as it is not valid
@@ -172,13 +208,20 @@ public class HMACLink implements Link {
                         nodes.get(message.getSenderId()).getPort()));
                 return message;
             }
-            Key aesKey = new SecretKeySpec(((KeyProposal) message).getKey().getBytes(),
-                    0, ((KeyProposal) message).getKey().getBytes().length, "AES");
+            if (SigningUtils.verifySignature(aesKeyString,
+                    ((KeyProposal) message).getSignature(),
+                    this.nodes.get(message.getSenderId()).getPublicKey())) {
+            }
             sharedKeys.put(message.getSenderId(), aesKey);
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "Received key proposal from {0}:{1} with key {2} and signature {3}. Signature is valid and " +
+                            "key is stored",
+                    InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
+                    nodes.get(message.getSenderId()).getPort(), aesKey, ((KeyProposal) message).getSignature()));
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
                  NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
-                 BadPaddingException e) {
+                 BadPaddingException | InvalidAlgorithmParameterException e) {
             // if we cannot decrypt the message, we ignore the message as it is not valid
             // it can be either a KeyProposal or a HMACMessage
             // if it is a KeyProposal and we cannot decrypt it, it probably is because the message is corrupted
@@ -186,8 +229,6 @@ public class HMACLink implements Link {
 
             // if it is a HMACMessage we cannot decrypt something that is not encrypted
             // so an exception is thrown, and we ignore the message as we do not have the key to check the hmac
-            System.out.println("MESSAGE: " + new Gson().toJson(message));
-            System.out.println(e);
             LOGGER.log(Level.WARNING, MessageFormat.format(
                     "WARNING: Error decrypting message received from {0}:{1}",
                     InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
@@ -222,6 +263,7 @@ public class HMACLink implements Link {
                 sharedKeys.put(dest.getId(), aesKey);
 
                 String aesKeyString = Base64.getEncoder().encodeToString(aesKey.getEncoded());
+
                 Optional<String> signature;
                 // Sign message
                 try {
@@ -232,11 +274,11 @@ public class HMACLink implements Link {
                     throw new HDSSException(ErrorMessage.SigningError);
                 }
 
-                KeyProposal keyProposal = new KeyProposal(this.config.getId(), aesKeyString, signature.get(), dest.getPublicKey());
+                KeyProposal keyProposal = new KeyProposal(this.config.getId(), aesKey, signature.get(), dest.getPublicKey());
                 keyProposal.setReceiver(dest.getId());
-                /*System.out.println(MessageFormat.format(
+                LOGGER.log(Level.INFO, MessageFormat.format(
                         "Sending key proposal to {0}:{1} with key: {2} and signature: {3}",
-                        dest.getHostname(), dest.getPort(), keyProposal.getKey(), keyProposal.getSignature()));*/
+                        dest.getHostname(), dest.getPort(), keyProposal.getKey(), keyProposal.getSignature()));
                 apLink.send(dest.getId(), keyProposal);
             } catch (RuntimeException e) {
                 e.printStackTrace();
