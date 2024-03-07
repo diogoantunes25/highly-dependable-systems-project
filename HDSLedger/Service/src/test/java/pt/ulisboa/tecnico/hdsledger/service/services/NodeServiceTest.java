@@ -49,7 +49,6 @@ public class NodeServiceTest {
 		}
 	}
 
-
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
 		List<String> publicKeys = IntStream.range(0, n)

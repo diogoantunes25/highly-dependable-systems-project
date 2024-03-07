@@ -93,13 +93,20 @@ public class ConsensusMessage extends Message {
         this.replyToMessageId = replyToMessageId;
     }
 
+    private Signable getToSign() {
+        return new Signable(this.consensusInstance, this.round, this.message);
+    }
+
     /**
      * Signs itself and stores signature
      */
     public void signSelf(String pathToPrivateKey) {
         // serialize myself with null signature
         this.signature = null;
-        String serialized = new Gson().toJson(this);
+
+        Signable toSign = this.getToSign();
+        String serialized = new Gson().toJson(toSign);
+        System.out.printf("signSelf - signing %s\n", serialized);
         try {
             this.signature = SigningUtils.sign(serialized, pathToPrivateKey);
         } catch (NoSuchAlgorithmException | InvalidKeyException | InvalidKeySpecException |
@@ -116,19 +123,14 @@ public class ConsensusMessage extends Message {
      **/
     public boolean checkConsistentSig(String pathToPublicKey) {
         if (this.signature == null) {
+            System.out.println("checkConsistentSig - bad signature because is null");
             return false;
         }
 
-        // Get state at time of signing
-        String tmp = this.signature;
-        this.signature = null;
-
         // Check signature
-        String serialized = new Gson().toJson(this);
-        boolean result = SigningUtils.verifySignature(serialized, tmp, pathToPublicKey);
-
-        // Restore original state
-        this.signature = tmp;
+        String serialized = new Gson().toJson(this.getToSign());
+        System.out.printf("checkConsistentSig - checking signature for %s\n", serialized);
+        boolean result = SigningUtils.verifySignature(serialized, this.signature, pathToPublicKey);
 
         return result;
     }
@@ -142,5 +144,20 @@ public class ConsensusMessage extends Message {
 
     public void setSignature(String signature) {
         this.signature = signature;
+    }
+
+    // Class that encapsulates what is important to be signed
+    private class Signable {
+        private int lambda;
+
+        private int round;
+
+        private String message;
+
+        Signable(int lambda, int round, String message) {
+            this.lambda = lambda;
+            this.round = round;
+            this.message = message;
+        }
     }
 }

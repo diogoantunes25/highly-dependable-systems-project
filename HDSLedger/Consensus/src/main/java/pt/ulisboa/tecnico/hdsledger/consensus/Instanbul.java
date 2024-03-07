@@ -241,6 +241,7 @@ public class Instanbul {
 	/**
 	 * Utility to create PrepareMessages
 	 */
+
 	private ConsensusMessage createPrepareMessage(PrePrepareMessage prePrepareMessage, String value, int instance, int round, int receiver, int senderId, int senderMessageId) {
 		PrepareMessage prepareMessage = new PrepareMessage(prePrepareMessage.getValue());
 
@@ -485,7 +486,7 @@ public class Instanbul {
 		if (!message.checkConsistentSig(this.others.get(senderId).getPublicKey())) {
 			LOGGER.log(Level.WARNING,
 					MessageFormat.format(
-						"{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} - BAD SIGNATURE",
+						"{0} - Received PREPARE message from {1} Consensus Instance {2}, Round {3} - BAD SIGNATURE",
 						config.getId(), senderId, this.lambda, round));
 		    return new ArrayList<>();
 		}
