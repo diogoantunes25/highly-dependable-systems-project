@@ -123,7 +123,6 @@ public class APLink implements Link {
                     // LOGGER.log(Level.INFO, MessageFormat.format(
                     //         "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                     //         data.getType(), destAddress, destPort, messageId, count++));
-
                     unreliableSend(destAddress, destPort, data);
 
                     // Wait (using exponential back-off), then look for ACK
@@ -168,19 +167,16 @@ public class APLink implements Link {
         }).start();
     }
 
-    /*
-     * Receives a message from any node in the network (blocking)
-     */
-    public Message receive() throws IOException, ClassNotFoundException {
+    public <T extends Message> Message receiveAndDeserializeWith(Class<T> targetClass) throws IOException, ClassNotFoundException {
 
         Message message = null;
         String serialized = "";
         Boolean local = false;
         DatagramPacket response = null;
-        
+
         if (this.localhostQueue.size() > 0) {
             message = this.localhostQueue.poll();
-            local = true; 
+            local = true;
             this.receivedAcks.add(message.getMessageId());
         } else {
             byte[] buf = new byte[65535];
@@ -190,7 +186,7 @@ public class APLink implements Link {
 
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             serialized = new String(buffer);
-            message = new Gson().fromJson(serialized, Message.class);
+            message = new Gson().fromJson(serialized, targetClass);
         }
 
         int senderId = message.getSenderId();
@@ -208,7 +204,7 @@ public class APLink implements Link {
 
         // It's not an ACK -> Deserialize for the correct type
         if (!local)
-            message = new Gson().fromJson(serialized, this.messageClass);
+            message = new Gson().fromJson(serialized, targetClass);
 
         boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
@@ -237,6 +233,9 @@ public class APLink implements Link {
                 if (consensusMessage.getReplyTo() == config.getId())
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
+            case KEY_PROPOSAL -> {
+                message = new Gson().fromJson(serialized, KeyProposal.class);
+            }
             default -> {}
         }
 
@@ -246,6 +245,7 @@ public class APLink implements Link {
 
             Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
             responseMessage.setMessageId(messageId);
+            responseMessage.setReceiver(senderId);
 
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
@@ -253,8 +253,14 @@ public class APLink implements Link {
             // it will discard duplicates
             unreliableSend(address, port, responseMessage);
         }
-        
         return message;
+    }
+
+    /*
+     * Receives a message from any node in the network (blocking)
+     */
+    public Message receive() throws IOException, ClassNotFoundException {
+        return receiveAndDeserializeWith(Message.class);
     }
 
     /**

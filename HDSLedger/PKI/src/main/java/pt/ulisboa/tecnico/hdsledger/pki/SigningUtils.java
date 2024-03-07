@@ -45,11 +45,11 @@ public class SigningUtils {
         return new String(decryptedData);
     }
 
-    public static String decryptwithPrivate(byte[] data, String pathToPrivateKey)
+    public static String decryptWithPrivate(byte[] data, String pathToPrivateKey)
             throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
             NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
-        PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "pub");
+        PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "priv");
         Cipher decryptCipher = Cipher.getInstance("RSA");
         decryptCipher.init(Cipher.DECRYPT_MODE, privateKey);
         byte[] decryptedData = decryptCipher.doFinal(data);

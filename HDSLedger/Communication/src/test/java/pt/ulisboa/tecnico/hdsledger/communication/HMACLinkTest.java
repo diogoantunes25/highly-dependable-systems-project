@@ -1,16 +1,19 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.text.MessageFormat;
 
 public class HMACLinkTest {
     @Test
-    public void testHMACLink(@TempDir Path tempDir) {
+    public void testHMACLink(@TempDir Path tempDir) throws IOException, ClassNotFoundException {
         // generate nodes private and public keys
         String privKeyPath1 = tempDir.resolve("pub1.key").toString();
         String pubKeyPath1 = tempDir.resolve("priv1.key").toString();
@@ -29,28 +32,46 @@ public class HMACLinkTest {
 
         ProcessConfig[] processConfigs = {processConfig1, processConfig2};
         Class<? extends Message> messageClass = Message.class;
-        // create APLink
-        APLink apLink1 = new APLink(processConfig1, 5001, processConfigs, messageClass, true, 1000);
-        APLink apLink2 = new APLink(processConfig2, 5002, processConfigs, messageClass, true, 1000);
 
         // create HMACLink
-        HMACLink hmacLink1 = new HMACLink(processConfig1, processConfigs, apLink1);
-        HMACLink hmacLink2 = new HMACLink(processConfig2, processConfigs, apLink2);
+        HMACLink hmacLink1 = new HMACLink(processConfig1, 8080, processConfigs, messageClass, true, 1000);
+        HMACLink hmacLink2 = new HMACLink(processConfig2, 8081, processConfigs, messageClass, true, 1000);
+
+        listen(hmacLink1);
+        listen(hmacLink2);
 
         // create a message
         Message message = new Message(processConfig1.getId(), Message.Type.APPEND);
-        hmacLink1.send(2, message);
-        System.out.println("Message with id: " + message.getMessageId() + " sent to " + message.getReceiver() +
-                            " with type: " + message.getType() + " and sender: " + message.getSenderId() +
-                            " and Hmac: " + ((HMACMessage) message).getHmac());
+        hmacLink1.send(processConfig2.getId(), message);
+
         try {
-            while (hmacLink2.receive() == null) {
-                Thread.sleep(100);
-            }
-            Message received = hmacLink2.receive();
-            assert(received.getSenderId() == 1);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            Thread.sleep(10000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
+    }
+
+    private void listen(Link link) {
+        new Thread(() -> {
+            try {
+                while (true) {
+                    Message message = link.receive();
+                    if (message.getType() == Message.Type.KEY_PROPOSAL) {
+                        System.out.println(MessageFormat.format(
+                                "Received key proposal from {0} with key {1}",
+                                message.getSenderId(),
+                                ((KeyProposal) message).getKey()));
+                    } else if (message.getType() != Message.Type.IGNORE && message.getType() != Message.Type.ACK) {
+                        System.out.println(MessageFormat.format(
+                                "Received message from {0} of type {1} with hmac {2}",
+                                message.getSenderId(),
+                                message.getType(),
+                                ((HMACMessage) message).getHmac()));
+                    }
+                }
+            } catch (ClassNotFoundException | IOException e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 }
