@@ -29,22 +29,33 @@
 		\LARGE \textbf{Highly Dependable Systems
 		\HRule{2.0pt} \\ [0.6cm] \LARGE{Project Report - First Delivery} \vspace*{10\baselineskip}}
 		}
-\date{}
+\date{March 8th 2024}
 \author{\textbf{Authors} \\ 
 		Carolina Coelho - 99189\\
 		Diogo Melita - 99202\\
 		Diogo Antunes - 99210}
 
+%\includegraphics[scale=0.2]{ist-logo.png}
 \maketitle
 \newpage
 
 % ------------------------------------------------------------------------------
 
-\section{Examples}
+\section{Objective}
 
-Section text
+This project aims to develop a simplified permissioned blockchain system with high
+dependability guarantees. At the consensus layer, the system uses the Istanbul BFT 
+consensus algorithm. For this stage, the main goal is to extend an incomplete version 
+of the IBFT  algorithm and use a Public Key Infrastructure (PKI) to ensure the 
+authenticity of the messages exchanged between the nodes.
 
-\subsection{Pictures}
+\section{Modules}
+\subsection{PKI}
+The PKI module is responsible for managing the public and private keys of the nodes. 
+The blockchain members should use the PKI module to self-generate their public and 
+private keys, which are pre-distributed prior to the start of the system. Additionally, 
+the PKI module is also responsible for signing and verifying messages as well as generating 
+secret keys and HMACs for the communication between the nodes.
 
 % \begin{figure}[htbp]
 %     \center
@@ -53,9 +64,51 @@ Section text
 % \end{figure}
 
 
-\subsection{Citation}
+\subsection{Authenticated Perfect Links}
+From the Fair-Loss Link abstraction, we built the Authenticated Perfect Link. Each message 
+sent through incorporates a digital signature (DS) that is computed by encrypting the 
+digest of the message with the sender's private key. Upon receiving a message the receiver 
+can then verify the signature and, if it is valid, store the message and reply with an 
+ACK, notifying the sender that the message was received.
 
-This is a citation\cite{Eg}.
+\subsection{HMAC Links}
+The HMAC Links are responsible for setting a secure channel between two nodes. Upon creation, 
+the node with lower ID will try to establish a secure channel with the other node. To do so, 
+this node will generate a secret key, sign it and cipher the secret key with the public key of 
+the receiving node. Upon receiving the key proposal message, the node will decrypt the secret 
+key and verify the signature. If everything is correct, it will reply with an ACK. After this 
+secure connection is established, all the messages sent between the two nodes will incorporate 
+an HMAC, which is computed by hashing the message with the secret key agreed to. Upon receiving 
+a message, the receiver will verify the HMAC and, if it is valid, store the message and reply 
+with an ACK, notifying the sender that the message was received.
+
+This module is used to ensure the integrity and authenticity of the messages exchanged between 
+the nodes.
+
+\subsection{Sign Links}
+The Sign Links are responsible for sending authenticated messages between two nodes. When a 
+message is sent, the sender will sign the message with its private key and the receiver will 
+verify the signature with the sender's public key. If the signature is valid, the receiver will 
+store the message and reply with an ACK, notifying the sender that the message was received.
+
+
+\subsection{Consensus}
+Consensus is achieved by a set of nodes that follow the QBFT algorithm. Each node is listening 
+on a given port for requests from other nodes and on another port for requests form the clients. 
+The nodes communicate with each other using a broadcast primitive and with the clients using a send 
+primitive, all based on the Authenticated Perfect Links. 
+
+\subsection{Application}
+For this stage, the application is a simple client that reads commands from the terminal and calls 
+an API from the library, which is responsible for communicating with the consensus layer abstraction 
+and for storing the known blockchain state. 
+
+\section{Architecture}
+Our implementation is based on Google's gRPC with multiple services doing asynchronous work. This 
+involves having a service that is responsible for receiveing the client's requests and responding to 
+them, and another service running on each node that is responsible for the IBFT consensus algorithm.
+To serialize and deserialize data we use Google's GSON library.
+
 
 \newpage
 
