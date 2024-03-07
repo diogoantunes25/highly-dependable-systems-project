@@ -30,11 +30,14 @@ import javafx.util.Pair;
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
 
-    // Weak support
-    private final int weakSupport;
-    
-    // Quorum size (i.e. strong support)
-    private final int quorumSize;
+	// First round of protocol
+	private static final int FIRST_ROUND = 0; 
+
+	// Weak support
+	private final int weakSupport;
+
+	// Quorum size (i.e. strong support)
+	private final int quorumSize;
 
 	// Milliseconds
 	private static final int INITIAL_TIMEOUT = 500;
@@ -121,7 +124,7 @@ public class Instanbul {
 		this.others = others;
 		this.beta = beta;
 
-		this.ri = 0;
+		this.ri = FIRST_ROUND;
 		this.pri = Optional.empty();
 		this.pvi = Optional.empty();
 		this.preparationJustification = Optional.empty();
@@ -298,6 +301,31 @@ public class Instanbul {
 		return consensusMessage;
 	}
 
+	/**
+	 * Utility to create get copy of RoundChange message without justification
+	 */
+	private ConsensusMessage copyNoJustificationRoundChangeMessage(ConsensusMessage message) {
+		
+		RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
+		roundChangeMessage.clearJustification();
+		Optional<String> sig = message.getSignature();
+
+		if (!sig.isPresent()) {
+			throw new RuntimeException("No signature in ROUND-CHANGE message that it's being copied");
+		}
+
+		ConsensusMessage messagePrime = new ConsensusMessageBuilder(message.getSenderId(), Message.Type.ROUND_CHANGE)
+			.setConsensusInstance(message.getConsensusInstance())
+			.setRound(message.getRound())
+			.setMessage(roundChangeMessage.toJson())
+			.setReceiver(message.getReceiver())
+			.build();
+
+		messagePrime.setSignature(sig.get());
+
+		return messagePrime;
+	}
+
 	/*
 	 * Start an instance of consensus for a value
 	 * Only the current leader will start a consensus instance,
@@ -389,13 +417,27 @@ public class Instanbul {
 		    return new ArrayList<>();
 		}
 
+		// Verify that the justification is valid
+		if (!this.justifyPrePrepare(round, value, prePrepareMessage.getJustificationPrepares(), prePrepareMessage.getJustificationRoundChanges())) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format(
+						"{0} - PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} is not justified",
+						config.getId(), senderId, this.lambda, round));
+		    return new ArrayList<>();
+		}
+
+		LOGGER.log(Level.INFO,
+				MessageFormat.format(
+					"{0} - PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} passed justification check",
+					config.getId(), senderId, this.lambda, round));
+
+
 		// Resend in case message hasn't yet reached leader
-		// TODO (dsa): why not return empty list
 		if (receivedPrePrepare.put(round, true) != null) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
 						"{0} - Already received PRE-PREPARE message for Consensus Instance {1}, Round {2}, "
-						+ "replying again to make sure it reaches the initial sender",
+						+ " ignoring new one",
 						config.getId(), this.lambda, round));
 			return new ArrayList<>();
 		}
@@ -546,14 +588,41 @@ public class Instanbul {
 
 		RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
 		Optional<List<ConsensusMessage>> justification = roundChangeMessage.getJustification();
+
+		// Note that ROUND-MESSAGE might not have any justification
+		// even though it has a value (because justification for round
+		// change messages is done as a set, what matters is that the
+		// set as a whole as the required PREPARE and they are all valid)
+
 		roundChangeMessage.clearJustification();
 		message.setMessage(roundChangeMessage.toJson());
 
-		// Now the message is as it was upon signing 
-
+		// Now the message is as it was upon signing (so we can check signature)
 		int senderId = message.getSenderId();
 		boolean result = message.checkConsistentSig(this.others.get(senderId).getPublicKey());
-		
+
+		if (justification.isPresent()) {
+			// Check each message in justification of round change
+			// Note that is not enough that we check when we receive prepares
+			// because these PREPARES might not have been received yet
+				
+			// I could just filter out the badly signed ones, but
+			// that is more cumbersome and it only happens if sender
+			// is byzantine, so I won't do it - all must be correct
+			// then
+
+			boolean allPreparesGood = justification.get().stream()
+				.filter(m -> m.getType() == Message.Type.PREPARE)
+				.allMatch(m -> m.checkConsistentSig(this.others.get(m.getSenderId()).getPublicKey()));
+
+			if (!allPreparesGood) {
+				result = false;
+			}
+		}
+
+		// TODO (dsa): as an optimization we could add all PREPARE messages
+		// to be handled by ourselves (future work)
+
 		// Undo changes made
 		roundChangeMessage.setJustification(justification);
 		message.setMessage(roundChangeMessage.toJson());
@@ -608,25 +677,95 @@ public class Instanbul {
 							roundChangeMessage.getPri().get()));
 	}
 
+	// TODO (dsa); justifyPrePrepare and justifyRoundChange have some repeated
+	// logic that might be factorizable
+
 	/**
-	 * Approximation of JUSTIFYROUNDCHANGE from paper
-	 * Assumes each round change message was already verifies
-	 * @param Qrc list of round change messages
-	 *
+	 * Approximation of JUSTIFYPREPREPARE from paper
+	 * Assumes each round change and each prepare message was already verified
+	 * @param value value is to be verified
+	 * @param QrcPrepare optional of list of round change messages (shoult not be empty optional even if list is empty)
+	 * @param QrcRoundChange optinal of list of round change messages
 	 */
-	boolean justifyRoundChange(List<ConsensusMessage> Qrc) {
+	boolean justifyPrePrepare(int round, String value, Optional<List<ConsensusMessage>> optQp, Optional<List<ConsensusMessage>> optQrc) {
+
+		if (round == FIRST_ROUND) {
+			return true;
+		}
+
+		if (!optQrc.isPresent() || !optQp.isPresent()) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format("{0} - justification of preprepare was asked for round {1} (which is not the first) without either PREPARE",
+						config.getId(), round));
+
+			return false;
+
+		}
+
+		List<ConsensusMessage> Qrc = optQrc.get();
+		List<ConsensusMessage> Qp = optQp.get();
+
 		if (Qrc.size() < this.quorumSize) {
 			LOGGER.log(Level.INFO,
-					MessageFormat.format("{0} - justification of round change was askes for a quorum with less than required size {1} < {2} (which is strange)",
+					MessageFormat.format("{0} - justification of preprepare was asked for a quorum with less than required size {1} < {2} (which is strange)",
 						config.getId(), Qrc.size(), this.quorumSize));
 
 			return false;
 		}
 
+
+		// Check 
 		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
-		// satisfies J1
+
+		// If there's no preparation, it's justified for sure
 		if (!optPair.isPresent()) {
 			return true;
+		}
+
+		// By now we now that there's a highest prepared value
+		String pv = optPair.get().getKey();
+		int pr = optPair.get().getValue();
+
+		// Get PREPARES for the highest prepared value and check there's
+		// a quorum
+		long count = Qp.stream()
+			.filter(m -> m.getRound() == pr)
+			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv))
+			.count();
+
+		if (count < this.quorumSize) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format("{0} - justification of preprepare was asked but not enough good prepares were provided",
+						config.getId()));
+
+			return false;
+		}
+		
+		return true;
+	}
+
+	/**
+	 * Approximation of JUSTIFYROUNDCHANGE from paper
+	 * Assumes each round change message was already verified
+	 * @param Qrc list of round change messages
+	 * @return nothing if verify failed or justification for preprepare if passed (ROUND-CHANGES and then PREPARES)
+	 */
+	Optional<Pair<List<ConsensusMessage>, List<ConsensusMessage>>> justifyRoundChange(List<ConsensusMessage> Qrc) {
+		if (Qrc.size() < this.quorumSize) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format("{0} - justification of round change was asked for a quorum with less than required size {1} < {2} (which is strange)",
+						config.getId(), Qrc.size(), this.quorumSize));
+
+			return Optional.empty();
+		}
+
+		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
+
+		// satisfies J1
+		if (!optPair.isPresent()) {
+			// if value is bottom, there are no prepare messages to send
+			// as justification
+			return Optional.of(new Pair(Qrc, new ArrayList<>()));
 		}
 
 		LOGGER.log(Level.INFO,
@@ -637,17 +776,25 @@ public class Instanbul {
 		int pr = optPair.get().getValue();
 
 		// Get all PREPARE values with justification for round pr with value pv
-		long matches = Qrc.stream()
+		List<ConsensusMessage> prepares = Qrc.stream()
 			.map(m -> m.deserializeRoundChangeMessage().getJustification())
 			.filter(opt -> opt.isPresent())
 			.flatMap(opt -> opt.get().stream())
 			.filter(m -> m.getRound() == pr)
-			.map(m -> m.deserializePrepareMessage().getValue())
-			.filter(v -> v.equals(pv))
-			.count();
+			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv))
+			.collect(Collectors.toList());
+
+		// Get ROUND-CHANGE messages without justifications
+		List<ConsensusMessage> roundChangesNoJustify = Qrc.stream()
+			.map(m -> copyNoJustificationRoundChangeMessage(m))
+			.collect(Collectors.toList());
 
 		// whether J2 is satisfied
-		return matches >= this.quorumSize;
+		if (prepares.size() < this.quorumSize) {
+			return Optional.empty();
+		}
+
+		return Optional.of(new Pair(roundChangesNoJustify, prepares));
 	}
 
 	/*
@@ -720,51 +867,56 @@ public class Instanbul {
 			return messages;
 		}
 
-
 		LOGGER.log(Level.INFO,
 			MessageFormat.format("{0} - Checking the existence of a good quorum of ROUND-CHANGE messages - Consensus Instance {2}, Round {3}",
 				config.getId(), message.getSenderId(), this.lambda, this.ri));
 
 		// Check existance of quorum
+		// TODO (dsa): check this hasn't been done yet - this rule is being activated multiple times
 		Optional<List<ConsensusMessage>> optQrc = roundChangeMessages.hasValidRoundChangeQuorum(this.ri);
-		if (optQrc.isPresent() && justifyRoundChange(optQrc.get())) {
+		if (optQrc.isPresent()) {
+			Optional<Pair<List<ConsensusMessage>, List<ConsensusMessage>>> optJustification = justifyRoundChange(optQrc.get());
+			if (optJustification.isPresent()) {
 
-			LOGGER.log(Level.INFO,
-					MessageFormat.format("{0} - Justified quorum of ROUND-CHANGE messages found - Consensus Instance {2}, Round {3}",
-						config.getId(), message.getSenderId(), this.lambda, this.ri));
+				LOGGER.log(Level.INFO,
+						MessageFormat.format("{0} - Justified quorum of ROUND-CHANGE messages found - Consensus Instance {2}, Round {3}",
+							config.getId(), message.getSenderId(), this.lambda, this.ri));
 
 
-			Optional<Pair<String, Integer>> optPair = highestPrepared(optQrc.get());
+				Optional<Pair<String, Integer>> optPair = highestPrepared(optQrc.get());
 
-			// lines 12 - 16 of protocol
-			Optional<String> v;
-			if (optPair.isPresent()) {
-				v = Optional.of(optPair.get().getKey());
-			} else {
-				v = inputValuei;
-			}
+				// lines 12 - 16 of protocol
+				Optional<String> v;
+				if (optPair.isPresent()) {
+					v = Optional.of(optPair.get().getKey());
+				} else {
+					v = inputValuei;
+				}
 
-			if (v.isPresent()) {
-				// TODO: get PREPARE part of justification
-				// TODO: get ROUND-CHANGE part of justification (without PREPARE messages)
-				List<ConsensusMessage> justificationPrepares = new ArrayList();
-				List<ConsensusMessage> justificationRoundChanges = new ArrayList();
+				if (v.isPresent()) {
 
-				// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
-				messages.addAll(IntStream.range(0, this.config.getN())
-					.mapToObj(receiver -> this.createPrePrepareMessage(v.get(), this.lambda, this.ri, receiver, Optional.of(justificationPrepares), Optional.of(justificationRoundChanges)))
-					.collect(Collectors.toList()));
-			} else {
-				// TODO (dsa): check that this is the case
-				// if v is not present, that means that no input has been made
-				// to this replica
-				// if this is the case, it's ok for the replica not to start
-				// the broadcast even though it's the leader (it will just
-				// be round-changed)
+					List<ConsensusMessage> justificationRoundChanges = optJustification.get().getKey();
+					List<ConsensusMessage> justificationPrepares = optJustification.get().getValue();
 
-				LOGGER.log(Level.WARNING,
-						MessageFormat.format("{0} -  I (replica {1}) was just \"elected\", but I don't have any input: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
-							config.getId(), message.getSenderId(), this.lambda, round));
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format("{0} -  I (replica {1}) was just \"elected\", sending a PRE-PREPARE with {4} ROUND-CHANGES and {5} PREPARES for justification: Consensus Instance {2}, Round {3}",
+								config.getId(), message.getSenderId(), this.lambda, round, justificationRoundChanges.size(), justificationPrepares.size()));
+
+					// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
+					messages.addAll(IntStream.range(0, this.config.getN())
+						.mapToObj(receiver -> this.createPrePrepareMessage(v.get(), this.lambda, this.ri, receiver, Optional.of(justificationPrepares), Optional.of(justificationRoundChanges)))
+						.collect(Collectors.toList()));
+				} else {
+					// if v is not present, that means that no input has been made
+					// to this replica
+					// if this is the case, it's ok for the replica not to start
+					// the broadcast even though it's the leader (it will just
+					// be round-changed)
+
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format("{0} -  I (replica {1}) was just \"elected\", but I don't have any input: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
+								config.getId(), message.getSenderId(), this.lambda, round));
+				}
 			}
 		}
 
