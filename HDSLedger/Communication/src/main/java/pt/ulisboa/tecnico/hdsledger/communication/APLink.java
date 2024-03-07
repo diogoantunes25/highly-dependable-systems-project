@@ -96,8 +96,13 @@ public class APLink implements Link {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
-                if (node == null)
+                if (node == null) {
+                    LOGGER.log(Level.WARNING,
+                            MessageFormat.format("{0} - No node {1}. Failed while sending",
+                                    config.getId(), nodeId));
+
                     throw new HDSSException(ErrorMessage.NoSuchNode);
+                }
 
                 data.setMessageId(messageCounter.getAndIncrement());
 
@@ -112,7 +117,7 @@ public class APLink implements Link {
                 if (nodeId == this.config.getId()) {
                     this.localhostQueue.add(data);
 
-                    LOGGER.log(Level.FINE,
+                    LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} (id={4}) successfully",
                                     config.getId(), data.getType(), destAddress, destPort, nodeId));
 
@@ -120,7 +125,7 @@ public class APLink implements Link {
                 }
 
                 for (;;) {
-                    LOGGER.log(Level.FINE, MessageFormat.format(
+                    LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++, nodeId));
 
@@ -136,7 +141,7 @@ public class APLink implements Link {
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.FINE, MessageFormat.format("{0} - Message {1} sent to {2}:{3} (id={4}) successfully",
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} (id={4}) successfully",
                         config.getId(), data.getType(), destAddress, destPort, nodeId));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
@@ -158,14 +163,18 @@ public class APLink implements Link {
     public void unreliableSend(InetAddress hostname, int port, Message data) {
         new Thread(() -> {
             try {
-                byte[] buf = new Gson().toJson(data).getBytes();
+                String serialized = new Gson().toJson(data);
+                byte[] buf = serialized.getBytes();
+
                 DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
                 socket.send(packet);
             } catch (IOException e) {
                 e.printStackTrace();
                 throw new HDSSException(ErrorMessage.SocketSendingError);
             }
+
         }).start();
+
     }
 
     /*
@@ -190,7 +199,7 @@ public class APLink implements Link {
 
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             serialized = new String(buffer);
-            message = new Gson().fromJson(serialized, Message.class);
+            message = new Gson().fromJson(serialized, this.messageClass);
         }
 
         int senderId = message.getSenderId();
@@ -210,6 +219,7 @@ public class APLink implements Link {
         if (!local)
             message = new Gson().fromJson(serialized, this.messageClass);
 
+
         boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
@@ -219,8 +229,7 @@ public class APLink implements Link {
 
         switch (message.getType()) {
             case APPEND_REQUEST -> {
-                System.out.println("Received request: " + message.getClass().getName());
-                AppendRequest request = (AppendRequest) message;
+                AppendMessage request = (AppendMessage) message;
                 //TODO (cfc)
                 /*if (request.getReplyTo() == config.getId())
                     receivedAcks.add(request.getReplyToMessageId());*/
@@ -228,7 +237,7 @@ public class APLink implements Link {
                 return request;
             }
             case APPEND_REPLY -> {
-                AppendReply reply = (AppendReply) message;
+                AppendMessage reply = (AppendMessage) message;
                 //TODO (cfc)
                 /*if (request.getReplyTo() == config.getId())
                     receivedAcks.add(request.getReplyToMessageId());*/

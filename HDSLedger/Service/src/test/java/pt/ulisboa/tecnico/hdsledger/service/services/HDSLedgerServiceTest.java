@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
@@ -9,6 +10,10 @@ import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.service.Node;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Deque;
@@ -17,23 +22,70 @@ import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
 import java.util.concurrent.ConcurrentHashMap;
+import java.io.IOException;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.security.*;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.google.gson.Gson;
 
 public class HDSLedgerServiceTest {
 
+	private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
+		AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
+
+		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
+		
+		message.setMessage(new Gson().toJson(appendRequest));
+
+		return message;
+	}
+
+	// n is set to 10 by default
+	@BeforeAll
+	private static void genKeys() {
+		// Gen keys for servers
+		int n = 10;
+		List<String> publicKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+
+		List<String> privateKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.collect(Collectors.toList());
+
+		for (int i = 0 ; i < n; i++) {
+			try {
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+			} catch (GeneralSecurityException | IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
+		List<String> publicKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+
+		List<String> privateKeys = IntStream.range(0, n)
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.collect(Collectors.toList());
+
 		return IntStream.range(0, n).mapToObj(i ->
 			new ProcessConfig(
 				false,
 				"localhost",
 				i,
 				basePort + i,
-				n
+				n,
+				publicKeys.get(i),
+				privateKeys.get(i)
 			)
 		).collect(Collectors.toList());
 	}
@@ -47,28 +99,37 @@ public class HDSLedgerServiceTest {
 					new APLink(config,
 						config.getPort(),
 						configsArray,
-						Message.class))
+						ConsensusMessage.class))
 				.collect(Collectors.toList());
 	}
 
-	private List<Link> defaultLinksClient(int n, List<ProcessConfig> configs, List<ProcessConfig> nodesConfigs) {
-		ProcessConfig[] configsArray = new ProcessConfig[n];
-		configs.toArray(configsArray);	
-		return configs
+	private List<Link> defaultLinksClient(int n, List<ProcessConfig> clientConfigs, List<ProcessConfig> nodesConfigs) {
+		return clientConfigs
 				.stream()
 				.map(config -> 
 					new APLink(config,
 						config.getPort(),
 						nodesConfigs.toArray(new ProcessConfig[n]),
-						Message.class))
+						AppendMessage.class))
 				.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupNodeServices(int n, int basePort) {
-		List<ProcessConfig> configs = defaultConfigs(n, basePort);
+	private List<Link> linksFromConfigs(List<ProcessConfig> configs, Class<? extends Message> messageClass) {
+		int n = configs.size();
+		return configs
+				.stream()
+				.map(config -> 
+					new APLink(config,
+						config.getPort(),
+						configs.toArray(new ProcessConfig[n]),
+						messageClass))
+				.collect(Collectors.toList());
+	}
+
+	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links) {
+		int n = configs.size();
 		ProcessConfig[] configsArray = new ProcessConfig[n];
 		configs.toArray(configsArray);	
-		List<Link> links = defaultLinks(n, configs);
 
 		List<NodeService> services = new ArrayList<>(n);
 		for (int i = 0; i < n; i++) {
@@ -80,17 +141,15 @@ public class HDSLedgerServiceTest {
 		return services;
 	}
 
-	List<HDSLedgerService> setupHDSLedgerServices(int n, int basePort, ProcessConfig[] clientsConfigs, List<NodeService> nodeServices) {
-		List<ProcessConfig> configs = defaultConfigs(n, basePort);
-		ProcessConfig[] configsArray = new ProcessConfig[n];
+	List<HDSLedgerService> setupHDSLedgerServices(int n, List<ProcessConfig> configs, List<Link> links, List<NodeService> nodeServices) {
+		ProcessConfig[] configsArray = new ProcessConfig[configs.size()];
 		configs.toArray(configsArray);	
 
 		List<HDSLedgerService> services = new ArrayList<>(n);
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
-			Link link = new APLink(config, config.getPort(), clientsConfigs, Message.class);
 			NodeService nodeService = nodeServices.get(i);
-			services.add(new HDSLedgerService(clientsConfigs, link, config, nodeService));
+			services.add(new HDSLedgerService(configsArray, links.get(i), config, nodeService));
 		}
 
 		return services;
@@ -117,24 +176,26 @@ public class HDSLedgerServiceTest {
 	void HDSLedgerStartsConsensusTest() {
 		int n_Nodes = 4;
 		int basePortNode = 20000;
-		int n_Clients = 2;
+		int n_Clients = 1;
 		int basePortClient = 30000;
 		int basePortHDS = 40000;
-		int senderId = 1;
+		int clientId = n_Nodes; // must be greater than n-1
 		int seq = 0;
 		String cmd = "a";
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n_Nodes);
 
-		List<ProcessConfig> clientsConfigs = defaultConfigs(n_Clients, basePortClient);
-		ProcessConfig[] clientsArray = new ProcessConfig[n_Clients];
-		clientsConfigs.toArray(clientsArray);
-		List<Link> clientsLinks = defaultLinksClient(n_Clients, clientsConfigs, defaultConfigs(n_Nodes, basePortHDS));
+		// Setup node service
+		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
+		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks);
 
+		// Setup ledger service and client links
+		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);
+		List<Link> ledgerLinks = linksFromConfigs(ledgerConfigs, AppendMessage.class);
+		List<HDSLedgerService> HDSLedgerServices = setupHDSLedgerServices(n_Nodes, ledgerConfigs, ledgerLinks, nodeServices);
 
-		AppendRequest request = new AppendRequest(senderId, Message.Type.APPEND_REQUEST, cmd, seq);
+		Link clientLink = ledgerLinks.get(clientId);
 
-		List<NodeService> nodeServices = setupNodeServices(n_Nodes, basePortNode);
-		List<HDSLedgerService> HDSLedgerServices = setupHDSLedgerServices(n_Nodes, basePortHDS, clientsArray, nodeServices);
 		nodeServices.forEach(service -> service.listen());
 		HDSLedgerServices.forEach(service -> service.listen());
 		nodeServices.forEach(service -> {
@@ -143,11 +204,11 @@ public class HDSLedgerServiceTest {
 			service.registerObserver(observer);
 		});
 
-		clientsLinks.get(senderId).broadcast(request);
+		for (int i = 0; i < n_Nodes; i++) {
+			AppendMessage request = createAppendRequestMessage(clientId, i, cmd, seq);
+			clientLink.send(i, request);
+		}
 
-		//nodeServices.forEach(service -> service.startConsensus(nonce, cmd));
-
-		// without assuming stuff about some correctness
 		try {
 			Thread.sleep(2000);
 		} catch (InterruptedException e) {
@@ -163,7 +224,7 @@ public class HDSLedgerServiceTest {
 			assertEquals(1, confirmedSlots.get(i).size());
 			Slot s = confirmedSlots.get(i).removeFirst();
 			assertEquals(s.getSlotId(), 1);
-			assertEquals(s.getNonce(), String.format("%s_%s", senderId, seq));
+			assertEquals(s.getNonce(), String.format("%s_%s", clientId, seq));
 			assertEquals(s.getMessage(), cmd);
 		}
 		
@@ -176,4 +237,3 @@ public class HDSLedgerServiceTest {
 	}
 
 }
-                         	

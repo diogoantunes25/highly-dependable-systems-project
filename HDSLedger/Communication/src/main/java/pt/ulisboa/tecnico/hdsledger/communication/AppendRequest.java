@@ -1,17 +1,16 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 
-public class AppendRequest extends Message {
+public class AppendRequest {
     
     // Value to append
     private String value;
 
     //nonce
-    private Integer sequenceNumber;
+    private int sequenceNumber;
 
-    public AppendRequest(int senderId, Type type, String value, Integer sequenceNumber) {
-        super(senderId, type);
+    public AppendRequest(String value, Integer sequenceNumber) {
         this.value = value;
         this.sequenceNumber = sequenceNumber;
     }
@@ -24,7 +23,7 @@ public class AppendRequest extends Message {
         this.value = value;
     }
 
-    public Integer getSequenceNumber() {
+    public int getSequenceNumber() {
         return sequenceNumber;
     }
 

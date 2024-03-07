@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
+import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
@@ -51,10 +52,12 @@ public class HDSLedgerService implements UDPService {
         nodeService.registerObserver(s -> decided(s));
     }
 
-    public void append(AppendRequest request) {
+    public void append(AppendMessage message) {
+        AppendRequest request = message.deserializeAppendRequest();
+
         // Send the value to the consensus service
         int sequenceNumber = request.getSequenceNumber();
-        int clientId = request.getSenderId();
+        int clientId = message.getSenderId();
         String value = request.getValue();
         String nonce = String.format("%s_%s", clientId, sequenceNumber);
         nodeService.startConsensus(nonce, value);
@@ -79,12 +82,9 @@ public class HDSLedgerService implements UDPService {
                         config.getId(), slotId, value, nonce));
 
         // Send the decided value to the client
-        Message reply = new AppendReply(config.getId(), Message.Type.APPEND_REPLY, value, sequenceNumber, slotId);
-        link.send(clientId, reply);
-        
+        // Message reply = new AppendReply(config.getId(), Message.Type.APPEND_REPLY, value, sequenceNumber, slotId);
+        // link.send(clientId, reply);
     }
-
-
 
     @Override
     public void listen() {
@@ -101,7 +101,7 @@ public class HDSLedgerService implements UDPService {
 
                                 case APPEND_REQUEST -> {
                                     System.out.println("Received request: "+ message.getClass().getName());
-                                    append((AppendRequest) message);
+                                    append((AppendMessage) message);
                                 }
                                 default ->
                                     LOGGER.log(Level.INFO,

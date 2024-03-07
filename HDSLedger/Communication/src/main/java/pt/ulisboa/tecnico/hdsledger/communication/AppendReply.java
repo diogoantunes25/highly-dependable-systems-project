@@ -1,20 +1,19 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 
-public class AppendReply extends Message {
+public class AppendReply {
     
     // Value to append
     private String value;
 
     //nonce
-    private Integer sequenceNumber;
+    private int sequenceNumber;
 
     //Slot
-    private Integer slot;
+    private int slot;
 
-    public AppendReply(int senderId, Type type, String value, Integer sequenceNumber, Integer slot) {
-        super(senderId, type);
+    public AppendReply(String value, int sequenceNumber, int slot) {
         this.value = value;
         this.sequenceNumber = sequenceNumber;
         this.slot = slot;
@@ -28,19 +27,19 @@ public class AppendReply extends Message {
         this.value = value;
     }
 
-    public Integer getSequenceNumber() {
+    public int getSequenceNumber() {
         return sequenceNumber;
     }
 
-    public void setSequenceNumber(Integer sequenceNumber) {
+    public void setSequenceNumber(int sequenceNumber) {
         this.sequenceNumber = sequenceNumber;
     }
 
-    public Integer getSlot() {
+    public int getSlot() {
         return slot;
     }
 
-    public void setSlot(Integer slot) {
+    public void setSlot(int slot) {
         this.slot = slot;
     }
 }
