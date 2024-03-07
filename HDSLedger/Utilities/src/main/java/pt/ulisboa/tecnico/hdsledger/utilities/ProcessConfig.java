@@ -3,8 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.utilities;
 public class ProcessConfig {
     public ProcessConfig() {}
 
-    public ProcessConfig(boolean isLeader, String hostname, int id, int port, int N, String publicKeyPath, String privateKeyPath) {
-        this.isLeader = isLeader;
+    public ProcessConfig(String hostname, int id, int port, int N, String publicKeyPath, String privateKeyPath) {
         this.hostname = hostname;
         this.id = id;
         this.port = port;
@@ -12,9 +11,6 @@ public class ProcessConfig {
         this.publicKeyPath = publicKeyPath;
         this.privateKeyPath = privateKeyPath;
     }
-
-    // dsa: not sure why this is part of the process configuration
-    private boolean isLeader;
 
     private String hostname;
 
@@ -27,10 +23,6 @@ public class ProcessConfig {
     private String publicKeyPath;
 
     private String privateKeyPath;
-
-    public boolean isLeader() {
-        return isLeader;
-    }
 
     public int getPort() {
         return port;

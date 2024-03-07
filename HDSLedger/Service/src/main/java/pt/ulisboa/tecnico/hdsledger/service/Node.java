@@ -32,9 +32,8 @@ public class Node {
             ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
             ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId() == id).findAny().get();
 
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}",
-                    nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(),
-                    nodeConfig.isLeader()));
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2};",
+                    nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort()));
 
             // Abstraction to send and receive messages
             Link linkToNodes = new APLink(nodeConfig, nodeConfig.getPort(), nodeConfigs,
