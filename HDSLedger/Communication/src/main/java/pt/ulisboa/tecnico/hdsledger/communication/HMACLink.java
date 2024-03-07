@@ -133,9 +133,10 @@ public class HMACLink implements Link {
         while (true) {
             message = apLink.receiveAndDeserializeWith(HMACMessage.class, sharedKeys.keySet());
             if (!message.getType().equals(Message.Type.IGNORE)) {
-                if (sharedKeys.containsKey(message.getSenderId()) && !message.getType().equals(Type.KEY_PROPOSAL) && !message.getType().equals(Type.ACK)) {
-                    message = processHMACMessage(message);
-                } else if (message.getType().equals(Type.KEY_PROPOSAL)) {  // if we do not have a sharedKey than the message probably is a Key Proposal
+                if (sharedKeys.containsKey(message.getSenderId()) && !message.getType().equals(Type.KEY_PROPOSAL)
+                        && !message.getType().equals(Type.ACK)) {
+                        message = processHMACMessage(message);
+                } else if (!sharedKeys.containsKey(message.getSenderId()) && message.getType().equals(Type.KEY_PROPOSAL)) {  // if we do not have a sharedKey than the message probably is a Key Proposal
                     message = processKeyProposal(message);
                 } else {
                     message.setType(Message.Type.IGNORE);
