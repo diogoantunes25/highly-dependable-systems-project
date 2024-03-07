@@ -9,6 +9,8 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
 
+import com.google.gson.Gson;
+
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,6 +21,9 @@ public class ClientStub {
     // Client identifier (self)
     private final ProcessConfig config;
 
+    // Configs for everyone (replicas and clients)
+    ProcessConfig[] others;
+
     // Link to communicate with nodes
     private final Link link;
 
@@ -28,28 +33,38 @@ public class ClientStub {
     // Current request ID
     private AtomicInteger requestId = new AtomicInteger(0);
 
-    private final Integer nodesNumber;
+    private final int n;
 
     private final ReceivedSlots receivedSlots;
 
-    public ClientStub(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs) throws HDSSException {
+    public ClientStub(int n, ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs) throws HDSSException {
         this.config = clientConfig;
-
-        // Create link to communicate with nodes
-        this.link = new APLink(clientConfig, clientConfig.getPort(), nodeConfigs, Message.class, activateLogs, 5000);
-        // TODO - ConsensusMessage is not correct i think
-
-        this.nodesNumber = nodeConfigs.length;
-
-        this.receivedSlots = new ReceivedSlots(this.nodesNumber);
+        this.others = nodeConfigs;
+        this.n = n;
+        this.link = new APLink(clientConfig,
+						clientConfig.getPort(),
+						nodeConfigs,
+						AppendMessage.class);
+        this.receivedSlots = new ReceivedSlots(n);
     }
+
+	private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
+		AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
+
+		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
+		
+		message.setMessage(new Gson().toJson(appendRequest));
+
+		return message;
+	}
 
     public int append(String value)  throws InterruptedException{
         int currentRequestId = this.requestId.getAndIncrement(); // nonce
-        AppendRequest request = new AppendRequest(config.getId(), Message.Type.APPEND_REQUEST, value, currentRequestId);
-
         String key = String.format("%s_%s", value, currentRequestId);
-        this.link.broadcast(request);
+        for (int i = 0; i < n; i++) {
+            AppendMessage request = createAppendRequestMessage(config.getId(), i, value, currentRequestId++);
+            this.link.send(i, request);
+        }
 
         while (!receivedSlots.hasDecided(key)) {
             wait();
@@ -60,7 +75,9 @@ public class ClientStub {
         return slotId;
     }
 
-    public void handleAppendReply(AppendReply appendReply) {
+    public void handleAppendReply(AppendMessage message) {
+        AppendReply appendReply = message.deserializeAppendReply();
+
         String key = String.format("%s_%s", appendReply.getValue(), appendReply.getSequenceNumber());
         receivedSlots.addSlot(key, appendReply.getSlot());
     }
@@ -74,7 +91,7 @@ public class ClientStub {
                         // Separate thread to handle each message
                         switch (message.getType()) {
                             case APPEND_REPLY -> {
-                                AppendReply reply = (AppendReply) message;
+                                AppendMessage reply = (AppendMessage) message;
                                 handleAppendReply(reply);
                             }
                             case ACK -> {

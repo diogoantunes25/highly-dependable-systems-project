@@ -61,10 +61,10 @@ public class NodeServiceTest {
 
 		return IntStream.range(0, n).mapToObj(i ->
 			new ProcessConfig(
-				false,
 				"localhost",
 				i,
 				basePort + i,
+				basePort + 1000 + i, // FIXME (dsa): do this properly
 				n,
 				publicKeys.get(i),
 				privateKeys.get(i)

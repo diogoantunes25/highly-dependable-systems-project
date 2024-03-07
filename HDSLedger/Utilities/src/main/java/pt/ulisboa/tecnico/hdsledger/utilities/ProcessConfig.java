@@ -1,12 +1,15 @@
 package pt.ulisboa.tecnico.hdsledger.utilities;
 
+import java.util.Optional;
+
 public class ProcessConfig {
     public ProcessConfig() {}
 
-    public ProcessConfig(String hostname, int id, int port, int N, String publicKeyPath, String privateKeyPath) {
+    public ProcessConfig(String hostname, int id, int port, int port2, int N, String publicKeyPath, String privateKeyPath) {
         this.hostname = hostname;
         this.id = id;
         this.port = port;
+        this.port2 = port2;
         this.N = N;
         this.publicKeyPath = publicKeyPath;
         this.privateKeyPath = privateKeyPath;
@@ -18,6 +21,9 @@ public class ProcessConfig {
 
     private int port;
 
+    // Port for node service (empty for clients)
+    private int port2;
+
     private int N;
 
     private String publicKeyPath;
@@ -26,6 +32,14 @@ public class ProcessConfig {
 
     public int getPort() {
         return port;
+    }
+
+    public Optional<Integer> getPort2() {
+        if (port2 > 0) {
+            return Optional.of(port2);
+        }
+
+        return Optional.empty();
     }
 
     public int getId() {
@@ -40,7 +54,6 @@ public class ProcessConfig {
         return N;
     }
 
-    // TODO (dsa): fix getter name
     public String getPublicKey() { return publicKeyPath; }
 
     public String getPrivateKey() { return privateKeyPath; }

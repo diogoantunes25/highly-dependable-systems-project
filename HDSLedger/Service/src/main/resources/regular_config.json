@@ -2,21 +2,31 @@
     {   
         "id": "1",
         "hostname": "localhost",
-        "port": 3001
+        "port": 3001,
+        "port2": 4001
     },
     {
         "id": "2",
         "hostname": "localhost",
-        "port": 3002
+        "port": 3002,
+        "port2": 4002
     },
     {
         "id": "3",
         "hostname": "localhost",
-        "port": 3003
+        "port": 3003,
+        "port2": 4003
     },
     {
         "id": "4",
         "hostname": "localhost",
-        "port": 3004
+        "port": 3004,
+        "port2": 4004
+    },
+    {
+        "id": "5",
+        "hostname": "localhost",
+        "port": 3005,
+        "port2": -1
     }
 ]

@@ -2,16 +2,21 @@ package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.clientLibrary.ClientStub;
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
+import java.text.MessageFormat;
 import java.util.Scanner;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 
 public class Client {
 
-    private static String nodesConfigPath = "../Service/src/main/resources/";
-    private static String clientsConfigPath = "src/main/resources/";
+    // private static String configPath = "../Service/src/main/resources/";
+    private static String configPath = "/tmp/";
+
+    private static final CustomLogger LOGGER = new CustomLogger(Client.class.getName());
 
     private static void printUsage() {
         System.out.println("Available commands:");
@@ -22,23 +27,37 @@ public class Client {
     public static void main(String[] args) {
 
         final int clientId = Integer.parseInt(args[0]);
-        nodesConfigPath += args[1];
-        clientsConfigPath += args[2];
+        // TODO (dsa): add again
+        // configPath += args[1];
+
+        configPath += "regular_config.json";
         boolean showDebugLogs = false;
         if (args.length == 4) {
             showDebugLogs = args[3].equals("-debug");
         }
 
+        LOGGER.log(Level.INFO, MessageFormat.format("Using clientId = {0}",
+                    clientId));
+
         // Get all configs
-        ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
-        ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
+        ProcessConfig[] configs = new ProcessConfigBuilder().fromFile(configPath);
+
+        // Find value of n by checking configs with two ports
+        int n = (int) Arrays.stream(configs).filter(config -> config.getPort2().isPresent()).count();
+
+        LOGGER.log(Level.INFO, MessageFormat.format("Read {0} configs. There are {1} nodes in the system.",
+                    configs.length, n));
+
 
         // Get the client config
-        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId() == clientId)
+        Optional<ProcessConfig> clientConfig = Arrays.stream(configs).filter(c -> c.getId() == clientId)
                 .findFirst();
-        if (clientConfig.isEmpty()) {
-            throw new HDSSException(ErrorMessage.ConfigFileNotFound);
+
+        // Ids from 0 to n-1 are reserved for replicas
+        if (clientId < n) {
+            throw new HDSSException(ErrorMessage.BadClientId);
         }
+
         ProcessConfig config = clientConfig.get();
 
         System.out.println("Welcome to HDSLedger Client!");
@@ -48,7 +67,7 @@ public class Client {
         String line = "";
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
 
-        ClientStub stub = new ClientStub(config, nodeConfigs, showDebugLogs);
+        ClientStub stub = new ClientStub(n, config, configs, showDebugLogs);
         stub.listen();
 
         while (true) {

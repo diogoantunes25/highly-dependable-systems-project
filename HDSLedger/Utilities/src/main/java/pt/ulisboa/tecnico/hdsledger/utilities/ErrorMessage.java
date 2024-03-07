@@ -6,6 +6,7 @@ public enum ErrorMessage {
     NoSuchNode("Can't send a message to a non existing node"),
     SocketSendingError("Error while sending message"),
     CannotOpenSocket("Error while opening socket"),
+    BadClientId("Bad client id provided. Must be greater or equal to the number of replicas"),
 
     CannotParseMessage("Error while parsing message");
 

@@ -100,10 +100,10 @@ public class InstanbulTest {
 
 		return IntStream.range(0, n).mapToObj(i ->
 			new ProcessConfig(
-				false,
 				"localhost",
 				i,
 				20000 + i,
+				30000 + i,
 				n,
 				publicKeys.get(i),
 				privateKeys.get(i)

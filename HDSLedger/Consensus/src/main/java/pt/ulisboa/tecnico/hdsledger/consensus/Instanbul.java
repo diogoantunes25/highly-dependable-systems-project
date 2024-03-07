@@ -2,7 +2,8 @@ package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig; import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 import java.text.MessageFormat;
 import java.util.Optional;
