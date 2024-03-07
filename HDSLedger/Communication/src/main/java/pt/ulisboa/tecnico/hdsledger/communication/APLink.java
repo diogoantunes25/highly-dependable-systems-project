@@ -262,7 +262,7 @@ public class APLink implements Link {
      * Receives a message from any node in the network (blocking)
      */
     public Message receive() throws IOException, ClassNotFoundException {
-        return receiveAndDeserializeWith(Message.class, nodes.keySet());
+        return receiveAndDeserializeWith(messageClass, nodes.keySet());
     }
 
     /**
