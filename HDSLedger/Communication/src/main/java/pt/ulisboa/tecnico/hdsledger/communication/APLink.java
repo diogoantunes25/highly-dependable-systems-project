@@ -167,7 +167,7 @@ public class APLink implements Link {
         }).start();
     }
 
-    public <T extends Message> Message receiveAndDeserializeWith(Class<T> targetClass) throws IOException, ClassNotFoundException {
+    public <T extends Message> Message receiveAndDeserializeWith(Class<T> targetClass, Set<Integer> disallowDuplicates) throws IOException, ClassNotFoundException {
 
         Message message = null;
         String serialized = "";
@@ -206,11 +206,13 @@ public class APLink implements Link {
         if (!local)
             message = new Gson().fromJson(serialized, targetClass);
 
-        boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
-        // Message already received (add returns false if already exists) => Discard
-        if (isRepeated) {
-            message.setType(Message.Type.IGNORE);
+        if (disallowDuplicates.contains(senderId)) {
+            boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
+            // Message already received (add returns false if already exists) => Discard
+            if (isRepeated && !targetClass.equals(HMACMessage.class)){
+                message.setType(Message.Type.IGNORE);
+            }
         }
 
         switch (message.getType()) {
@@ -260,7 +262,7 @@ public class APLink implements Link {
      * Receives a message from any node in the network (blocking)
      */
     public Message receive() throws IOException, ClassNotFoundException {
-        return receiveAndDeserializeWith(Message.class);
+        return receiveAndDeserializeWith(Message.class, nodes.keySet());
     }
 
     /**

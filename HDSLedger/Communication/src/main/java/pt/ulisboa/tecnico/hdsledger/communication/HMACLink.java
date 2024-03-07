@@ -131,7 +131,7 @@ public class HMACLink implements Link {
     public Message receive() throws IOException, ClassNotFoundException {
         Message message;
         while (true) {
-            message = apLink.receiveAndDeserializeWith(HMACMessage.class);
+            message = apLink.receiveAndDeserializeWith(HMACMessage.class, sharedKeys.keySet());
             if (!message.getType().equals(Message.Type.IGNORE)) {
                 if (sharedKeys.containsKey(message.getSenderId()) && !message.getType().equals(Type.KEY_PROPOSAL) && !message.getType().equals(Type.ACK)) {
                     message = processHMACMessage(message);
@@ -202,10 +202,6 @@ public class HMACLink implements Link {
                         InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
                         nodes.get(message.getSenderId()).getPort()));
                 return message;
-            }
-            if (SigningUtils.verifySignature(aesKeyString,
-                    ((KeyProposal) message).getSignature(),
-                    this.nodes.get(message.getSenderId()).getPublicKey())) {
             }
             sharedKeys.put(message.getSenderId(), aesKey);
             LOGGER.log(Level.INFO, MessageFormat.format(

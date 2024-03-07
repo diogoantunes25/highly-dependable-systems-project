@@ -46,7 +46,7 @@ public class HMACLinkTest {
         hmacLink1.send(processConfig2.getId(), message);
 
         try {
-            Thread.sleep(10000);
+            Thread.sleep(2000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
