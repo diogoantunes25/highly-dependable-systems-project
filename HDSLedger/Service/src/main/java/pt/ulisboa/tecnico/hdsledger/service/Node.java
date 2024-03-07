@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.service.services.HDSLedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
@@ -9,43 +10,50 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 
+import java.util.stream.Collectors;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.logging.Level;
+import javafx.util.Pair;
 
 public class Node {
 
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
     // Hardcoded path to files
-    private static String configPath = "src/main/resources/";
+    // private static String configPath = "src/main/resources/";
+    private static String configPath = "/tmp/regular_config.json";
 
     public static void main(String[] args) {
 
         try {
             // Command line arguments
             int id = Integer.valueOf(args[0]);
-            String nodesConfigPath = configPath + args[1];
-            String clientsConfigPath = configPath + args[2];
 
-            // Create configuration instances
-            ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
-            ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
-            ProcessConfig nodeConfig = Arrays.stream(nodeConfigs).filter(c -> c.getId() == id).findAny().get();
+            // Get all configs
+            Pair<ProcessConfig[], ProcessConfig[]> configs = new ProcessConfigBuilder().fromFile(configPath);
+            ProcessConfig[] nodesConfigs = configs.getKey();
+            ProcessConfig[] ledgerConfigs = configs.getValue();
 
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2};",
+            // Get my configs
+            ProcessConfig ledgerConfig = Arrays.stream(ledgerConfigs).filter(c -> c.getId() == id).findAny().get();
+            ProcessConfig nodeConfig = Arrays.stream(nodesConfigs).filter(c -> c.getId() == id).findAny().get();
+
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node running at {1}:{2};",
                     nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort()));
 
-            // Abstraction to send and receive messages
-            Link linkToNodes = new APLink(nodeConfig, nodeConfig.getPort(), nodeConfigs,
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Ledger running at {1}:{2};",
+                    ledgerConfig.getId(), ledgerConfig.getHostname(), ledgerConfig.getPort()));
+
+            // Get a link that has the nodes (for the node service)
+            Link nodeLink = new APLink(nodeConfig, nodeConfig.getPort(), nodesConfigs,
                     ConsensusMessage.class);
 
-            Link linkToClients = new APLink(nodeConfig, nodeConfig.getPort(), clientConfigs,
-                    ConsensusMessage.class);
+            // Get a link that has all parties in the system
+            Link ledgerLink = new APLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
+                    AppendMessage.class);
 
-            // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(linkToNodes, nodeConfig, nodeConfigs);
-
-            HDSLedgerService hdsLedgerService = new HDSLedgerService(clientConfigs, linkToClients, nodeConfig, nodeService);
+            NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs);
+            HDSLedgerService hdsLedgerService = new HDSLedgerService(ledgerConfigs, ledgerLink, ledgerConfig, nodeService);
             
             nodeService.listen();
 

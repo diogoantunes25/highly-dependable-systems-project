@@ -35,7 +35,7 @@ public class ClientStub {
 
     private final int n;
 
-    private final ReceivedSlots receivedSlots;
+    private ReceivedSlots receivedSlots;
 
     public ClientStub(int n, ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs) throws HDSSException {
         this.config = clientConfig;
@@ -48,38 +48,54 @@ public class ClientStub {
         this.receivedSlots = new ReceivedSlots(n);
     }
 
-	private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
-		AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
+    private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
+        AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
 
-		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
-		
-		message.setMessage(new Gson().toJson(appendRequest));
+        AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
 
-		return message;
-	}
+        message.setMessage(new Gson().toJson(appendRequest));
+
+        return message;
+    }
 
     public int append(String value)  throws InterruptedException{
         int currentRequestId = this.requestId.getAndIncrement(); // nonce
         String key = String.format("%s_%s", value, currentRequestId);
+        int thisId = currentRequestId++;
         for (int i = 0; i < n; i++) {
-            AppendMessage request = createAppendRequestMessage(config.getId(), i, value, currentRequestId++);
+            AppendMessage request = createAppendRequestMessage(config.getId(), i, value, thisId);
             this.link.send(i, request);
         }
 
-        while (!receivedSlots.hasDecided(key)) {
-            wait();
+        receivedSlots = new ReceivedSlots(n);
+
+        while (!receivedSlots.hasDecided()) {
+            try {
+                // TODO (dsa): bad
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
-        int slotId = receivedSlots.getDecidedSlot(key);
+        Optional<Integer> slotId = receivedSlots.getDecidedSlot();
         
-        return slotId;
+        if (slotId.isPresent()) {
+            System.out.println("Slot decided after f+1 confirmations");
+        } else {
+            throw new RuntimeException("Slot is not present where it should");
+        }
+
+        return slotId.get();
     }
 
     public void handleAppendReply(AppendMessage message) {
+        System.out.println("Received append reply");
         AppendReply appendReply = message.deserializeAppendReply();
 
         String key = String.format("%s_%s", appendReply.getValue(), appendReply.getSequenceNumber());
-        receivedSlots.addSlot(key, appendReply.getSlot());
+        receivedSlots.addSlot(appendReply.getSlot(), message.getSenderId());
+        System.out.println("Response registered");
     }
 
     public void listen() {
@@ -94,7 +110,7 @@ public class ClientStub {
                                 AppendMessage reply = (AppendMessage) message;
                                 handleAppendReply(reply);
                             }
-                            case ACK -> {
+                            case ACK, IGNORE -> {
                                 continue; // maybe add to logger?
                             }
                             default -> {
@@ -113,41 +129,61 @@ public class ClientStub {
 
     // class that holds the received slots for each value   
     private static class ReceivedSlots {
-        private final Map<String, Map<Integer,AtomicInteger>> slots = new ConcurrentHashMap<>();
+        // value -> replica -> slot confirmed
+        private final Map<Integer, Integer> slots = new HashMap<>();
 
-        private final Map<String, Integer> decidedSlots = new ConcurrentHashMap<>();
+        private Optional<Integer> decision = Optional.empty();
 
-        private final int nodesNumber;
+        private final int n;
 
-        public ReceivedSlots(int nodesNumber) {
-            this.nodesNumber = nodesNumber;
+        private final int f;
+
+        public ReceivedSlots(int n) {
+            this.n = n;
+            this.f = (n-1)/3;
         }
 
-        public void addSlot(String key, int slotId) {
-            int decidesNeeded = (this.nodesNumber - 1) / 3 + 1;
-            if (decidedSlots.containsKey(key)) {
-                return;
+        public synchronized void addSlot(int slotId, int senderId) {
+            System.out.printf("Received %d from %d\n", slotId, senderId);
+            slots.putIfAbsent(senderId, slotId);
+        
+            // Histogram
+            Map<Integer, Integer> histogram = new HashMap();
+            slots.entrySet()
+                .stream()
+                .map(e -> e.getValue())
+                .forEach(slot -> histogram.put(slot, histogram.getOrDefault(slot, 0) + 1));
+
+            for (Map.Entry<Integer, Integer> e: slots.entrySet()) {
+                System.out.printf("slots %d: %d\n", e.getKey(), e.getValue());
             }
-            slots.putIfAbsent(key, new ConcurrentHashMap<>());
-            slots.get(key).putIfAbsent(slotId, new AtomicInteger(0));
-            int confirmedSlot = slots.get(key).get(slotId).incrementAndGet();
-            if (confirmedSlot >= decidesNeeded) {
-                decidedSlots.put(key, slotId);
-                notify();
+
+            for (Map.Entry<Integer, Integer> e: histogram.entrySet()) {
+                System.out.printf("Histogram %d: %d\n", e.getKey(), e.getValue());
+            }
+
+            Optional<Integer> opt = histogram.entrySet()
+                .stream()
+                .filter(p -> p.getValue() > this.f)
+                .map(p -> p.getKey())
+                .findFirst();
+
+
+            // TODO: change prints to proper logger
+            if (opt.isPresent()) {
+                decision = Optional.of(opt.get());
+            } else {
+                System.out.println("No decision yet");
             }
         }
 
-        public void addDecidedSlot(String value, int slotId) {
-            decidedSlots.put(value, slotId);
+
+        public synchronized boolean hasDecided() {
+            return decision.isPresent();
         }
 
-        public boolean hasDecided(String key) {
-            return decidedSlots.containsKey(key);
+        public synchronized Optional<Integer> getDecidedSlot() {
+            return decision;
         }
-
-        public Integer getDecidedSlot(String key) {
-            return decidedSlots.get(key);
-        }
-
     }
 }

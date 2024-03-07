@@ -14,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
+import com.google.gson.Gson;
+
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
@@ -52,6 +54,16 @@ public class HDSLedgerService implements UDPService {
         nodeService.registerObserver(s -> decided(s));
     }
 
+    private AppendMessage createAppendReplyMessage(int id, int receiver, String value, int sequenceNumber, int slot) {
+        AppendReply appendReply = new AppendReply(value, sequenceNumber, slot);
+
+        AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REPLY, receiver);
+
+        message.setMessage(new Gson().toJson(appendReply));
+
+        return message;
+    }
+
     public void append(AppendMessage message) {
         AppendRequest request = message.deserializeAppendRequest();
 
@@ -82,8 +94,8 @@ public class HDSLedgerService implements UDPService {
                         config.getId(), slotId, value, nonce));
 
         // Send the decided value to the client
-        // Message reply = new AppendReply(config.getId(), Message.Type.APPEND_REPLY, value, sequenceNumber, slotId);
-        // link.send(clientId, reply);
+        AppendMessage reply = createAppendReplyMessage(config.getId(), clientId, value, sequenceNumber, slotId);
+        link.send(clientId, reply);
     }
 
     @Override

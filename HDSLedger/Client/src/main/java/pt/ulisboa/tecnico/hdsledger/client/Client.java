@@ -10,10 +10,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
+import javafx.util.Pair;
 
 public class Client {
 
     // private static String configPath = "../Service/src/main/resources/";
+    // FIXME (dsa)
     private static String configPath = "/tmp/";
 
     private static final CustomLogger LOGGER = new CustomLogger(Client.class.getName());
@@ -40,7 +42,9 @@ public class Client {
                     clientId));
 
         // Get all configs
-        ProcessConfig[] configs = new ProcessConfigBuilder().fromFile(configPath);
+        Pair<ProcessConfig[], ProcessConfig[]> bothConfigs = new ProcessConfigBuilder().fromFile(configPath);
+        // Client only cares about ledger configs
+        ProcessConfig[] configs = bothConfigs.getValue();
 
         // Find value of n by checking configs with two ports
         int n = (int) Arrays.stream(configs).filter(config -> config.getPort2().isPresent()).count();
