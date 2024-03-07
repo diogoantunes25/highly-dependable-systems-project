@@ -264,6 +264,10 @@ public class APLink implements Link {
             case KEY_PROPOSAL -> {
                 message = new Gson().fromJson(serialized, KeyProposal.class);
             }
+
+            case HMAC -> {
+                message = new Gson().fromJson(serialized, HMACMessage.class);
+            }
             default -> {}
         }
 

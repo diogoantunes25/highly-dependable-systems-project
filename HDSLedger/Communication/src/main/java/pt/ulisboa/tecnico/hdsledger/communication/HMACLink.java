@@ -36,6 +36,8 @@ public class HMACLink implements Link {
     private final Map<Integer, ProcessConfig> nodes = new ConcurrentHashMap<>();
     // Reference to the node itself
     private final ProcessConfig config;
+    // Class to deserialize messages to
+    private final Class<? extends Message> messageClass;
     // Send messages to self by pushing to queue instead of through the network
     private final Map<Integer, Key> sharedKeys = new ConcurrentHashMap<>();
     // APLink reference
@@ -47,8 +49,9 @@ public class HMACLink implements Link {
 
     public HMACLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
                     boolean activateLogs, int baseSleepTime) {
-        this.apLink = new APLink(self, port, nodes, messageClass, activateLogs, baseSleepTime);
+        this.apLink = new APLink(self, port, nodes, HMACMessage.class, activateLogs, baseSleepTime);
         this.config = self;
+        this.messageClass = messageClass;
 
         Arrays.stream(nodes).forEach(node -> {
             int id = node.getId();
@@ -115,7 +118,7 @@ public class HMACLink implements Link {
         String dataString = new Gson().toJson(data);
         Key sharedKey = sharedKeys.get(nodeId);
         byte[] hmac = SigningUtils.generateHMAC(dataString.getBytes(), sharedKey);
-        HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), data.getType(), hmac);
+        HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), Type.HMAC, hmac, dataString);
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "Sending message of type {0} to {1}:{2} with message ID {3} -" +
                                 "with HMAC: {4}",
@@ -133,9 +136,8 @@ public class HMACLink implements Link {
         while (true) {
             message = apLink.receiveAndDeserializeWith(HMACMessage.class, sharedKeys.keySet());
             if (!message.getType().equals(Message.Type.IGNORE)) {
-                if (sharedKeys.containsKey(message.getSenderId()) && !message.getType().equals(Type.KEY_PROPOSAL)
-                        && !message.getType().equals(Type.ACK)) {
-                        message = processHMACMessage(message);
+                if (sharedKeys.containsKey(message.getSenderId()) && message.getType().equals(Type.HMAC)) {
+                        message = processHMACMessage((HMACMessage) message);
                 } else if (!sharedKeys.containsKey(message.getSenderId()) && message.getType().equals(Type.KEY_PROPOSAL)) {  // if we do not have a sharedKey than the message probably is a Key Proposal
                     message = processKeyProposal(message);
                 } else {
@@ -161,14 +163,14 @@ public class HMACLink implements Link {
         return message;
     }
 
-    private Message processHMACMessage(Message message) throws UnknownHostException {
+    private Message processHMACMessage(HMACMessage message) throws UnknownHostException {
         // If we already have the key than it is probably a HMACMessage, it is unlikely that we receive a KeyProposal
         // if it is an HMAC Message, but we do not have the key, we ignore the message as there's nothing we can do
         // verify hmac
-        byte[] hmac = ((HMACMessage) message).getHmac();
-        Message msg = new Message(message.getSenderId(), message.getType());
+        byte[] hmac = message.getHmac();
+        String messageString = message.getMessage();
+        Message msg = new Gson().fromJson(messageString, messageClass);
         msg.setReceiver(message.getReceiver());
-        String messageString = new Gson().toJson(msg);
         Key sharedKey = sharedKeys.get(message.getSenderId());
         if (!Arrays.equals(hmac, SigningUtils.generateHMAC(messageString.getBytes(), sharedKey))) {
             // if the hmac is invalid, we ignore the message as it is not valid

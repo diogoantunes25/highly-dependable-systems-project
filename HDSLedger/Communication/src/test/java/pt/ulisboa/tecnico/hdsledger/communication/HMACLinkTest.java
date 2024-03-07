@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
@@ -28,11 +29,11 @@ public class HMACLinkTest {
         }
 
         // create a process configuration
-        ProcessConfig processConfig1 = new ProcessConfig(true, "localhost", 1, 8080, 4, pubKeyPath1, privKeyPath1);
-        ProcessConfig processConfig2 = new ProcessConfig(false, "localhost", 2, 8081, 4, pubKeyPath2, privKeyPath2);
+        ProcessConfig processConfig1 = new ProcessConfig("localhost", 1, 8080, -1, 4, pubKeyPath1, privKeyPath1);
+        ProcessConfig processConfig2 = new ProcessConfig( "localhost", 2, 8081, -1, 4, pubKeyPath2, privKeyPath2);
 
         ProcessConfig[] processConfigs = {processConfig1, processConfig2};
-        Class<? extends Message> messageClass = Message.class;
+        Class<? extends Message> messageClass = ConsensusMessage.class;
 
         // create HMACLink
         HMACLink hmacLink1 = new HMACLink(processConfig1, 8080, processConfigs, messageClass, true, 1000);
@@ -42,7 +43,7 @@ public class HMACLinkTest {
         listen(hmacLink2);
 
         // create a message
-        Message message = new Message(processConfig1.getId(), Message.Type.APPEND);
+        Message message = new Message(processConfig1.getId(), Message.Type.PREPARE);
         hmacLink1.send(processConfig2.getId(), message);
 
         try {
