@@ -34,9 +34,10 @@ public class Client {
 
         configPath += "regular_config.json";
         boolean showDebugLogs = false;
-        if (args.length == 4) {
-            showDebugLogs = args[3].equals("-debug");
-        }
+        // if (args.length 4) {
+        //     showDebugLogs = args[3].equals("-debug");
+        // }
+        showDebugLogs = true;
 
         LOGGER.log(Level.INFO, MessageFormat.format("Using clientId = {0}",
                     clientId));

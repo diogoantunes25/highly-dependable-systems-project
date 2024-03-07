@@ -41,7 +41,7 @@ public class ClientStub {
         this.config = clientConfig;
         this.others = nodeConfigs;
         this.n = n;
-        this.link = new APLink(clientConfig,
+        this.link = new HMACLink(clientConfig,
 						clientConfig.getPort(),
 						nodeConfigs,
 						AppendMessage.class);
@@ -54,6 +54,7 @@ public class ClientStub {
         AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
 
         message.setMessage(new Gson().toJson(appendRequest));
+        message.signSelf(this.config.getPrivateKey());
 
         return message;
     }
@@ -114,6 +115,7 @@ public class ClientStub {
                                 continue; // maybe add to logger?
                             }
                             default -> {
+                                System.out.println(message.getType());
                                 throw new HDSSException(ErrorMessage.CannotParseMessage);
                             }
                         }

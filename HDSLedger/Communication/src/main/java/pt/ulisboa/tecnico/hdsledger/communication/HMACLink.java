@@ -17,6 +17,7 @@ import java.lang.reflect.Array;
 import java.net.*;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
@@ -42,6 +43,8 @@ public class HMACLink implements Link {
     private final Map<Integer, Key> sharedKeys = new ConcurrentHashMap<>();
     // APLink reference
     private final APLink apLink;
+    // Send messages to self by pushing to queue instead of through the network
+    private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
 
     public HMACLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, false, 200);
@@ -85,16 +88,27 @@ public class HMACLink implements Link {
      * @param data The message to be sent
      */
     public void send(int nodeId, Message data) {
+        // Send message to local queue instead of using network if destination in self
+        if (nodeId == this.config.getId()) {
+            this.localhostQueue.add(data);
+
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format("{0} - Message {1} (locally) sent (id={2}) successfully",
+                        config.getId(), data.getType(), nodeId));
+
+            return;
+        }
+
         if (sharedKeys.get(nodeId) == null) {
             new Thread(() -> {
                 int backoff = 10;
                 while (sharedKeys.get(nodeId) == null) {
                     try {
                         LOGGER.log(Level.INFO, MessageFormat.format(
-                                "Failed to send message to {0}:{1} with message ID {2} -" +
+                                "Failed to send message to {0}:{1} (replica={4}) with message ID {2} -" +
                                         "shared key is not ready yet. Waiting {3}ms to retry.",
                                 nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(),
-                                data.getMessageId(), backoff));
+                                data.getMessageId(), backoff, nodeId));
                         // exponential backoff
                         Thread.sleep(backoff);
                         backoff *= 2;
@@ -134,31 +148,50 @@ public class HMACLink implements Link {
     public Message receive() throws IOException, ClassNotFoundException {
         Message message;
         while (true) {
+
+            if (this.localhostQueue.size() > 0) {
+                message = this.localhostQueue.poll();
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                        "Received message of type {0} from local queue",
+                            message.getType()));
+                break;
+            }
+
             message = apLink.receiveAndDeserializeWith(HMACMessage.class, sharedKeys.keySet());
             if (!message.getType().equals(Message.Type.IGNORE)) {
+
                 if (sharedKeys.containsKey(message.getSenderId()) && message.getType().equals(Type.HMAC)) {
                         message = processHMACMessage((HMACMessage) message);
                 } else if (!sharedKeys.containsKey(message.getSenderId()) && message.getType().equals(Type.KEY_PROPOSAL)) {  // if we do not have a sharedKey than the message probably is a Key Proposal
+                    // when key proposal is received, we don't yet have a message to return
                     message = processKeyProposal(message);
                 } else {
+                    LOGGER.log(Level.INFO, MessageFormat.format(
+                            "Received message of type {0} - ignoring",
+                                message.getType()));
                     message.setType(Message.Type.IGNORE);
                 }
+            }
+
+            if (!message.getType().equals(Type.IGNORE)) {
+                // If we did not set the message to IGNORE, we send an ACK
+                // this is done because sometimes we might not have the necessary key to check the hmac,
+                // so we want to ignore the message in order to force the sending node to resend the message
+                InetAddress address = InetAddress.getByName(nodes.get(message.getSenderId()).getHostname());
+                int port = nodes.get(message.getSenderId()).getPort();
+
+                Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
+                responseMessage.setMessageId(message.getMessageId());
+                responseMessage.setReceiver(message.getSenderId());
+
+                // ACK must also be send using authenticated channel
+                sendWhenKeyIsReady(message.getSenderId(), message);
+                // apLink.unreliableSend(address, port, responseMessage);
+            }
+
+            if (!message.getType().equals(Type.KEY_PROPOSAL)) {
                 break;
             }
-        }
-
-        if (!message.getType().equals(Type.IGNORE)) {
-            // If we did not set the message to IGNORE, we send an ACK
-            // this is done because sometimes we might not have the necessary key to check the hmac,
-            // so we want to ignore the message in order to force the sending node to resend the message
-            InetAddress address = InetAddress.getByName(nodes.get(message.getSenderId()).getHostname());
-            int port = nodes.get(message.getSenderId()).getPort();
-
-            Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
-            responseMessage.setMessageId(message.getMessageId());
-            responseMessage.setReceiver(message.getSenderId());
-
-            apLink.unreliableSend(address, port, responseMessage);
         }
         return message;
     }
@@ -169,23 +202,23 @@ public class HMACLink implements Link {
         // verify hmac
         byte[] hmac = message.getHmac();
         String messageString = message.getMessage();
-        Message msg = new Gson().fromJson(messageString, messageClass);
-        msg.setReceiver(message.getReceiver());
+        Message innerMessage = new Gson().fromJson(messageString, messageClass);
+        innerMessage.setReceiver(message.getReceiver());
         Key sharedKey = sharedKeys.get(message.getSenderId());
         if (!Arrays.equals(hmac, SigningUtils.generateHMAC(messageString.getBytes(), sharedKey))) {
             // if the hmac is invalid, we ignore the message as it is not valid
-            message.setType(Message.Type.IGNORE);
+            innerMessage.setType(Message.Type.IGNORE);
             LOGGER.log(Level.WARNING, MessageFormat.format(
                     "WARNING: Invalid message HMAC received from {0}:{1}",
-                    InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
-                    nodes.get(message.getSenderId()).getPort()));
-            return message;
+                    InetAddress.getByName(nodes.get(innerMessage.getSenderId()).getHostname()),
+                    nodes.get(innerMessage.getSenderId()).getPort()));
+            return innerMessage;
         }
         LOGGER.log(Level.INFO, MessageFormat.format(
                 "Received message from {0}:{1} of type {2} with hmac {3}, and hmac is correct",
                 InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
-                nodes.get(message.getSenderId()).getPort(), message.getType(), hmac));
-        return message;
+                nodes.get(innerMessage.getSenderId()).getPort(), innerMessage.getType(), hmac));
+        return innerMessage;
     }
 
     private Message processKeyProposal(Message message) throws UnknownHostException {

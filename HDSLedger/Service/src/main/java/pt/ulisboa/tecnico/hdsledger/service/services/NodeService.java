@@ -102,9 +102,10 @@ public class NodeService implements UDPService {
     }
 
     /**
-     * Check that mesage is valid
+     * Check that value is valid
      */
-    private boolean checkIsValidMessage(String value) {
+    private boolean checkIsValidValue(String value) {
+        // Get client id and check that it's signed
         // TODO (dsa)
         return true;
     }
@@ -121,7 +122,7 @@ public class NodeService implements UDPService {
         // one and that the signature is correct
  
         return instances.computeIfAbsent(lambda, l -> {
-            Instanbul instance = new Instanbul(this.others, this.config, l, value -> this.checkIsValidMessage(value));
+            Instanbul instance = new Instanbul(this.others, this.config, l, value -> this.checkIsValidValue(value));
             // TODO (dsa): probably don't need a timer per instance (one for all is enough)
             Timer timer = new SimpleTimer();
             Consumer<String> observer = s -> {

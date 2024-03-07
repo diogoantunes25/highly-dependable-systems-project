@@ -4,6 +4,7 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.APLink;
+import pt.ulisboa.tecnico.hdsledger.communication.HMACLink;
 import pt.ulisboa.tecnico.hdsledger.service.services.HDSLedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -45,12 +46,14 @@ public class Node {
                     ledgerConfig.getId(), ledgerConfig.getHostname(), ledgerConfig.getPort()));
 
             // Get a link that has the nodes (for the node service)
-            Link nodeLink = new APLink(nodeConfig, nodeConfig.getPort(), nodesConfigs,
+            Link nodeLink = new HMACLink(nodeConfig, nodeConfig.getPort(), nodesConfigs,
                     ConsensusMessage.class);
 
             // Get a link that has all parties in the system
-            Link ledgerLink = new APLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
+            Link ledgerLink = new HMACLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
                     AppendMessage.class);
+            // Link ledgerLink = new APLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
+            //          AppendMessage.class);
 
             NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs);
             HDSLedgerService hdsLedgerService = new HDSLedgerService(ledgerConfigs, ledgerLink, ledgerConfig, nodeService);

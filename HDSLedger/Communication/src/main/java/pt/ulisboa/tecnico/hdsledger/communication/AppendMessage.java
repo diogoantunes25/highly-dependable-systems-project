@@ -29,6 +29,11 @@ public class AppendMessage extends Message {
     // The usage is - message is created, then signed and then signature set
     private String signature;
 
+    // Who sent the previous message
+    private int replyTo;
+    // Id of the previous message
+    private int replyToMessageId;
+
     public AppendMessage(int senderId, Message.Type type, int receiver) {
         super(senderId, type);
     }
@@ -52,6 +57,23 @@ public class AppendMessage extends Message {
     private Signable getToSign() {
         return new Signable(this.message);
     }
+
+    public int getReplyTo() {
+        return replyTo;
+    }
+
+    public void setReplyTo(int replyTo) {
+        this.replyTo = replyTo;
+    }
+
+    public int getReplyToMessageId() {
+        return replyToMessageId;
+    }
+
+    public void setReplyToMessageId(int replyToMessageId) {
+        this.replyToMessageId = replyToMessageId;
+    }
+
 
     /**
      * Signs itself and stores signature

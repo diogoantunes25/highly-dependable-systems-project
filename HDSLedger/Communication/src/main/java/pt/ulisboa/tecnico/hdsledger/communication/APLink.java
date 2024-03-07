@@ -229,18 +229,18 @@ public class APLink implements Link {
             case APPEND_REQUEST -> {
                 AppendMessage request = (AppendMessage) message;
                 //TODO (cfc)
-                /*if (request.getReplyTo() == config.getId())
-                    receivedAcks.add(request.getReplyToMessageId());*/
+                if (request.getReplyTo() == config.getId())
+                    receivedAcks.add(request.getReplyToMessageId());
 
-                return request;
+                return message;
             }
             case APPEND_REPLY -> {
                 AppendMessage reply = (AppendMessage) message;
                 //TODO (cfc)
-                /*if (request.getReplyTo() == config.getId())
-                    receivedAcks.add(request.getReplyToMessageId());*/
+                if (reply.getReplyTo() == config.getId())
+                    receivedAcks.add(reply.getReplyToMessageId());
 
-                return reply;
+                return message;
             }
             case PRE_PREPARE -> {
                 return message;
