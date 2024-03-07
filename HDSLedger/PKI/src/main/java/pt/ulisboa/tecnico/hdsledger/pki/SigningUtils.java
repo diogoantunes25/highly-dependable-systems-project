@@ -6,9 +6,9 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 
 import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
 
 public class SigningUtils {
-
     public static String encrypt(byte[] data, String pathToPrivateKey)
         throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
         NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
@@ -21,16 +21,16 @@ public class SigningUtils {
         return Base64.getEncoder().encodeToString(encryptedData);
     }
 
-    public static String encryptWithPublic(byte[] data, String pathToPublicKey)
+    public static byte[] encryptWithPublic(Key key, String pathToPublicKey)
             throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
-            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, NoSuchProviderException {
 
         PublicKey publicKey = (PublicKey) RSAKeyGenerator.read(pathToPublicKey, "pub");
-        Cipher encryptCipher = Cipher.getInstance("RSA");
-        encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
-        byte[] encryptedData = encryptCipher.doFinal(data);
+        Cipher encryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        encryptCipher.init(Cipher.WRAP_MODE, publicKey);
+        byte[] encryptedData = encryptCipher.wrap(key);
 
-        return Base64.getEncoder().encodeToString(encryptedData);
+        return encryptedData;
     }
 
     public static String decrypt(byte[] data, String pathToPublicKey)
@@ -45,23 +45,26 @@ public class SigningUtils {
         return new String(decryptedData);
     }
 
-    public static String decryptWithPrivate(byte[] data, String pathToPrivateKey)
+    public static byte[] decryptWithPrivate(byte[] data, String pathToPrivateKey)
             throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
-            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
+            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
 
         PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "priv");
-        Cipher decryptCipher = Cipher.getInstance("RSA");
-        decryptCipher.init(Cipher.DECRYPT_MODE, privateKey);
-        byte[] decryptedData = decryptCipher.doFinal(data);
+        Cipher decryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        decryptCipher.init(Cipher.UNWRAP_MODE, privateKey);
+        Key sessionKey = decryptCipher.unwrap(data, "AES", Cipher.SECRET_KEY);
 
-        return new String(decryptedData);
+        byte[] sessionKeyBytes = sessionKey.getEncoded();
+
+
+        return sessionKeyBytes;
     }
-    public static String generateHMAC(String data, Key key) {
+    public static byte[] generateHMAC(byte[] data, Key key) {
         try {
             Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
             sha256_HMAC.init(key);
-            byte[] macData = sha256_HMAC.doFinal(data.getBytes());
-            return Base64.getEncoder().encodeToString(macData);
+            byte[] macData = sha256_HMAC.doFinal(data);
+            return macData;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

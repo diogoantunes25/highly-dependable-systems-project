@@ -7,6 +7,7 @@ import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -136,14 +137,14 @@ public class SigningUtilsTest {
 
         try {
             Key key = AESKeyGenerator.generateSimKey();
-            String mac = SigningUtils.generateHMAC(data, key);
+            byte[] mac = SigningUtils.generateHMAC(data.getBytes(), key);
 
-            if (mac.equals(SigningUtils.generateHMAC(otherData, key))) {
+            if (Arrays.equals(mac, SigningUtils.generateHMAC(otherData.getBytes(), key))) {
                 throw new RuntimeException("Good MAC where bad one was expected");
             }
 
             // test that the MAC is valid
-            if (!mac.equals(SigningUtils.generateHMAC(data, key))) {
+            if (!Arrays.equals(mac, SigningUtils.generateHMAC(data.getBytes(), key))) {
                 throw new RuntimeException("Bad MAC where good one was expected");
             }
 
