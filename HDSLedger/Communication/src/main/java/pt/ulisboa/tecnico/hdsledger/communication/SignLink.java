@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import com.google.gson.Gson;
 
+import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message.Type;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
@@ -19,7 +20,7 @@ import java.util.logging.LogManager;
 /**
  * Authenticated point to point link.
  */
-public class APLink implements Link {
+public class SignLink implements Link {
 
     private static final CustomLogger LOGGER = new CustomLogger(APLink.class.getName());
     // Time to wait for an ACK before resending the message
@@ -41,12 +42,12 @@ public class APLink implements Link {
     // Send messages to self by pushing to queue instead of through the network
     private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
 
-    public APLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
+    public SignLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, false, 200);
     }
 
-    public APLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
-            boolean activateLogs, int baseSleepTime) {
+    public SignLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
+                  boolean activateLogs, int baseSleepTime) {
 
         this.config = self;
         this.messageClass = messageClass;
@@ -96,13 +97,8 @@ public class APLink implements Link {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
-                if (node == null) {
-                    LOGGER.log(Level.WARNING,
-                            MessageFormat.format("{0} - No node {1}. Failed while sending",
-                                    config.getId(), nodeId));
-
+                if (node == null)
                     throw new HDSSException(ErrorMessage.NoSuchNode);
-                }
 
                 data.setMessageId(messageCounter.getAndIncrement());
 
@@ -117,17 +113,17 @@ public class APLink implements Link {
                 if (nodeId == this.config.getId()) {
                     this.localhostQueue.add(data);
 
-                    LOGGER.log(Level.INFO,
-                            MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} (id={4}) successfully",
-                                    config.getId(), data.getType(), destAddress, destPort, nodeId));
+                    // LOGGER.log(Level.INFO,
+                    //         MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} successfully",
+                    //                 config.getId(), data.getType(), destAddress, destPort));
 
                     return;
                 }
 
                 for (;;) {
-                    LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Sending {1} message to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
-                            data.getType(), destAddress, destPort, messageId, count++, nodeId));
+                    // LOGGER.log(Level.INFO, MessageFormat.format(
+                    //         "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
+                    //         data.getType(), destAddress, destPort, messageId, count++));
 
                     unreliableSend(destAddress, destPort, data);
 
@@ -141,8 +137,8 @@ public class APLink implements Link {
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} (id={4}) successfully",
-                        config.getId(), data.getType(), destAddress, destPort, nodeId));
+                // LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully",
+                //         config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -163,8 +159,19 @@ public class APLink implements Link {
     public void unreliableSend(InetAddress hostname, int port, Message data) {
         new Thread(() -> {
             try {
-                String serialized = new Gson().toJson(data);
-                byte[] buf = serialized.getBytes();
+                String jsonString = new Gson().toJson(data);
+                Optional<String> signature;
+
+                // Sign message
+                try {
+                    signature = Optional.of(SigningUtils.sign(jsonString, this.config.getPrivateKey()));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    throw new HDSSException(ErrorMessage.SigningError);
+                }
+
+                SignedMessage signedMessage = new SignedMessage(data.getSenderId(), data.getType(), jsonString, signature.get());
+                byte[] buf = new Gson().toJson(signedMessage).getBytes();
 
                 DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
                 socket.send(packet);
@@ -172,12 +179,13 @@ public class APLink implements Link {
                 e.printStackTrace();
                 throw new HDSSException(ErrorMessage.SocketSendingError);
             }
-
         }).start();
-
     }
 
-    public <T extends Message> Message receiveAndDeserializeWith(Class<T> targetClass, Set<Integer> disallowDuplicates) throws IOException, ClassNotFoundException {
+    /*
+     * Receives a message from any node in the network (blocking)
+     */
+    public Message receive() throws IOException, ClassNotFoundException {
 
         Message message = null;
         String serialized = "";
@@ -196,7 +204,19 @@ public class APLink implements Link {
 
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             serialized = new String(buffer);
-            message = new Gson().fromJson(serialized, targetClass);
+
+            // Verify signature
+            message = new Gson().fromJson(serialized, SignedMessage.class);
+
+            if (!SigningUtils.verifySignature(((SignedMessage) message).getMessage(),
+                    ((SignedMessage) message).getSignature(),
+                    this.nodes.get(message.getSenderId()).getPublicKey())) {
+                message.setType(Message.Type.IGNORE);
+                LOGGER.log(Level.WARNING,  MessageFormat.format(
+                                "WARNING: Invalid message signature received from {0}:{1}",
+                        InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+                return message;
+            }
         }
 
         int senderId = message.getSenderId();
@@ -214,34 +234,16 @@ public class APLink implements Link {
 
         // It's not an ACK -> Deserialize for the correct type
         if (!local)
-            message = new Gson().fromJson(serialized, targetClass);
+            message = new Gson().fromJson(serialized, this.messageClass);
 
+        boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
-        if (disallowDuplicates.contains(senderId)) {
-            boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
-            // Message already received (add returns false if already exists) => Discard
-            if (isRepeated && !targetClass.equals(HMACMessage.class)){
-                message.setType(Message.Type.IGNORE);
-            }
+        // Message already received (add returns false if already exists) => Discard
+        if (isRepeated) {
+            message.setType(Message.Type.IGNORE);
         }
 
         switch (message.getType()) {
-            case APPEND_REQUEST -> {
-                AppendMessage request = (AppendMessage) message;
-                //TODO (cfc)
-                /*if (request.getReplyTo() == config.getId())
-                    receivedAcks.add(request.getReplyToMessageId());*/
-
-                return request;
-            }
-            case APPEND_REPLY -> {
-                AppendMessage reply = (AppendMessage) message;
-                //TODO (cfc)
-                /*if (request.getReplyTo() == config.getId())
-                    receivedAcks.add(request.getReplyToMessageId());*/
-
-                return reply;
-            }
             case PRE_PREPARE -> {
                 return message;
             }
@@ -261,19 +263,15 @@ public class APLink implements Link {
                 if (consensusMessage.getReplyTo() == config.getId())
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
-            case KEY_PROPOSAL -> {
-                message = new Gson().fromJson(serialized, KeyProposal.class);
-            }
             default -> {}
         }
 
-        if (!local && !targetClass.equals(HMACMessage.class)) {
+        if (!local) {
             InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
             int port = response.getPort();
 
             Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
             responseMessage.setMessageId(messageId);
-            responseMessage.setReceiver(senderId);
 
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
@@ -281,14 +279,8 @@ public class APLink implements Link {
             // it will discard duplicates
             unreliableSend(address, port, responseMessage);
         }
-        return message;
-    }
 
-    /*
-     * Receives a message from any node in the network (blocking)
-     */
-    public Message receive() throws IOException, ClassNotFoundException {
-        return receiveAndDeserializeWith(messageClass, nodes.keySet());
+        return message;
     }
 
     /**

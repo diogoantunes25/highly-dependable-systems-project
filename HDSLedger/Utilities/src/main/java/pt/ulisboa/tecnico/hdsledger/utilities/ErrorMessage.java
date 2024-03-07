@@ -8,7 +8,15 @@ public enum ErrorMessage {
     CannotOpenSocket("Error while opening socket"),
     BadClientId("Bad client id provided. Must be greater or equal to the number of replicas"),
 
-    CannotParseMessage("Error while parsing message");
+    CannotParseMessage("Error while parsing message"),
+
+    GeneratingKeyError("Error while generating key"),
+
+    EncryptionError("Error while encrypting message"),
+
+    DecryptionError("Error while decrypting message"),
+
+    SigningError("Error while signing message");
 
     private final String message;
 

@@ -1,21 +1,15 @@
 package pt.ulisboa.tecnico.hdsledger.pki;
 
 import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
-import java.security.PublicKey;
+import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
-public class SigningUtils {
+import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
 
-    public static byte[] encrypt(byte[] data, String pathToPrivateKey)
+public class SigningUtils {
+    public static String encrypt(byte[] data, String pathToPrivateKey)
         throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
         NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
@@ -24,10 +18,22 @@ public class SigningUtils {
         encryptCipher.init(Cipher.ENCRYPT_MODE, privateKey);
         byte[] encryptedData = encryptCipher.doFinal(data);
 
+        return Base64.getEncoder().encodeToString(encryptedData);
+    }
+
+    public static byte[] encryptWithPublic(Key key, String pathToPublicKey)
+            throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
+            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, NoSuchProviderException {
+
+        PublicKey publicKey = (PublicKey) RSAKeyGenerator.read(pathToPublicKey, "pub");
+        Cipher encryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        encryptCipher.init(Cipher.WRAP_MODE, publicKey);
+        byte[] encryptedData = encryptCipher.wrap(key);
+
         return encryptedData;
     }
 
-    public static byte[] decrypt(byte[] data, String pathToPublicKey)
+    public static String decrypt(byte[] data, String pathToPublicKey)
             throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
             NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
 
@@ -36,7 +42,32 @@ public class SigningUtils {
         decryptCipher.init(Cipher.DECRYPT_MODE, publicKey);
         byte[] decryptedData = decryptCipher.doFinal(data);
 
-        return decryptedData;
+        return new String(decryptedData);
+    }
+
+    public static byte[] decryptWithPrivate(byte[] data, String pathToPrivateKey)
+            throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
+            NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException {
+
+        PrivateKey privateKey = (PrivateKey) RSAKeyGenerator.read(pathToPrivateKey, "priv");
+        Cipher decryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        decryptCipher.init(Cipher.UNWRAP_MODE, privateKey);
+        Key sessionKey = decryptCipher.unwrap(data, "AES", Cipher.SECRET_KEY);
+
+        byte[] sessionKeyBytes = sessionKey.getEncoded();
+
+
+        return sessionKeyBytes;
+    }
+    public static byte[] generateHMAC(byte[] data, Key key) {
+        try {
+            Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
+            sha256_HMAC.init(key);
+            byte[] macData = sha256_HMAC.doFinal(data);
+            return macData;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static String digest(String data) throws NoSuchAlgorithmException {
@@ -53,8 +84,7 @@ public class SigningUtils {
             NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException {
 
         String digest = digest(data);
-        byte[] digestEncrypted = encrypt(digest.getBytes(), pathToPrivateKey);
-        String digestBase64 = Base64.getEncoder().encodeToString(digestEncrypted);
+        String digestBase64 = encrypt(digest.getBytes(), pathToPrivateKey);
 
         return digestBase64;
     }
@@ -68,6 +98,14 @@ public class SigningUtils {
 
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    public static Key generateSimKey() {
+        try {
+            return AESKeyGenerator.generateSimKey();
+        } catch (GeneralSecurityException e) {
+            throw new RuntimeException(e);
         }
     }
 }
