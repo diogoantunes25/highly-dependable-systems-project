@@ -36,8 +36,6 @@ public class HMACLink implements Link {
     private final Map<Integer, ProcessConfig> nodes = new ConcurrentHashMap<>();
     // Reference to the node itself
     private final ProcessConfig config;
-    // Set of received messages from specific node (prevent duplicates)
-    private final Map<Integer, CollapsingSet> receivedMessages = new ConcurrentHashMap<>();
     // Send messages to self by pushing to queue instead of through the network
     private final Map<Integer, Key> sharedKeys = new ConcurrentHashMap<>();
     // APLink reference
@@ -134,17 +132,14 @@ public class HMACLink implements Link {
         Message message;
         while (true) {
             message = apLink.receiveAndDeserializeWith(HMACMessage.class);
-            if (sharedKeys.containsKey(message.getSenderId())) {
-                if (!message.getType().equals(Type.KEY_PROPOSAL) && !message.getType().equals(Type.ACK)
-                        && !message.getType().equals(Type.IGNORE)) {
+            if (!message.getType().equals(Message.Type.IGNORE)) {
+                if (sharedKeys.containsKey(message.getSenderId()) && !message.getType().equals(Type.KEY_PROPOSAL) && !message.getType().equals(Type.ACK)) {
                     message = processHMACMessage(message);
-                    break;
                 } else if (message.getType().equals(Type.KEY_PROPOSAL)) {  // if we do not have a sharedKey than the message probably is a Key Proposal
                     message = processKeyProposal(message);
-                    break;
+                } else {
+                    message.setType(Message.Type.IGNORE);
                 }
-            } else {
-                message.setType(Message.Type.IGNORE);
                 break;
             }
         }
