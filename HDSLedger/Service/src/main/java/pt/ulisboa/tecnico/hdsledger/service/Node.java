@@ -22,7 +22,7 @@ public class Node {
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
     // Hardcoded path to files
     // private static String configPath = "src/main/resources/";
-    private static String configPath = "/tmp/regular_config.json";
+    private static String configPath = "src/main/resources/regular_config.json";
 
     public static void main(String[] args) {
 

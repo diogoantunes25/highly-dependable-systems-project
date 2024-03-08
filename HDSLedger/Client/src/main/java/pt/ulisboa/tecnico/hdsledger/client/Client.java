@@ -14,9 +14,9 @@ import javafx.util.Pair;
 
 public class Client {
 
-    // private static String configPath = "../Service/src/main/resources/";
+    private static String configPath = "../Service/src/main/resources/";
     // FIXME (dsa)
-    private static String configPath = "/tmp/";
+    // private static String configPath = "/tmp/";
 
     private static final CustomLogger LOGGER = new CustomLogger(Client.class.getName());
 

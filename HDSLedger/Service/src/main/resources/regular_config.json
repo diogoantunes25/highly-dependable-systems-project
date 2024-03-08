@@ -1,32 +1,47 @@
 [
     {   
-        "id": "1",
+        "id": "0",
         "hostname": "localhost",
         "port": 3001,
-        "port2": 4001
+        "port2": 4001,
+        "N": 4,
+        "publicKeyPath": "../keys/node1.pub",
+        "privateKeyPath": "../keys/node1.priv"
+    },
+    {
+        "id": "1",
+        "hostname": "localhost",
+        "port": 3002,
+        "port2": 4002,
+        "N": 4,
+        "publicKeyPath": "../keys/node2.pub",
+        "privateKeyPath": "../keys/node2.priv"
     },
     {
         "id": "2",
         "hostname": "localhost",
-        "port": 3002,
-        "port2": 4002
+        "port": 3003,
+        "port2": 4003,
+        "N": 4,
+        "publicKeyPath": "../keys/node3.pub",
+        "privateKeyPath": "../keys/node3.priv"
     },
     {
         "id": "3",
         "hostname": "localhost",
-        "port": 3003,
-        "port2": 4003
+        "port": 3004,
+        "port2": 4004,
+        "N": 4,
+        "publicKeyPath": "../keys/node4.pub",
+        "privateKeyPath": "../keys/node4.priv"
     },
     {
         "id": "4",
         "hostname": "localhost",
-        "port": 3004,
-        "port2": 4004
-    },
-    {
-        "id": "5",
-        "hostname": "localhost",
         "port": 3005,
-        "port2": -1
+        "port2": -1,
+        "N": 4,
+        "publicKeyPath": "../keys/client.pub",
+        "privateKeyPath": "../keys/client.priv"
     }
 ]
