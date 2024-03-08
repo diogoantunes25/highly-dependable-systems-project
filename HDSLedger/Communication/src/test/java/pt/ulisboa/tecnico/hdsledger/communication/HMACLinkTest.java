@@ -58,18 +58,10 @@ public class HMACLinkTest {
             try {
                 while (true) {
                     Message message = link.receive();
-                    if (message.getType() == Message.Type.KEY_PROPOSAL) {
-                        System.out.println(MessageFormat.format(
-                                "Received key proposal from {0} with key {1}",
-                                message.getSenderId(),
-                                ((KeyProposal) message).getKey()));
-                    } else if (message.getType() != Message.Type.IGNORE && message.getType() != Message.Type.ACK) {
-                        System.out.println(MessageFormat.format(
+                    System.out.println(MessageFormat.format(
                                 "Received message from {0} of type {1} with hmac {2}",
                                 message.getSenderId(),
-                                message.getType(),
-                                ((HMACMessage) message).getHmac()));
-                    }
+                                message.getType()));
                 }
             } catch (ClassNotFoundException | IOException e) {
                 e.printStackTrace();

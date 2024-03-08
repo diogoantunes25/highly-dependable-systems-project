@@ -165,6 +165,7 @@ public class HMACLink implements Link {
             }
         }
     }
+
     /*
      * Receives a message from any node in the network (blocking)
      */
