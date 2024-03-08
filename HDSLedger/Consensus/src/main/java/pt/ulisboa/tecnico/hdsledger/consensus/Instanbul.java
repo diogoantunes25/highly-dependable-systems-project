@@ -26,9 +26,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.util.Pair;
 
 /**
- * Instance of Instanbul consensus protocol
+ * Instance of Instanbul consensus protocol.
  * It's thread safe (per instance) - this is ensured by having all public methods
- * be synchronized (or do simple operations on thread safe objects)
+ * be synchronized (or do simple operations on thread safe objects).
+ * Assumes that all messages that come into the instance have had their signatures
+ * checked (using checkSignature static method).
+ * Also returns messages unsigned and expected user to sign them properly once
+ * returns (using sign static method).
  */
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
@@ -200,19 +204,6 @@ public class Instanbul {
 	}
 
 	/**
-	 * Returns round that started timer with provided timerId
-	*/
-	// private Optional<Integer> getRoundWithTimerId(int timerId) {
-	// 	for (Map.Entry<Integer, Optional<Integer>> entry : roundTimerId.entrySet()) {
-	// 		Optional<Integer> value = entry.getValue();
-	// 		if (value.isPresent() && value.get() == timerId) {
-	// 			return Optional.of(entry.getKey());
-	// 		}
-	// 	}
-	// 	return Optional.empty(); // Value not found	
-	// }
-
-	/**
 	 * Utility to create PrePrepareMessages
 	 */
 	private ConsensusMessage createPrePrepareMessage(String value, int instance, int round, int receiver, Optional<List<ConsensusMessage>> justificationPrepares, Optional<List<ConsensusMessage>> justificationRoundChanges) {
@@ -319,6 +310,80 @@ public class Instanbul {
 
 		return messagePrime;
 	}
+
+	/**
+	 * Checks signatures in message
+	 */
+	public static boolean checkSignature(ConsensusMessage message) {
+		return switch (message.getType()) {
+			case PRE_PREPARE -> {
+				// Message itself doesn't need to be signed, but the justifcation
+				// has messages (PREPAREs and ROUND-CHANGEs) that need to be signed
+				yield true;
+			}
+
+			case PREPARE -> {
+				// Needs to be signed
+				yield true;
+			}
+
+			case COMMIT -> {
+				// Doesn't need to be signed nor it has a justification
+				yield true;
+			}
+
+			case ROUND_CHANGE -> {
+				// Needs to be signed and it's justification (PREPAREs also
+				// need to be signed)
+				yield true;
+			}
+
+			default -> {
+				LOGGER.log(Level.INFO,
+						MessageFormat.format("Signature checker received unknown message {0}", message.getType()));
+
+				yield false;
+			}
+		};
+	}
+
+	/**
+	 * Signs messages that required signing
+	 * @return returns signed message
+	 */
+	public static ConsensusMessage sign(ConsensusMessage message, String myPublicKeyPath) {
+		return switch (message.getType()) {
+			case PRE_PREPARE -> {
+				// Message itself doesn't need to be signed, but the justifcation
+				// has messages (PREPAREs and ROUND-CHANGEs) that need to be signed
+				yield message;
+			}
+
+			case PREPARE -> {
+				// Needs to be signed
+				yield message;
+			}
+
+			case COMMIT -> {
+				// Doesn't need to be signed nor it has a justification
+				yield message;
+			}
+
+			case ROUND_CHANGE -> {
+				// Needs to be signed and it's justification (PREPAREs also
+				// need to be signed)
+				yield message;
+			}
+
+			default -> {
+				LOGGER.log(Level.INFO,
+						MessageFormat.format("Signature checker received unknown message {0}", message.getType()));
+
+				throw new RuntimeException("Trying to sign unknown message");
+			}
+		};
+	}
+
 
 	/*
 	 * Start an instance of consensus for a value
