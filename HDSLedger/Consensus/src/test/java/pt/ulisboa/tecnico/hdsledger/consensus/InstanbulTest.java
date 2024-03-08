@@ -38,7 +38,7 @@ public class InstanbulTest {
 	// n is set to 10 by default
 	@BeforeAll
 	private static void genKeys() {
-		int n = 10;
+		int n = 12;
 		List<String> publicKeys = IntStream.range(0, n)
 			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
 			.collect(Collectors.toList());
