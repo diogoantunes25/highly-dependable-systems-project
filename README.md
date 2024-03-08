@@ -18,29 +18,33 @@ have the same state.
 ---
 
 # Public Key Infrastructure
-The nodes and clients within the blockchain system should employ self-generated public and private keys, 
-distributed in advance before the system's initiation. The `PKI` module is responsible for generating these 
-keys.
+Both nodes and client assume that a public-key infrastructure was setup in advance.
+The `PKI` module can be used to setup this infrastructure.
 
-The steps to generate the keys are as follows:
+To generate a single key pair:
 
-### Install PKI module
 ```bash
-cd PKI/
+cd HDSLedger/PKI
 mvn clean install
+mvn exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
 ```
 
-### Generate keys
+To setup the PKI for `n` nodes and `c` clients and store the config to `file`, run:
+
 ```bash
-mvn compile exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
+cd HDSLedger
+./key_setup.sh n c file
 ```
-
 
 # Configuration Files
 
 ### Node configuration
 
-Can be found inside the `resources/` folder of the `Service` module.
+By default both nodes and replicas look for the config file inside the `resources/` folder
+of the `Service` module. A config is an array of objects, each one describing
+a participant of the system. For each one, it should exist an object with the
+following syntax, with `port` being the port used by the ledger service, for replicas
+to interact with the clients and `port2` being used by the replicas for the consensus.
 
 ```json
 {
@@ -54,8 +58,8 @@ Can be found inside the `resources/` folder of the `Service` module.
 }
 ```
 
-The `port` is the port used by the HDSLedgerService, to receive requests from the 
-client and to respond to them. The `port2` is the port used by the NodeService for the QBFT messages.
+> Note: For simplicity, the first `N-1` ids are reserved for the replicas and the remaining 
+> for the clients.
 
 ## Dependencies
 
@@ -72,14 +76,14 @@ This should install the following dependencies:
 
 ## Puppet Master
 
-The puppet master is a python script `puppet-master.py` which is responsible for starting the nodes of the blockchain.
+The puppet master is a python script `puppet-master.py` which is responsible for starting the replicas.
 The script runs with `kitty` terminal emulator by default since it's installed on the RNL labs.
 
 To run the script you need to have `python3` installed.
 The script has arguments which can be modified:
 
 - `terminal` - the terminal emulator used by the script
-- `server_config` - a string from the array `server_configs` which contains the possible configurations for the blockchain nodes
+- `server_config` - a string from the array `server_configs` which contains the possible configurations for the replicas
 
 Run the script with the following command:
 
@@ -98,11 +102,11 @@ Compile and install all modules using:
 
 ```bash
 cd HDSLedger/
-mvn clean install
+mvn clean install -DskipTests
 ```
 
 ### Execution
-The clients and the blockchain nodes can be mannualy executed using the following command: (one for each terminal window)
+The clients and the replicas can be manually started by running
 
 ```bash
 cd <module>/
@@ -111,43 +115,13 @@ mvn compile exec:java -Dexec.args="<id>"
 
 Where `<module>` is either `Service` or `Client`.
 
-Note: The `id` is the id of the blockchain node or the clients, according to the config file. For simplicity, the first `N-1` ids are for the blockchain nodes and the remaining 
-for the clients.
-
 ## Running the tests
 
-To test the system, a lot of tests were implemented. To run everyone of them, use the following command:
+To run unit tests, Maven can be used as follows:
 
 ```bash
 cd HDSLedger/
 mvn test
 ```
-
-If you only want to run the tests of a specific module, use the following command:
-
-```bash
-cd <module>/
-mvn test
-```
-
-Where `<module>` is either `Communication`, `Consensus`, `PKI`, or `Service`.
-
-If you want to run a specific test class, use the following command:
-
-```bash
-cd <module>/
-mvn test -Dtest=<test-class>
-```
-
-Where `<test-class>` is the name of the test class you want to run.
-
-If you want to run a specific test of a specific test class, use the following command:
-
-```bash
-cd <module>/
-mvn test -Dtest=<test-class>#<test-method>
-```
-
-Where `<test-method>` is the name of the test method you want to run.
 
 ---
