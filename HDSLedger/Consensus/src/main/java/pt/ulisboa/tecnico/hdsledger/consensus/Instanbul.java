@@ -111,7 +111,7 @@ public class Instanbul {
 	//	- if there's an empty entry for r, timer stopped
 	// private Map<Integer, Optional<Integer>> roundTimerId = new HashMap<>();
 
-	// Validity verifying function
+	// Validity verifying function (should not depende on instance state)
 	private Predicate<String> beta;
 
 	public Instanbul(List<ProcessConfig> others, ProcessConfig config, int lambda, Predicate<String> beta) {
@@ -305,13 +305,22 @@ public class Instanbul {
 	/**
 	 * Checks signatures in message
 	 */
-	public static boolean checkSignature(ConsensusMessage message, List<ProcessConfig> others) {
+	public static boolean checkSignature(ConsensusMessage message, List<ProcessConfig> others, Predicate<String> beta) {
 		return switch (message.getType()) {
 			case PRE_PREPARE -> {
+				PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
+
+				// Verify that proposed message is valid
+				if (!beta.test(prePrepareMessage.getValue())) {
+					LOGGER.log(Level.INFO,
+							MessageFormat.format(
+								"PRE-PREPARE message from {0} is invalid (i.e. failed beta predicate)",
+								message.getSenderId()));
+					yield false;
+				}
+
 				// Message itself doesn't need to be signed, but the justifcation
 				// has messages (PREPAREs and ROUND-CHANGEs) that need to be signed
-
-				PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
 
 				Optional<List<ConsensusMessage>> optQp = prePrepareMessage.getJustificationPrepares();
 				Optional<List<ConsensusMessage>> optQrc = prePrepareMessage.getJustificationRoundChanges();
@@ -613,14 +622,7 @@ public class Instanbul {
 		    return new ArrayList<>();
 		}
 
-		// Verify that proposed message is valid
-		if (!this.beta.test(value)) {
-			LOGGER.log(Level.INFO,
-					MessageFormat.format(
-						"{0} - PRE-PREPARE message from {1} Consensus Instance {2}, Round {3} is invalid (i.e. failed beta predicate)",
-						config.getId(), senderId, this.lambda, round));
-		    return new ArrayList<>();
-		}
+		
 
 		// Verify that the justification is valid
 		if (!this.justifyPrePrepare(round, value, prePrepareMessage.getJustificationPrepares(), prePrepareMessage.getJustificationRoundChanges())) {
@@ -679,15 +681,6 @@ public class Instanbul {
 				MessageFormat.format(
 					"{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), senderId, this.lambda, round));
-
-		// Message signature check is done as late as possible
-		// if (!message.checkConsistentSig(this.others.get(senderId).getPublicKey())) {
-		// 	LOGGER.log(Level.WARNING,
-		// 			MessageFormat.format(
-		// 				"{0} - Received PREPARE message from {1} Consensus Instance {2}, Round {3} - BAD SIGNATURE",
-		// 				config.getId(), senderId, this.lambda, round));
-		//     return new ArrayList<>();
-		// }
 
 		// Doesn't add duplicate messages
 		prepareMessages.addMessage(message);
@@ -1036,22 +1029,6 @@ public class Instanbul {
 				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), message.getSenderId(), this.lambda, round));
 
-		// if (!roundChangeMessageIsValidSignedIsValid(message)) {
-		// 	LOGGER.log(Level.WARNING,
-		// 			MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - bad signature",
-		// 				config.getId(), message.getSenderId(), this.lambda, round));
-		//
-		// 	return messages;
-		// }
-
-		// if (!sanityCheckRoundChangeMessage(roundChangeMessage)) {
-		// 	LOGGER.log(Level.WARNING,
-		// 			MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
-		// 				config.getId(), message.getSenderId(), this.lambda, round));
-		//
-		// 	return messages;
-		// }
-
 		roundChangeMessages.addMessage(message);
 
 		// Amplification
@@ -1175,7 +1152,7 @@ public class Instanbul {
 	 * Handles protocol messages and returns messages to be sent over the network
 	 */
 	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
-        if (!Instanbul.checkSignature(message, this.others)) {
+        if (!Instanbul.checkSignature(message, this.others, this.beta)) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Detected message with bad signature from {1} in {2} message, ignoring",

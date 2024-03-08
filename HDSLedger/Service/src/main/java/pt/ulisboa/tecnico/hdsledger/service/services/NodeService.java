@@ -19,6 +19,7 @@ import java.util.Queue;
 import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -96,6 +97,10 @@ public class NodeService implements UDPService {
     // List of paths to client public keys
     private List<String> clientPks;
 
+    // maps values to the slot they where finalized to (after
+    // coming out from consensus)
+    Map<String, Slot> history = new ConcurrentHashMap<>();
+
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig, List<String> clientPks) {
         this.link = link;
@@ -115,7 +120,7 @@ public class NodeService implements UDPService {
     /**
      * Check that value is valid
      */
-    private boolean checkIsValidValue(String value) {
+    private boolean checkIsValidValue(int lambda, String value) {
         Optional<List<String>> parts = parseValue(value);
         if (!parts.isPresent()) {
             return false;
@@ -136,7 +141,14 @@ public class NodeService implements UDPService {
                 config.getId(), value, clientId));
 
         // Check it wasn't proposed yet
-        // TODO
+        boolean repeated = history.entrySet()
+            .stream()
+            .map(e -> e.getValue())
+            .anyMatch(s -> s.getSeq() == seq && s.getClientId() == clientId &&
+                s.getMessage().equals(cmd));
+        if (repeated) {
+            return false;
+        }
 
         // Check client signature is valid
         AppendMessage hmacMessage = (AppendMessage) new Gson().fromJson(serializedProof, AppendMessage.class);
@@ -158,8 +170,7 @@ public class NodeService implements UDPService {
         // one and that the signature is correct
  
         return instances.computeIfAbsent(lambda, l -> {
-            Instanbul instance = new Instanbul(this.others, this.config, l, value -> this.checkIsValidValue(value));
-            // TODO (dsa): probably don't need a timer per instance (one for all is enough)
+            Instanbul instance = new Instanbul(this.others, this.config, l, value -> this.checkIsValidValue(l, value));
             Timer timer = new SimpleTimer();
             Consumer<String> observer = s -> {
                 decided(l, s);
@@ -415,9 +426,6 @@ public class NodeService implements UDPService {
                 try {
                     DecisionBucket bucket = new DecisionBucket();
 
-                    // maps values to the slot they where finalized to (after
-                    // coming out from consensus)
-                    Map<String, Slot> history = new HashMap<>();
 
                     // input values for which the observers where already notified
                     Set<String> acketToObserver = new HashSet();
@@ -435,14 +443,12 @@ public class NodeService implements UDPService {
                                 config.getId(), input));
 
 
-                    // TODO: use stripedInput
                     while (this.running.get()) {
                         // if input was already processed after agreement, there's
                         // nothing to do besides getting a new value
                         // TODO (dsa): probably no longer need this (because beta
                         // ensures that accept value was not already decided and is valid)
                         
-                        // TODO
                         // Input contains the proof, which might differ from mine
                         // so this should be checked with input without last part
                         if (history.containsKey(strippedInput)) {
@@ -490,8 +496,6 @@ public class NodeService implements UDPService {
                         // check if this instance was already decided upon. if it
                         // was, then no need to wait, otherwise wait for more
                         // decisions
-                        // TODO (dsa): probably no longer need this (because only
-                        // one consensus is executed at a time)
                         Decision d;
                         while (!bucket.contains(currentLambda.get())) {
                             LOGGER.log(Level.INFO,
