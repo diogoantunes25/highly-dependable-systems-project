@@ -104,6 +104,9 @@ public class Instanbul {
 	// Timer required by IBFT
 	private Optional<Timer> timer = Optional.empty();
 
+	// Round for which have Pre Prepared
+	private Set<Integer> havePrePrepared = new HashSet<>();
+
 	// Timer ids for each round
 	// The semantics are:
 	//	- if there's no entry for r, timer not stopped
@@ -602,6 +605,11 @@ public class Instanbul {
 			throw new RuntimeException("Should not be processing PREPARE message in wrong round");
 		}
 
+		// Already pre prepared for this round
+		if (this.havePrePrepared.contains(round)) {
+			return new ArrayList<>();
+		}
+
 		int senderMessageId = message.getMessageId();
 
 		PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
@@ -621,8 +629,6 @@ public class Instanbul {
 					config.getId(), senderId, this.lambda, round));
 		    return new ArrayList<>();
 		}
-
-		
 
 		// Verify that the justification is valid
 		if (!this.justifyPrePrepare(round, value, prePrepareMessage.getJustificationPrepares(), prePrepareMessage.getJustificationRoundChanges())) {
@@ -648,6 +654,11 @@ public class Instanbul {
 			return new ArrayList<>();
 		}
 
+
+		this.havePrePrepared.add(round);
+
+		// Start timer for this round
+		this.startTimer(getTimeout(this.ri));
 
 		// Broadcast Prepare (labmda, round, value)
 		return IntStream.range(0, this.config.getN())
@@ -684,11 +695,6 @@ public class Instanbul {
 
 		// Doesn't add duplicate messages
 		prepareMessages.addMessage(message);
-
-		// Set instance value
-		if (!this.inputValuei.isPresent()) {
-			this.inputValuei = Optional.of(value);
-		}
 
 		// If already prepared, won't prepare again
 		if (this.pri.isPresent()) {

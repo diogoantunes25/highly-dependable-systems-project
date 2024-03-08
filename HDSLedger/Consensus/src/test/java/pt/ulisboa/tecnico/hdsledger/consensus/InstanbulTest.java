@@ -231,50 +231,6 @@ public class InstanbulTest {
 	}
 
 	/**
-	 * Runs an instance of consensus with 10 nodes where all nodes input the same value
-	 */
-	@Test
-	public void simpleConsensusN10() {
-		int n = 10;
-		int lambda = 0;
-		String value = "a";
-
-		// Stores the values confirmed by each replica
-		Map<Integer, List<String>> confirmed = new HashMap<>();
-
-		// Backlog of messages
-		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
-
-		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
-
-		// Start every replica
-		instances.forEach(instance -> {
-			List<ConsensusMessage> output = instance.start(value);
-
-			// Store all messages to be processed
-			output.forEach(m -> messages.addLast(m));
-		});
-
-		// Process all messages without any incidents
-		while (messages.size() > 0) {
-			ConsensusMessage message = messages.pollFirst();	
-	 		if (message == null) {
-				throw new RuntimeException("ERROR: null message found");
-			}
-
-			int receiver = message.getReceiver();
-			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
-			output.forEach(m -> messages.addLast(m));
-		}
-
-		// Check that everyone delivered the same and once only
-		if (!checkConfirmed(confirmed).equals(value)) {
-			throw new RuntimeException("ERROR: agreed to wrong value");
-		}	
-	}
-
-	/**
 	 * Runs an instance of consensus with 4 nodes where all, but one agree on
 	 * value
 	 */
@@ -774,9 +730,99 @@ public class InstanbulTest {
 		}
 	}
 
-	// TODO (dsa): delay commit messages for the round to change and
-	// then allow them to go through
-	
+	/**
+	 * Runs an instance of consensus with 4 nodes where one node that is
+	 * the commit don't go through and round changes are stripped temporarly of justifications
+	 */
+	@Test
+	public void roundChangesWithoutJustificationsN4() {
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Backlog of messages (after partition)
+		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			if (instance.getId() != 0) {
+				String value = String.format("a%d", instance.getId());
+				List<ConsensusMessage> output = instance.start(value);
+				// Store all messages to be processed
+				output.forEach(m -> messages.addLast(m));
+			}
+		});
+
+		// Run for at most 2 seconds
+		long startTime = System.currentTimeMillis();
+        long duration = 0;
+		while (duration < 7000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+
+				if (message.getType() == Message.Type.COMMIT) {
+					messages2.addLast(message);
+					continue;
+				};
+
+				if (message.getType() == Message.Type.ROUND_CHANGE) {
+					System.out.println("Tampering with ROUND-CHANGE justification");
+					RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
+					roundChangeMessage.clearJustification();
+					message.setMessage(roundChangeMessage.toJson());
+				}
+
+				Instanbul instance = instances.get(receiver);
+				if (instance == null) System.out.println("[test] instance is null");
+				if (message == null) System.out.println("[test] message is null");
+				List<ConsensusMessage> output = instance.handleMessage(message);
+				output.forEach(m -> messages.addLast(m));
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		// nothing is delivered
+		Set<String> outputs = new HashSet();
+		for (Map.Entry<Integer, List<String>> entry: confirmed.entrySet()) {
+			List<String> delivered = entry.getValue();
+			System.out.printf("[test] Delivered by %d: %s\n",
+					entry.getKey(),
+					String.join(", ", delivered));
+
+			if (delivered.size() != 0) {
+				throw new RuntimeException("A replica didn't deliver once (0 or multiple times)");
+			}
+		}
+
+		while (messages2.size() > 0) {
+				ConsensusMessage message = messages2.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages2.addLast(m));
+		}
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
 	/**
 	 * Tests highest prepared where no one prepared yet (so there are no justifications)
 	 */

@@ -35,6 +35,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javafx.util.Pair;
 
@@ -121,5 +122,34 @@ public class TimerTest {
         Thread.sleep(timeout + 100);
 
         assertFalse(triggered.get());
+    }
+
+    /**
+     * Test that starts a timer twice, ensure only the first started
+     */
+    @Test
+    public void startTwiceTest() throws InterruptedException{
+
+        Timer timer = new SimpleTimer();
+        int timeout = 1000;
+        int round = 0; 
+        AtomicInteger triggered = new AtomicInteger(0);
+
+        Consumer<Integer> callback = timerId -> {
+            System.out.printf("Timer %d expired\n", timerId);
+            triggered.getAndIncrement();
+        };
+
+        timer.registeTimeoutCallback(callback);
+
+        timer.setTimerToRunning(round, timeout);
+
+        Thread.sleep(timeout + 200);
+
+        timer.setTimerToRunning(round, timeout);
+
+        Thread.sleep(timeout*2);
+
+        assertEquals(triggered.get(), 1);
     }
 }

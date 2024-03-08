@@ -65,7 +65,7 @@ public class RoundChangeMessage {
     }
 
     public Optional<List<ConsensusMessage>> getJustification() {
-        if (present) {
+        if (present && justification != null) {
             return Optional.of(justification);
         }
 
