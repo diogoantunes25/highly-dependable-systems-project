@@ -15,6 +15,8 @@ public class SimpleTimer implements Timer {
 
 	private AtomicInteger id = new AtomicInteger(0);
 
+	private Set<Integer> used = ConcurrentHashMap.newKeySet();
+
 	private Set<Integer> running = ConcurrentHashMap.newKeySet();
 
 	private Queue<Consumer<Integer>> callbacks = new ConcurrentLinkedQueue<>();
@@ -23,30 +25,30 @@ public class SimpleTimer implements Timer {
 
 	}
 
-	public int setTimerToRunning(int timeout) {
-		final int myId = id.getAndIncrement();
+	public void setTimerToRunning(int timerId, int timeout) {
+		boolean isNew = used.add(timerId);
+		running.add(timerId);
 
-		running.add(myId);
+		if (isNew) {
+			Thread t = new Thread(() -> {
+				try {
+					Thread.sleep(timeout);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
 
-		Thread t = new Thread(() -> {
-			try {
-				Thread.sleep(timeout);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+				// If timer was not cancelled, notify callbacks
+				if (this.running.contains(timerId)) {
+					this.callbacks.forEach(c -> c.accept(timerId));
+				}
+			});
 
-			// If timer was not cancelled, notify callbacks
-			if (this.running.contains(myId)) {
-				this.callbacks.forEach(c -> c.accept(myId));
-			}
-		});
-
-		t.start();
-
-		return myId;
+			t.start();
+		}
 	}
 
 	public void setTimerToStopped(int id) {
+		used.add(id);
 		running.remove(id);
 	}
 

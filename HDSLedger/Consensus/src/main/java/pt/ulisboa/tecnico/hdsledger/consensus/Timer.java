@@ -10,7 +10,7 @@ public interface Timer {
 	 * Starts timer that times out after `timeout` milliseconds.
 	 * @return timer id
 	*/
-	public int setTimerToRunning(int timeout);
+	public void setTimerToRunning(int timerId, int timeout);
 
 	/**
 	 * Stops timer

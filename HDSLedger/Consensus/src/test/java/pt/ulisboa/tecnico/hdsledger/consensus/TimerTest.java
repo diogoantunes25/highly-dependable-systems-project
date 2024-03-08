@@ -40,20 +40,20 @@ import javafx.util.Pair;
 
 public class TimerTest {
 
-	/**
-	 * Simple test that starts a timer and checks if it triggers the callback
-	 */
-	@Test
-	public void simpleTest() throws InterruptedException{
+    /**
+     * Simple test that starts a timer and checks if it triggers the callback
+     */
+    @Test
+    public void simpleTest() throws InterruptedException {
 
         Timer timer = new SimpleTimer();
-        Integer timeout = 1000;
-        Integer id = timer.setTimerToRunning(timeout);
+        int timeout = 1000;
+        int round = 0; 
+        timer.setTimerToRunning(round, timeout);
         AtomicBoolean triggered = new AtomicBoolean(false);
 
         Consumer<Integer> callback = timerId -> {
-            //System.out.printf("Timer %d expired\n", timerId);
-            assertEquals(timerId, id);
+            System.out.printf("Timer %d expired\n", timerId);
             triggered.set(true);
         };
 
@@ -66,62 +66,60 @@ public class TimerTest {
         Thread.sleep(timeout);
 
         assertTrue(triggered.get());
-	}
+    }
 
     /**
-	 * Test that starts a timer, stops it and checks if it triggers the callback
-	 */
+     * Test that starts a timer, stops it and checks if it triggers the callback
+     */
+        @Test
+        public void stopTimerTest() throws InterruptedException{
+
+            Timer timer = new SimpleTimer();
+            int timeout = 1000;
+            int round = 0; 
+            AtomicBoolean triggered = new AtomicBoolean(false);
+
+            Consumer<Integer> callback = timerId -> {
+                //System.out.printf("Timer %d expired\n", timerId);
+                triggered.set(true);
+            };
+
+            timer.registeTimeoutCallback(callback);
+
+            timer.setTimerToRunning(round, timeout);
+
+            timer.setTimerToStopped(round);
+
+            Thread.sleep(timeout + 100);
+
+            assertFalse(triggered.get());
+
+        }
+
+    /**
+     * Test that starts a timer, stops it, starts it again and checks if it triggers the callback
+     */
     @Test
-	public void stopTimerTest() throws InterruptedException{
+    public void stopAndStartTest() throws InterruptedException{
 
         Timer timer = new SimpleTimer();
-        Integer timeout = 1000;
+        int timeout = 1000;
+        int round = 0; 
         AtomicBoolean triggered = new AtomicBoolean(false);
-        
-        Consumer<Integer> callback = timerId -> {
-            //System.out.printf("Timer %d expired\n", timerId);
-            triggered.set(true);
-        };
-        
-        timer.registeTimeoutCallback(callback);
-        
-        Integer id = timer.setTimerToRunning(timeout);
-        
-        timer.setTimerToStopped(id);
-        
-        Thread.sleep(timeout + 100);
 
-        assertFalse(triggered.get());
-		
-	}
-
-    /**
-	 * Test that starts a timer, stops it, starts it again and checks if it triggers the callback
-	 */
-    /*@Test
-	public void stopAndStartTest() throws InterruptedException{
-
-        Timer timer = new SimpleTimer();
-        Integer timeout = 1000;
-        AtomicBoolean triggered = new AtomicBoolean(false);
-        
         Consumer<Integer> callback = timerId -> {
             System.out.printf("Timer %d expired\n", timerId);
             triggered.set(true);
         };
-        
+
         timer.registeTimeoutCallback(callback);
 
-        Integer id = timer.setTimerToRunning(timeout);
+        timer.setTimerToStopped(round);
 
-        timer.setTimerToStopped(id);
-        
-        timer.setTimerToRunning(timeout);
-        
+        timer.setTimerToRunning(round, timeout);
+
         Thread.sleep(timeout + 100);
 
         assertFalse(triggered.get());
-		
-	}*/
-	
+    }
 }

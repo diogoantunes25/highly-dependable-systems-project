@@ -110,7 +110,7 @@ public class Instanbul {
 	//	- if there's no entry for r, timer not stopped
 	//	- if there's a non-empty entry for r, timer running with the id inside the optinal
 	//	- if there's an empty entry for r, timer stopped
-	private Map<Integer, Optional<Integer>> roundTimerId = new HashMap<>();
+	// private Map<Integer, Optional<Integer>> roundTimerId = new HashMap<>();
 
 	// Validity verifying function
 	private Predicate<String> beta;
@@ -176,13 +176,9 @@ public class Instanbul {
 		if (this.timer.isPresent()) {
 
 			// If I haven't started a timer for this round
-			if (!roundTimerId.containsKey(this.ri)) {
-
-				LOGGER.log(Level.WARNING, MessageFormat.format("{0} - Starting timer for round {1} that expires in {2} milliseconds",
-							config.getId(), this.lambda, timeout));
-				int timerId = this.timer.get().setTimerToRunning(timeout);
-				roundTimerId.put(this.ri, Optional.of(timerId));
-			}
+			LOGGER.log(Level.WARNING, MessageFormat.format("{0} - Starting timer for round {1} that expires in {2} milliseconds",
+						config.getId(), this.lambda, timeout));
+			this.timer.get().setTimerToRunning(this.ri, timeout);
 		} else {
 			LOGGER.log(Level.WARNING, MessageFormat.format("{0} - No timer available - liveness cannot be guaranteed",
 						config.getId(), this.lambda));
@@ -195,15 +191,8 @@ public class Instanbul {
 	private void stopTimer(int round) {
 		// If I have a timer
 		if (this.timer.isPresent()) {
-			// If I haven't started a timer for this round
-			if (!roundTimerId.containsKey(round)) {
-				// nothing to stop in this case, because it was not running
-			} else {
-				// actually stop timer
-				this.timer.get().setTimerToStopped(roundTimerId.get(round).get());
-			}
-
-			roundTimerId.put(round, Optional.empty());
+			// actually stop timer
+			this.timer.get().setTimerToStopped(round);
 		} else {
 			LOGGER.log(Level.WARNING, MessageFormat.format("{0} - No timer available - liveness cannot be guaranteed",
 						config.getId(), this.lambda));
@@ -213,15 +202,15 @@ public class Instanbul {
 	/**
 	 * Returns round that started timer with provided timerId
 	*/
-	private Optional<Integer> getRoundWithTimerId(int timerId) {
-		for (Map.Entry<Integer, Optional<Integer>> entry : roundTimerId.entrySet()) {
-			Optional<Integer> value = entry.getValue();
-			if (value.isPresent() && value.get() == timerId) {
-				return Optional.of(entry.getKey());
-			}
-		}
-		return Optional.empty(); // Value not found	
-	}
+	// private Optional<Integer> getRoundWithTimerId(int timerId) {
+	// 	for (Map.Entry<Integer, Optional<Integer>> entry : roundTimerId.entrySet()) {
+	// 		Optional<Integer> value = entry.getValue();
+	// 		if (value.isPresent() && value.get() == timerId) {
+	// 			return Optional.of(entry.getKey());
+	// 		}
+	// 	}
+	// 	return Optional.empty(); // Value not found	
+	// }
 
 	/**
 	 * Utility to create PrePrepareMessages
@@ -967,24 +956,13 @@ public class Instanbul {
 	/**
 	 * Handles timer expiration and returns messages to be sent over the network
 	 */
-	public synchronized List<ConsensusMessage> handleTimeout(int timerId) {
-		Optional<Integer> roundOpt = getRoundWithTimerId(timerId);
-
-		if (!roundOpt.isPresent()) {
-			LOGGER.log(Level.INFO,
-					MessageFormat.format(
-						"{0} - Timeout of timer {2} on Consensus Instance {1} that either was stopped or not stated. SHOULD NOT HAPPEN",
-						config.getId(), this.lambda, timerId));
-			return new ArrayList<>();
-		}
-
-		int round = roundOpt.get();
-		
+	public synchronized List<ConsensusMessage> handleTimeout(int round) {
 		if (round != this.ri) {
 			LOGGER.log(Level.WARNING,
 					MessageFormat.format(
 						"{0} - Timeout on Consensus Instance {1}, Round {2} which is not the current round ({3}) - Shouldn't happen",
 						config.getId(), this.lambda, round, this.ri));
+			return new ArrayList<>();
 		}
 
 		this.ri += 1;

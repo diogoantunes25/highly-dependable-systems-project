@@ -12,8 +12,8 @@ public class NotATimerTimer implements Timer {
 
 	public NotATimerTimer() {}
 
-	public int setTimerToRunning(int timeout) {
-		return id.getAndIncrement();
+	public void setTimerToRunning(int timerId, int timeout) {
+		// nop
 	}
 
 	public void setTimerToStopped(int id) {
