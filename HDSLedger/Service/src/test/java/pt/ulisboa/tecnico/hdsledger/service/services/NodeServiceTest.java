@@ -85,8 +85,15 @@ public class NodeServiceTest {
 				.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupServices(int n, int basePort) {
+	private List<String> defaultClientKeys(int n, int nClients) {
+		return IntStream.range(n, n+nClients)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+	}
+
+	List<NodeService> setupServices(int n, int basePort, int nClients) {
 		List<ProcessConfig> configs = defaultConfigs(n, basePort);
+		List<String> clientPks = defaultClientKeys(n, nClients);
 		ProcessConfig[] configsArray = new ProcessConfig[n];
 		configs.toArray(configsArray);	
 		List<Link> links = defaultLinks(n, configs);
@@ -95,7 +102,7 @@ public class NodeServiceTest {
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
 			Link link = links.get(i);
-			services.add(new NodeService(link, config, configsArray));
+			services.add(new NodeService(link, config, configsArray, clientPks));
 		}
 
 		return services;
@@ -121,12 +128,14 @@ public class NodeServiceTest {
 	@Test
 	void singleExecutionTest() {
 		int n = 4;
+		int nClients = 1;
 		int basePort = 10000;
-		String nonce = "123";
+		int clientId = n;
+		int seq = 134;
 		String cmd = "a";
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort);
+		List<NodeService> services = setupServices(n, basePort, nClients);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -134,7 +143,7 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(nonce, cmd));
+		services.forEach(service -> service.startConsensus(clientId, seq, cmd));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -168,6 +177,7 @@ public class NodeServiceTest {
 	@Test
 	void consecutiveExecutionTest() {
 		int n = 4;
+		int nClients = 1;
 		int basePort = 10020;
 		String nonce1 = "123";
 		String cmd1 = "a";
@@ -176,7 +186,7 @@ public class NodeServiceTest {
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort);
+		List<NodeService> services = setupServices(n, basePort, nClients);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -222,6 +232,7 @@ public class NodeServiceTest {
 	@Test
 	void consecutiveExecutionDisagreementTest() {
 		int n = 4;
+		int nClients = 1;
 		int basePort = 10040;
 		String nonce1 = "123";
 		String cmd1 = "a";
@@ -230,7 +241,7 @@ public class NodeServiceTest {
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort);
+		List<NodeService> services = setupServices(n, basePort, nClients);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -273,14 +284,18 @@ public class NodeServiceTest {
 			Slot s2 = confirmedSlots.get(i).removeFirst();
 
 			assert(
-				(s1_0.getNonce().equals(s1.getNonce()) &&
+				(s1_0.getClientId() == s1.getClientId() &&
+				s1_0.getSeq() == s1.getSeq() &&
 				s1_0.getMessage().equals(s1.getMessage()) &&
-				s2_0.getNonce().equals(s2.getNonce()) &&
+				s2_0.getClientId() == s2.getClientId() &&
+				s2_0.getSeq() == s2.getSeq() &&
 				s2_0.getMessage().equals(s2.getMessage()))
 				||
-				(s2_0.getNonce().equals(s1.getNonce()) &&
+				(s2_0.getClientId() == s1.getClientId() &&
+				s2_0.getSeq() == s1.getSeq() &&
 				s2_0.getMessage().equals(s1.getMessage()) &&
-				s1_0.getNonce().equals(s2.getNonce()) &&
+				s1_0.getClientId() == s2.getClientId() &&
+				s1_0.getSeq() == s2.getSeq() &&
 				s1_0.getMessage().equals(s2.getMessage()))
 			);
 		}
@@ -303,15 +318,18 @@ public class NodeServiceTest {
 	@Test
 	void lateInputTest() {
 		int n = 4;
+		int nClients = 1;
 		int basePort = 10060;
-		String nonce1 = "123";
+		int clientId1 = n;
+		int seq1 = 12341;
 		String cmd1 = "a";
-		String nonce2 = "1234";
+		int clientId2 = n;
+		int seq2 = 123;
 		String cmd2 = "b";
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort);
+		List<NodeService> services = setupServices(n, basePort, nClients);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -321,8 +339,8 @@ public class NodeServiceTest {
 
 		services.forEach(service -> {
 			if (service.getId() != 0) {
-				service.startConsensus(nonce1, cmd1);
-				service.startConsensus(nonce2, cmd2);
+				service.startConsensus(clientId1, seq1, cmd1);
+				service.startConsensus(clientId2, seq2, cmd2);
 			}
 		});
 
@@ -337,8 +355,8 @@ public class NodeServiceTest {
 
 		System.out.println("[test] all but 0 got somewhere");
 
-		services.get(0).startConsensus(nonce2, cmd2);
-		services.get(0).startConsensus(nonce1, cmd1);
+		services.get(0).startConsensus(clientId2, seq2, cmd2);
+		services.get(0).startConsensus(clientId1, seq1, cmd1);
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness

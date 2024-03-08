@@ -31,8 +31,8 @@ public class HDSLedgerService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
     
-    // Clients configurations
-    private final ProcessConfig[] clientsConfig;
+    // Other participants configurations configurations
+    private final ProcessConfig[] others;
 
     // Current node config
     private final ProcessConfig config;
@@ -46,8 +46,8 @@ public class HDSLedgerService implements UDPService {
     // Confirmed queue
     private Queue<String> confirmed = new LinkedList<>();
 
-    public HDSLedgerService(ProcessConfig[] clientConfigs, Link link, ProcessConfig config, NodeService nodeService) {
-        this.clientsConfig = clientConfigs;
+    public HDSLedgerService(ProcessConfig[] others, Link link, ProcessConfig config, NodeService nodeService) {
+        this.others = others;
         this.link = link;   
         this.config = config;
         this.nodeService = nodeService;
@@ -67,12 +67,25 @@ public class HDSLedgerService implements UDPService {
     public void append(AppendMessage message) {
         AppendRequest request = message.deserializeAppendRequest();
 
+
         // Send the value to the consensus service
         int sequenceNumber = request.getSequenceNumber();
         int clientId = message.getSenderId();
+
+        if (!message.checkConsistentSig(others[clientId].getPublicKey())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Bad signature from client {1}",
+                        config.getId(), clientId));
+            return;
+        }
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                    "{0} - Append request from client {1} (signature check passed)",
+                    config.getId(), clientId));
+
         String value = request.getValue();
-        String nonce = String.format("%s_%s", clientId, sequenceNumber);
-        nodeService.startConsensus(nonce, value);
+        nodeService.startConsensus(clientId, sequenceNumber, value, message);
     }
 
     /**
@@ -82,16 +95,14 @@ public class HDSLedgerService implements UDPService {
     private void decided(Slot slot) {
 
         int slotId = slot.getSlotId();
-        String nonce = slot.getNonce();
+        int clientId = slot.getClientId();
+        int sequenceNumber = slot.getSeq();
         String value = slot.getMessage();
-        String[] parts = nonce.split("_");
-        int clientId = Integer.parseInt(parts[0]);
-        int sequenceNumber = Integer.parseInt(parts[1]);
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
-                        "{0} - Decided on slot {1} value {2} and nonce {3}",
-                        config.getId(), slotId, value, nonce));
+                        "{0} - Decided on slot {1} value {2}, clientId {3} and sequence number {4}",
+                        config.getId(), slotId, value, clientId, sequenceNumber));
 
         // Send the decided value to the client
         AppendMessage reply = createAppendReplyMessage(config.getId(), clientId, value, sequenceNumber, slotId);

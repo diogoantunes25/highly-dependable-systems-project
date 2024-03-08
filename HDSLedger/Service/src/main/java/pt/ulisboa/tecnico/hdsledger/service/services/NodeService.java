@@ -36,6 +36,11 @@ import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
+
+import com.google.gson.Gson;
 
 public class NodeService implements UDPService {
 
@@ -86,11 +91,15 @@ public class NodeService implements UDPService {
     // thread safety, which is not provided by this thread's property)
     private Optional<List<Thread>> threads = Optional.empty();
 
+    // List of paths to client public keys
+    private List<String> clientPks;
+
     public NodeService(Link link, ProcessConfig config,
-            ProcessConfig[] nodesConfig) {
+            ProcessConfig[] nodesConfig, List<String> clientPks) {
         this.link = link;
         this.config = config;
         this.others = Arrays.asList(nodesConfig);
+        this.clientPks = clientPks;
     }
 
     public ProcessConfig getConfig() {
@@ -105,9 +114,22 @@ public class NodeService implements UDPService {
      * Check that value is valid
      */
     private boolean checkIsValidValue(String value) {
-        // Get client id and check that it's signed
-        // TODO (dsa)
-        return true;
+        Optional<List<String>> parts = parseValue(value);
+        if (!parts.isPresent()) {
+            return false;
+        }
+
+        int clientId = Integer.parseInt(parts.get().get(0));
+        int seq = Integer.parseInt(parts.get().get(1));
+        String cmd = parts.get().get(2);
+        String serializedProof = parts.get().get(3);
+
+        // Check it wasn't proposed yet
+        // TODO
+
+        // Check client signature is valid
+        AppendMessage hmacMessage = (AppendMessage) new Gson().fromJson(serializedProof, AppendMessage.class);
+        return hmacMessage.checkConsistentSig(this.clientPks.get(clientId));
     }
 
     /**
@@ -177,10 +199,13 @@ public class NodeService implements UDPService {
      *
      * @param cmd value to append to state
      * @param nonce should be unique and not contain `::`
+     * @param proof message proving that client did submit the transaction to be appended
      */
-    public synchronized void startConsensus(String nonce, String cmd) {
+    public synchronized void startConsensus(int clientId, int seq, String cmd, AppendMessage proof) {
+        String serializedProof = new Gson().toJson(proof);
+        String value = String.format("%s::%s::%s::%s", clientId, seq, cmd, serializedProof);
+
         // note: add must be used instead of put as it's non-blocking
-        String value = String.format("%s::%s", nonce, cmd);
         inputs.add(value); 
     }
 
@@ -236,7 +261,7 @@ public class NodeService implements UDPService {
         // if not, then it's considered invalid by all valid nodes and discarded
         
         String[] parts = value.split("::");
-        if (parts.length != 2) {
+        if (parts.length != 4) {
             return Optional.empty();
         }
 
@@ -452,12 +477,15 @@ public class NodeService implements UDPService {
                         String value = d.getValue();
                         Optional<List<String>> parts = parseValue(value);
                         if (parts.isPresent()) {
-                            String nonce = parts.get().get(0);
-                            String cmd = parts.get().get(1);
+                            int clientId = Integer.parseInt(parts.get().get(0));
+                            int seq = Integer.parseInt(parts.get().get(1));
+                            String cmd = parts.get().get(2);
+                            // TODO: save proofs (might be needed for compliance for example)
+                            String serializedProof = parts.get().get(3);
                             
                             // update state
                             int slotId = updateState(cmd);
-                            Slot slot = new Slot(slotId, nonce, cmd);
+                            Slot slot = new Slot(slotId, seq, clientId, cmd);
                             history.put(value, slot);
                         } else {
                             // TODO (dsa): raise exception, because this should not happen

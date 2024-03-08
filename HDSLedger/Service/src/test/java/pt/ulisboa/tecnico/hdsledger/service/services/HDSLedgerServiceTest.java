@@ -126,7 +126,7 @@ public class HDSLedgerServiceTest {
 				.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links) {
+	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks) {
 		int n = configs.size();
 		ProcessConfig[] configsArray = new ProcessConfig[n];
 		configs.toArray(configsArray);	
@@ -135,7 +135,7 @@ public class HDSLedgerServiceTest {
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
 			Link link = links.get(i);
-			services.add(new NodeService(link, config, configsArray));
+			services.add(new NodeService(link, config, configsArray, clientPks));
 		}
 
 		return services;
@@ -172,6 +172,12 @@ public class HDSLedgerServiceTest {
 		}
 	}
 
+	private List<String> defaultClientKeys(int n, int nClients) {
+		return IntStream.range(n, n+nClients)
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.collect(Collectors.toList());
+	}
+
 	@Test
 	void HDSLedgerStartsConsensusTest() {
 		int n_Nodes = 4;
@@ -187,7 +193,8 @@ public class HDSLedgerServiceTest {
 		// Setup node service
 		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
 		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
-		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks);
+		List<String> clientPks = defaultClientKeys(n_Nodes, n_Clients);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks);
 
 		// Setup ledger service and client links
 		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);

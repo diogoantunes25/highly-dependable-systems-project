@@ -5,15 +5,19 @@ public class Slot {
     // Slot position in ledger
     private int slotId;
 
-    // Nonce provided to ensure uniqueness
-    private String nonce;
+    // Sequence number provided by client
+    private int seq;
+
+    // Client that proposed command
+    private int clientId;
 
     // State machine command / string to append
     private String message;
 
-    public Slot(int slotId, String nonce, String message) {
+    public Slot(int slotId, int seq, int clientId, String message) {
         this.slotId = slotId;
-        this.nonce = nonce;
+        this.seq = seq;
+        this.clientId = clientId;
         this.message = message;
     }
 
@@ -21,8 +25,12 @@ public class Slot {
         return slotId;
     }
 
-    public String getNonce() {
-        return nonce;
+    public int getClientId() {
+        return clientId;
+    }
+
+    public int getSeq() {
+        return seq;
     }
 
     public String getMessage() {
@@ -33,7 +41,8 @@ public class Slot {
     public String toString() {
         return "Slot{" +
                 "slotId=" + slotId +
-                ", nonce='" + nonce + '\'' +
+                ", seq='" + seq + '\'' +
+                ", clientId='" + clientId + '\'' +
                 ", message='" + message + '\'' +
                 '}';
     }

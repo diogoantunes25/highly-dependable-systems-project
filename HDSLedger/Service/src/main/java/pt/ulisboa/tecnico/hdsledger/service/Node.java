@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.logging.Level;
+import java.util.List;
 import javafx.util.Pair;
 
 public class Node {
@@ -39,6 +40,12 @@ public class Node {
             ProcessConfig ledgerConfig = Arrays.stream(ledgerConfigs).filter(c -> c.getId() == id).findAny().get();
             ProcessConfig nodeConfig = Arrays.stream(nodesConfigs).filter(c -> c.getId() == id).findAny().get();
 
+            // Get client public keys
+            List<String> clientPks = Arrays.stream(ledgerConfigs)
+                .filter(config -> !config.getPort2().isPresent())
+                .map(config -> config.getPublicKey())
+                .collect(Collectors.toList());
+
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node running at {1}:{2};",
                     nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort()));
 
@@ -52,10 +59,8 @@ public class Node {
             // Get a link that has all parties in the system
             Link ledgerLink = new HMACLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
                     AppendMessage.class);
-            // Link ledgerLink = new APLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
-            //          AppendMessage.class);
 
-            NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs);
+            NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs, clientPks);
             HDSLedgerService hdsLedgerService = new HDSLedgerService(ledgerConfigs, ledgerLink, ledgerConfig, nodeService);
             
             nodeService.listen();
