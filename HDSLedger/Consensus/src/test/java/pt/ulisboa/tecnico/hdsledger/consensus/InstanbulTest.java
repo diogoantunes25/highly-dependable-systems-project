@@ -664,6 +664,67 @@ public class InstanbulTest {
 	}
 
 	/**
+	 * Runs an instance of consensus with 4 nodes where network partitions
+	 * for some seconds
+	 */
+	@Test
+	public void networkPartitionN4() {
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Backlog of messages (after partition)
+		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			String value = String.format("a%d", instance.getId());
+			List<ConsensusMessage> output = instance.start(value);
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Run for at most 5 seconds
+		long startTime = System.currentTimeMillis();
+        long duration = 0;
+		while (duration < 5000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				// Don't allow messages to go through
+				messages2.addLast(message);
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		while (messages2.size() > 0) {
+				ConsensusMessage message = messages2.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages2.addLast(m));
+		}
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
+	/**
 	 * Runs an instance of consensus with 4 nodes where messages are invalid
 	 */
 	@Test
