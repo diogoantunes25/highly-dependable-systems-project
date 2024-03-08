@@ -5,6 +5,9 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
@@ -25,6 +28,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.google.gson.Gson;
 
 public class NodeServiceTest {
 
@@ -125,6 +130,17 @@ public class NodeServiceTest {
 		}
 	}
 
+	private static AppendMessage getDefaultProof(int clientId, int seq, String cmd) {
+		AppendRequest appendRequest = new AppendRequest(cmd, seq);
+
+        AppendMessage message = new AppendMessage(clientId, Message.Type.APPEND_REQUEST, 0);
+        message.setMessage(new Gson().toJson(appendRequest));
+        message.signSelf(String.format("/tmp/priv_%d.key", clientId));
+
+        return message;
+
+	}
+
 	@Test
 	void singleExecutionTest() {
 		int n = 4;
@@ -133,6 +149,7 @@ public class NodeServiceTest {
 		int clientId = n;
 		int seq = 134;
 		String cmd = "a";
+		AppendMessage proof = getDefaultProof(clientId, seq, cmd);
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
 		List<NodeService> services = setupServices(n, basePort, nClients);
@@ -143,7 +160,7 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(clientId, seq, cmd));
+		services.forEach(service -> service.startConsensus(clientId, seq, cmd, proof));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -162,7 +179,8 @@ public class NodeServiceTest {
 			assertEquals(1, confirmedSlots.get(i).size());
 			Slot s = confirmedSlots.get(i).removeFirst();
 			assertEquals(s.getSlotId(), 1);
-			assertEquals(s.getNonce(), nonce);
+			assertEquals(s.getClientId(), clientId);
+			assertEquals(s.getSeq(), seq);
 			assertEquals(s.getMessage(), cmd);
 		}
 		
@@ -179,10 +197,17 @@ public class NodeServiceTest {
 		int n = 4;
 		int nClients = 1;
 		int basePort = 10020;
-		String nonce1 = "123";
+
+		int clientId1 = n;
+		int seq1 = 13241;
 		String cmd1 = "a";
-		String nonce2 = "1234";
+		AppendMessage proof1 = getDefaultProof(clientId1, seq1, cmd1);
+
+		int clientId2 = n;
+		int seq2 = 13223;
 		String cmd2 = "b";
+		AppendMessage proof2 = getDefaultProof(clientId2, seq2, cmd2);
+
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
@@ -194,8 +219,8 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(nonce1, cmd1));
-		services.forEach(service -> service.startConsensus(nonce2, cmd2));
+		services.forEach(service -> service.startConsensus(clientId1, seq1, cmd1, proof1));
+		services.forEach(service -> service.startConsensus(clientId2, seq2, cmd2, proof2));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -214,9 +239,13 @@ public class NodeServiceTest {
 			assertEquals(2, confirmedSlots.get(i).size());
 			Slot s1 = confirmedSlots.get(i).removeFirst();
 			Slot s2 = confirmedSlots.get(i).removeFirst();
-			assertEquals(nonce1, s1.getNonce());
-			assertEquals(nonce2, s2.getNonce());
+
+			assertEquals(clientId1, s1.getClientId());
+			assertEquals(seq1, s1.getSeq());
 			assertEquals(cmd1, s1.getMessage());
+
+			assertEquals(clientId2, s2.getClientId());
+			assertEquals(seq2, s2.getSeq());
 			assertEquals(cmd2, s2.getMessage());
 		}
 		
@@ -234,10 +263,16 @@ public class NodeServiceTest {
 		int n = 4;
 		int nClients = 1;
 		int basePort = 10040;
-		String nonce1 = "123";
+
+		int clientId1 = n;
+		int seq1 = 13241;
 		String cmd1 = "a";
-		String nonce2 = "1234";
+		AppendMessage proof1 = getDefaultProof(clientId1, seq1, cmd1);
+
+		int clientId2 = n;
+		int seq2 = 13223;
 		String cmd2 = "b";
+		AppendMessage proof2 = getDefaultProof(clientId2, seq2, cmd2);
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
@@ -252,11 +287,11 @@ public class NodeServiceTest {
 		// Start consensus with different order - first half starts the first consensus instance with cmd1, second half with cmd2
 		services.forEach(service -> {
 			if (service.getId() < n/2) {
-				service.startConsensus(nonce1, cmd1);
-				service.startConsensus(nonce2, cmd2);
+				service.startConsensus(clientId1, seq1, cmd1, proof1);
+				service.startConsensus(clientId2, seq2, cmd2, proof2);
 			} else {
-				service.startConsensus(nonce2, cmd2);
-				service.startConsensus(nonce1, cmd1);
+				service.startConsensus(clientId2, seq2, cmd2, proof2);
+				service.startConsensus(clientId1, seq1, cmd1, proof1);
 			}
 		});
 
@@ -320,12 +355,16 @@ public class NodeServiceTest {
 		int n = 4;
 		int nClients = 1;
 		int basePort = 10060;
+
 		int clientId1 = n;
-		int seq1 = 12341;
+		int seq1 = 13241;
 		String cmd1 = "a";
+		AppendMessage proof1 = getDefaultProof(clientId1, seq1, cmd1);
+
 		int clientId2 = n;
-		int seq2 = 123;
+		int seq2 = 13223;
 		String cmd2 = "b";
+		AppendMessage proof2 = getDefaultProof(clientId2, seq2, cmd2);
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
@@ -339,8 +378,8 @@ public class NodeServiceTest {
 
 		services.forEach(service -> {
 			if (service.getId() != 0) {
-				service.startConsensus(clientId1, seq1, cmd1);
-				service.startConsensus(clientId2, seq2, cmd2);
+				service.startConsensus(clientId1, seq1, cmd1, proof1);
+				service.startConsensus(clientId2, seq2, cmd2, proof2);
 			}
 		});
 
@@ -355,8 +394,8 @@ public class NodeServiceTest {
 
 		System.out.println("[test] all but 0 got somewhere");
 
-		services.get(0).startConsensus(clientId2, seq2, cmd2);
-		services.get(0).startConsensus(clientId1, seq1, cmd1);
+		services.get(0).startConsensus(clientId2, seq2, cmd2, proof2);
+		services.get(0).startConsensus(clientId1, seq1, cmd1, proof1);
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -377,14 +416,18 @@ public class NodeServiceTest {
 		Slot s1_0 = confirmedSlots.get(0).removeFirst();
 		Slot s2_0 = confirmedSlots.get(0).removeFirst();
 		assert(
-				(nonce1.equals(s1_0.getNonce()) &&
+				(seq1 == s1_0.getSeq() &&
+				 clientId1 == s1_0.getClientId() &&
 				 cmd1.equals(s1_0.getMessage()) &&
-				 nonce2.equals(s2_0.getNonce()) &&
-				 cmd2.equals(s2_0.getMessage()))
+				 seq2 == s2_0.getSeq() &&
+				 clientId2 == s2_0.getClientId() &&
+				 cmd2.equals(s2_0.getMessage())
 				||
-				(nonce2.equals(s1_0.getNonce()) &&
+				(seq2 == s1_0.getSeq()) &&
+				 clientId2 == s1_0.getClientId() &&
 				 cmd2.equals(s1_0.getMessage()) &&
-				 nonce1.equals(s2_0.getNonce()) &&
+				 seq1 == s2_0.getSeq() &&
+				 clientId1 == s2_0.getClientId() &&
 				 cmd1.equals(s2_0.getMessage()))
 			  );
 
@@ -393,8 +436,10 @@ public class NodeServiceTest {
 			assertEquals(2, confirmedSlots.get(i).size());
 			Slot s1 = confirmedSlots.get(i).removeFirst();
 			Slot s2 = confirmedSlots.get(i).removeFirst();
-			assertEquals(nonce1, s1.getNonce());
-			assertEquals(nonce2, s2.getNonce());
+			assertEquals(seq1, s1.getSeq());
+			assertEquals(seq2, s2.getSeq());
+			assertEquals(clientId1, s1.getClientId());
+			assertEquals(clientId2, s2.getClientId());
 			assertEquals(cmd1, s1.getMessage());
 			assertEquals(cmd2, s2.getMessage());
 		}
@@ -409,4 +454,5 @@ public class NodeServiceTest {
 	}
 
 	// TODO: add tests with previous round messages
+	// TODO: add tests where client sends bad signatures
 }

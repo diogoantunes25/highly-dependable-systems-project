@@ -231,7 +231,8 @@ public class HDSLedgerServiceTest {
 			assertEquals(1, confirmedSlots.get(i).size());
 			Slot s = confirmedSlots.get(i).removeFirst();
 			assertEquals(s.getSlotId(), 1);
-			assertEquals(s.getNonce(), String.format("%s_%s", clientId, seq));
+			assertEquals(s.getClientId(), clientId);
+			assertEquals(s.getSeq(), seq);
 			assertEquals(s.getMessage(), cmd);
 		}
 		

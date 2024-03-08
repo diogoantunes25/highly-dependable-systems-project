@@ -124,12 +124,24 @@ public class NodeService implements UDPService {
         String cmd = parts.get().get(2);
         String serializedProof = parts.get().get(3);
 
+        int n = this.others.size();
+        if (clientId < n) {
+            LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for append was requested for client with ID smaller than n, which is wrong (value is {1})",
+                    config.getId(), value));
+        }
+
+        LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {2}, message {1} starting",
+                config.getId(), value, clientId));
+
         // Check it wasn't proposed yet
         // TODO
 
         // Check client signature is valid
         AppendMessage hmacMessage = (AppendMessage) new Gson().fromJson(serializedProof, AppendMessage.class);
-        return hmacMessage.checkConsistentSig(this.clientPks.get(clientId));
+
+        LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {1} - getting key at position {2}",
+                config.getId(), clientId, clientId-n));
+        return hmacMessage.checkConsistentSig(this.clientPks.get(clientId - n));
     }
 
     /**
