@@ -229,32 +229,14 @@ public class NodeService implements UDPService {
      * Thread-safe (but not mutual exclusion region)
      */
     private void handleMessage(ConsensusMessage message) {
-        // All methods for the same instance are synchronized, which motivates
-        // moving all crypto out of the instance methods
-
-        // For this reason all messages that go into the instances have all
-        // signatures (in both the message and the justification signed) so
-        // that no signature check is required inside the instance (the method
-        // is still in Instanbul class to ensure proper encapsulation)
-
-        if (!Instanbul.checkSignature(message)) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                        "{0} - Node service detected message with bad signature, not telling instance",
-                        config.getId()));
-            return;
-        }
-
         int lambda = message.getConsensusInstance();
         Instanbul instance = getInstance(lambda);
 
         // Input into state machine
         List<ConsensusMessage> output = instance.handleMessage(message); 
-
-        // Sign and dispatch messages
-        output.stream()
-            .map(m -> Instanbul.sign(m, this.config.getPrivateKey()))
-            .forEach(m -> link.send(m.getReceiver(), m));
+        
+        // Dispatch messages
+        output.stream().forEach(m -> link.send(m.getReceiver(), m));
     }
 
     /**

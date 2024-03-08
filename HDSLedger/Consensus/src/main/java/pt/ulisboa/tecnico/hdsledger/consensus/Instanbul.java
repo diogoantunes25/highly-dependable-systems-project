@@ -27,12 +27,7 @@ import javafx.util.Pair;
 
 /**
  * Instance of Instanbul consensus protocol.
- * It's thread safe (per instance) - this is ensured by having all public methods
- * be synchronized (or do simple operations on thread safe objects).
- * Assumes that all messages that come into the instance have had their signatures
- * checked (using checkSignature static method).
- * Also returns messages unsigned and expected user to sign them properly once
- * returns (using sign static method).
+ * It's thread safe (per instance)
  */
 public class Instanbul {
 	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
@@ -235,7 +230,7 @@ public class Instanbul {
 			.setReceiver(receiver)
 			.build();
 
-		consensusMessage.signSelf(this.config.getPrivateKey());
+		// consensusMessage.signSelf(this.config.getPrivateKey());
 
 		return consensusMessage;
 	}
@@ -267,21 +262,17 @@ public class Instanbul {
 		// Create round change message with null justification (to sign)
 		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri);
 
+		// I won't sign the message with the justification, but I need to put	
+		// it there so that the one that signs the message can take it out
+		// and put it back in
+		roundChangeMessage.setJustification(justification);
+
 		ConsensusMessage consensusMessage = new ConsensusMessageBuilder(this.config.getId(), Message.Type.ROUND_CHANGE)
 			.setConsensusInstance(instance)
 			.setRound(round)
 			.setMessage(roundChangeMessage.toJson())
 			.setReceiver(receiver)
 			.build();
-
-		// Can't sign round change with justificaction (because I want
-		// to then send ROUND-CHANGE without the justification to get
-		// O(n2) complexity, not O(n3))
-		consensusMessage.signSelf(this.config.getPrivateKey());
-
-		// Now I set the justification and redo the message
-		roundChangeMessage.setJustification(justification);
-		consensusMessage.setMessage(roundChangeMessage.toJson());
 
 		return consensusMessage;
 	}
@@ -314,16 +305,81 @@ public class Instanbul {
 	/**
 	 * Checks signatures in message
 	 */
-	public static boolean checkSignature(ConsensusMessage message) {
+	public static boolean checkSignature(ConsensusMessage message, List<ProcessConfig> others) {
 		return switch (message.getType()) {
 			case PRE_PREPARE -> {
 				// Message itself doesn't need to be signed, but the justifcation
 				// has messages (PREPAREs and ROUND-CHANGEs) that need to be signed
+
+				PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
+
+				Optional<List<ConsensusMessage>> optQp = prePrepareMessage.getJustificationPrepares();
+				Optional<List<ConsensusMessage>> optQrc = prePrepareMessage.getJustificationRoundChanges();
+
+				if (optQrc.isPresent()) {
+					List<ConsensusMessage> Qrc = optQrc.get();
+
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+								"PRE-PREPARE message from {0} check - there are {1} ROUND-CHANGEs", message.getSenderId(), Qrc.size()));
+
+					boolean allMatch = Qrc.stream()
+						.allMatch(m -> {
+							int senderId = m.getSenderId();
+							return m.checkConsistentSig(others.get(senderId).getPublicKey());
+						});
+
+					if (!allMatch) {
+						LOGGER.log(Level.WARNING,
+								MessageFormat.format(
+									"PRE-PREPARE message from {0} rejected because a ROUND-CHANGE was poorly signed - BAD SIGNATURE", message.getSenderId()));
+						yield false;
+					} else {
+						LOGGER.log(Level.WARNING,
+								MessageFormat.format(
+									"PRE-PREPARE message from {0} is being checked ROUND-CHANGE seem to be all correctly signed", message.getSenderId()));
+					}
+				}
+
+				if (optQp.isPresent()) {
+					List<ConsensusMessage> Qp = optQp.get();
+
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+								"PRE-PREPARE message from {0} check - there are {1} PREPAREs", message.getSenderId(), Qp.size()));
+
+					boolean allMatch = Qp.stream()
+						.allMatch(m -> {
+							int senderId = m.getSenderId();
+							return m.checkConsistentSig(others.get(senderId).getPublicKey());
+						});
+
+					if (!allMatch) {
+						LOGGER.log(Level.WARNING,
+								MessageFormat.format(
+									"PRE-PREPARE message from {0} rejected because a PREPARE was poorly signed - BAD SIGNATURE", message.getSenderId()));
+						yield false;
+					} else {
+						LOGGER.log(Level.WARNING,
+								MessageFormat.format(
+									"PRE-PREPARE message from {0} is being checked PREPARE seem to be all correctly signed", message.getSenderId()));
+					}
+				}
+
 				yield true;
 			}
 
 			case PREPARE -> {
 				// Needs to be signed
+
+				int senderId = message.getSenderId();
+				if (!message.checkConsistentSig(others.get(senderId).getPublicKey())) {
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+								"Received PREPARE message from {0} - BAD SIGNATURE", senderId));
+					yield false;
+				}
+
 				yield true;
 			}
 
@@ -333,9 +389,82 @@ public class Instanbul {
 			}
 
 			case ROUND_CHANGE -> {
-				// Needs to be signed and it's justification (PREPAREs also
-				// need to be signed)
-				yield true;
+
+				RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
+
+				// BASIC CONSISTENCY CHECKS
+
+				// If three fields aren't either all set or none set, bad behaviour
+				if (!(roundChangeMessage.getPvi().isPresent() && roundChangeMessage.getPri().isPresent() && roundChangeMessage.getJustification().isPresent())
+						&& !(!roundChangeMessage.getPvi().isPresent() && !roundChangeMessage.getPri().isPresent() && !roundChangeMessage.getJustification().isPresent())) {
+					yield false;
+						}
+
+				// Ony if there's a prepared value do we have to check
+				// justification signatures
+				if (roundChangeMessage.getPvi().isPresent()) {
+					// JUSTIFICATION SIGNATURE CHECKS
+
+					if (!roundChangeMessage.getJustification()
+							.get()
+							.stream()
+							.allMatch(m -> {
+								int prepareSenderId = m.getSenderId();
+								return m.checkConsistentSig(others.get(prepareSenderId).getPublicKey());
+							})) {
+						yield false;
+					}
+				}
+
+				// MESSAGE CHECK
+
+				// Note: this part is particularly subtle because of awkard
+				// pre-existing message code. I couldn't sign the message with the
+				// justification on it (because I later want a RC mensage without
+				// the prepares there). For this reason, I had to create an
+				// entire message, sign it and then add justification. Undoing
+				// this to check signature must be done taking this into account.
+				// (refer to method for creating the round message for further
+				// detail)
+
+				Optional<List<ConsensusMessage>> justification = roundChangeMessage.getJustification();
+
+				// Note that ROUND-MESSAGE might not have any justification
+				// even though it has a value (because justification for round
+				// change messages is done as a set, what matters is that the
+				// set as a whole as the required PREPARE and they are all valid)
+
+				roundChangeMessage.clearJustification();
+				message.setMessage(roundChangeMessage.toJson());
+
+				// Now the message is as it was upon signing (so we can check signature)
+				int senderId = message.getSenderId();
+				boolean result = message.checkConsistentSig(others.get(senderId).getPublicKey());
+
+				if (justification.isPresent()) {
+					// Check each message in justification of round change
+					// Note that is not enough that we check when we receive prepares
+					// because these PREPARES might not have been received yet
+
+					// I could just filter out the badly signed ones, but
+					// that is more cumbersome and it only happens if sender
+					// is byzantine, so I won't do it - all must be correct
+					// then
+
+					boolean allPreparesGood = justification.get().stream()
+						.filter(m -> m.getType() == Message.Type.PREPARE)
+						.allMatch(m -> m.checkConsistentSig(others.get(m.getSenderId()).getPublicKey()));
+
+					if (!allPreparesGood) {
+						result = false;
+					}
+				}
+
+				// Undo changes made
+				roundChangeMessage.setJustification(justification);
+				message.setMessage(roundChangeMessage.toJson());
+
+				yield result;
 			}
 
 			default -> {
@@ -351,16 +480,16 @@ public class Instanbul {
 	 * Signs messages that required signing
 	 * @return returns signed message
 	 */
-	public static ConsensusMessage sign(ConsensusMessage message, String myPublicKeyPath) {
+	public static ConsensusMessage sign(ConsensusMessage message, String myPrivateKeyPath) {
 		return switch (message.getType()) {
 			case PRE_PREPARE -> {
-				// Message itself doesn't need to be signed, but the justifcation
-				// has messages (PREPAREs and ROUND-CHANGEs) that need to be signed
+				// Message itself doesn't need to be signed
 				yield message;
 			}
 
 			case PREPARE -> {
 				// Needs to be signed
+				message.signSelf(myPrivateKeyPath);
 				yield message;
 			}
 
@@ -370,14 +499,29 @@ public class Instanbul {
 			}
 
 			case ROUND_CHANGE -> {
-				// Needs to be signed and it's justification (PREPAREs also
-				// need to be signed)
+				// Save justification
+				RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
+				Optional<List<ConsensusMessage>> justification = roundChangeMessage.getJustification();
+
+				// Can't sign round change with justificaction (because I want
+				// to then send ROUND-CHANGE without the justification to get
+				// O(n2) complexity, not O(n3))
+				roundChangeMessage.clearJustification();
+				message.setMessage(roundChangeMessage.toJson());
+				message.signSelf(myPrivateKeyPath);
+				LOGGER.log(Level.INFO,
+						MessageFormat.format("Signing checker is signing ROUND-CHANGE: {0}", roundChangeMessage.toJson()));
+
+				// Now I set the justification and redo the message
+				roundChangeMessage.setJustification(justification);
+				message.setMessage(roundChangeMessage.toJson());
+
 				yield message;
 			}
 
 			default -> {
 				LOGGER.log(Level.INFO,
-						MessageFormat.format("Signature checker received unknown message {0}", message.getType()));
+						MessageFormat.format("Signing function received unknown message {0}", message.getType()));
 
 				throw new RuntimeException("Trying to sign unknown message");
 			}
@@ -493,7 +637,6 @@ public class Instanbul {
 					config.getId(), senderId, this.lambda, round));
 
 
-		// Resend in case message hasn't yet reached leader
 		if (receivedPrePrepare.put(round, true) != null) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format(
@@ -538,13 +681,13 @@ public class Instanbul {
 					config.getId(), senderId, this.lambda, round));
 
 		// Message signature check is done as late as possible
-		if (!message.checkConsistentSig(this.others.get(senderId).getPublicKey())) {
-			LOGGER.log(Level.WARNING,
-					MessageFormat.format(
-						"{0} - Received PREPARE message from {1} Consensus Instance {2}, Round {3} - BAD SIGNATURE",
-						config.getId(), senderId, this.lambda, round));
-		    return new ArrayList<>();
-		}
+		// if (!message.checkConsistentSig(this.others.get(senderId).getPublicKey())) {
+		// 	LOGGER.log(Level.WARNING,
+		// 			MessageFormat.format(
+		// 				"{0} - Received PREPARE message from {1} Consensus Instance {2}, Round {3} - BAD SIGNATURE",
+		// 				config.getId(), senderId, this.lambda, round));
+		//     return new ArrayList<>();
+		// }
 
 		// Doesn't add duplicate messages
 		prepareMessages.addMessage(message);
@@ -748,9 +891,6 @@ public class Instanbul {
 							roundChangeMessage.getPri().get()));
 	}
 
-	// TODO (dsa); justifyPrePrepare and justifyRoundChange have some repeated
-	// logic that might be factorizable
-
 	/**
 	 * Approximation of JUSTIFYPREPREPARE from paper
 	 * Assumes each round change and each prepare message was already verified
@@ -896,21 +1036,21 @@ public class Instanbul {
 				MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3}",
 					config.getId(), message.getSenderId(), this.lambda, round));
 
-		if (!roundChangeMessageIsValidSignedIsValid(message)) {
-			LOGGER.log(Level.WARNING,
-					MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - bad signature",
-						config.getId(), message.getSenderId(), this.lambda, round));
+		// if (!roundChangeMessageIsValidSignedIsValid(message)) {
+		// 	LOGGER.log(Level.WARNING,
+		// 			MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - bad signature",
+		// 				config.getId(), message.getSenderId(), this.lambda, round));
+		//
+		// 	return messages;
+		// }
 
-			return messages;
-		}
-
-		if (!sanityCheckRoundChangeMessage(roundChangeMessage)) {
-			LOGGER.log(Level.WARNING,
-					MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
-						config.getId(), message.getSenderId(), this.lambda, round));
-
-			return messages;
-		}
+		// if (!sanityCheckRoundChangeMessage(roundChangeMessage)) {
+		// 	LOGGER.log(Level.WARNING,
+		// 			MessageFormat.format("{0} - Bad ROUND-CHANGE message from {1}: Consensus Instance {2}, Round {3} - either values are inconsistent or are wrong",
+		// 				config.getId(), message.getSenderId(), this.lambda, round));
+		//
+		// 	return messages;
+		// }
 
 		roundChangeMessages.addMessage(message);
 
@@ -1018,10 +1158,35 @@ public class Instanbul {
 		return messages;
 	}
 
+	public List<ConsensusMessage> signAll(List<ConsensusMessage> messages) {
+        return messages.stream()
+            .map(m -> Instanbul.sign(m, this.config.getPrivateKey()))
+			.collect(Collectors.toList());
+	}
+
 	/**
 	 * Handles timer expiration and returns messages to be sent over the network
 	 */
-	public synchronized List<ConsensusMessage> handleTimeout(int round) {
+	public List<ConsensusMessage> handleTimeout(int round) {
+		return this.signAll(this._handleTimeout(round));
+	}
+
+	/**
+	 * Handles protocol messages and returns messages to be sent over the network
+	 */
+	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+        if (!Instanbul.checkSignature(message, this.others)) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Detected message with bad signature from {1} in {2} message, ignoring",
+                        config.getId(), message.getSenderId(), message.getType()));
+            return new ArrayList<>();
+        }
+
+		return this.signAll(this._handleMessage(message));
+	}
+	private synchronized List<ConsensusMessage> _handleTimeout(int round) {
+
 		if (round != this.ri) {
 			LOGGER.log(Level.WARNING,
 					MessageFormat.format(
@@ -1046,10 +1211,7 @@ public class Instanbul {
 			.collect(Collectors.toList());
 	}
 
-	/**
-	 * Handles protocol messages and returns messages to be sent over the network
-	 */
-	public synchronized List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+	private synchronized List<ConsensusMessage> _handleMessage(ConsensusMessage message) {
 		int mround = message.getRound();
 
 		return switch (message.getType()) {
