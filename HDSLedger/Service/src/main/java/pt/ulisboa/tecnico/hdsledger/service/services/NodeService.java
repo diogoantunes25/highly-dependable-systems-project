@@ -280,6 +280,36 @@ public class NodeService implements UDPService {
         return Optional.of(Arrays.asList(parts));
     }
 
+    /*
+     * Takes string of form nonce::command and returns and Option with [nonce; command]
+     * if it's in valid format, otherwise returns empty option.
+     * */
+    public static Optional<List<String>> parseSrippedValue(String value) {
+        // Value is always of the form nonce::m if is proposed by correct process
+        // if not, then it's considered invalid by all valid nodes and discarded
+        
+        String[] parts = value.split("::");
+        if (parts.length != 3) {
+            return Optional.empty();
+        }
+
+        return Optional.of(Arrays.asList(parts));
+    }
+
+    public static Optional<String> stripProof(String value) {
+        Optional<List<String>> partsOpt = parseValue(value);
+
+        if (!partsOpt.isPresent()) {
+            return Optional.empty();
+        }
+
+        List<String> parts = partsOpt.get();
+
+        String stripped = String.format("%s::%s::%s", parts.get(0), parts.get(1), parts.get(2));
+
+        return Optional.of(stripped);
+    }
+
     /**
      * Updates state and returns slot position for value
      * Non thread-safe.
@@ -393,31 +423,37 @@ public class NodeService implements UDPService {
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
                     String input = this.inputs.take();
+                    String strippedInput = stripProof(input).get();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Got input {1}",
                                 config.getId(), input));
 
 
+                    // TODO: use stripedInput
                     while (this.running.get()) {
                         // if input was already processed after agreement, there's
                         // nothing to do besides getting a new value
                         // TODO (dsa): probably no longer need this (because beta
                         // ensures that accept value was not already decided and is valid)
-                        if (history.containsKey(input)) {
+                        
+                        // TODO
+                        // Input contains the proof, which might differ from mine
+                        // so this should be checked with input without last part
+                        if (history.containsKey(strippedInput)) {
 
                             // if not notified observers, notify
                             // (it's possible for a value to be processed, but
                             // the clients not notified if the input came late)
-                            if (!acketToObserver.contains(input)) {
-                                Slot slot = history.get(input);
+                            if (!acketToObserver.contains(strippedInput)) {
+                                Slot slot = history.get(strippedInput);
                                 LOGGER.log(Level.INFO,
                                         MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
                                             config.getId(), input, slot.getSlotId()));
                                 for (Consumer<Slot> obs: this.observers) {
                                     obs.accept(slot);
                                 }
-                                acketToObserver.add(input);
+                                acketToObserver.add(strippedInput);
                             }
 
                             LOGGER.log(Level.INFO,
@@ -425,6 +461,8 @@ public class NodeService implements UDPService {
                                         config.getId()));
                             // take must be used instead of remove because it's blocking.
                             input = this.inputs.take(); // blocking
+                            strippedInput = stripProof(input).get();
+
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Got input {1}",
                                         config.getId(), input));
@@ -477,7 +515,9 @@ public class NodeService implements UDPService {
 
                         // if this consensus output is duplicate, there's nothing
                         // to be done
-                        if (history.containsKey(d.getValue())) {
+                        String value = d.getValue();
+                        String strippedValue = stripProof(value).get();
+                        if (history.containsKey(strippedValue)) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - History already contained ({1}), skipping for this reason",
                                         config.getId(), d.getValue()));
@@ -486,7 +526,6 @@ public class NodeService implements UDPService {
                         }
 
                         // if it's not duplicate, parse
-                        String value = d.getValue();
                         Optional<List<String>> parts = parseValue(value);
                         if (parts.isPresent()) {
                             int clientId = Integer.parseInt(parts.get().get(0));
@@ -498,7 +537,7 @@ public class NodeService implements UDPService {
                             // update state
                             int slotId = updateState(cmd);
                             Slot slot = new Slot(slotId, seq, clientId, cmd);
-                            history.put(value, slot);
+                            history.put(strippedValue, slot);
                         } else {
                             // TODO (dsa): raise exception, because this should not happen
                             LOGGER.log(Level.INFO,

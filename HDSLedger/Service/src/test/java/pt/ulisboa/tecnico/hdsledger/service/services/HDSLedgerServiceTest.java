@@ -40,6 +40,7 @@ public class HDSLedgerServiceTest {
 		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
 		
 		message.setMessage(new Gson().toJson(appendRequest));
+        message.signSelf(String.format("/tmp/priv_%d.key", id));
 
 		return message;
 	}
@@ -182,7 +183,7 @@ public class HDSLedgerServiceTest {
 	void HDSLedgerStartsConsensusTest() {
 		int n_Nodes = 4;
 		int basePortNode = 20000;
-		int n_Clients = 1;
+		int n_Clients = n_Nodes;
 		int basePortClient = 30000;
 		int basePortHDS = 40000;
 		int clientId = n_Nodes; // must be greater than n-1
@@ -217,7 +218,7 @@ public class HDSLedgerServiceTest {
 		}
 
 		try {
-			Thread.sleep(2000);
+			Thread.sleep(5000);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
