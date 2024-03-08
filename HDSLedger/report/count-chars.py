@@ -6,14 +6,16 @@ with open(file_path, 'r', encoding='utf-8') as file:
     content = file.read()
 
 # Use regex to find all occurrences of \section{...}
-section_matches = re.finditer(r'\\section\{(.*?)\}([\s\S]*?)(?=\\section|\Z)', content)
+# section_matches = re.finditer(r'\\section\{(.*?)\}([\s\S]*?)(?=\\section|\Z)', content)
+# Use regex to find all occurrences of \section{...}, \subsection{...}, and \subsubsection{...}
+section_matches = re.finditer(r'(\\section|\\subsection|\\subsubsection)\{(.*?)\}([\s\S]*?)(?=\\section|\\subsection|\\subsubsection|\Z)', content)
 
 total_character_count = 0
 
 for match in section_matches:
-    # Extract the title and content within \section{...}
-    section_title = match.group(1)
-    section_content = match.group(2)
+    section_type = match.group(1)
+    section_title = match.group(2)
+    section_content = match.group(3)
     
     # Remove white spaces (including spaces, tabs, and newlines)
     section_title_without_spaces = re.sub(r'\s', '', section_title)
@@ -24,7 +26,7 @@ for match in section_matches:
     section_content_character_count = len(section_content_without_spaces)
     
     # Print the count for each section
-    print(f"Section '{section_title}':")
+    print(f"{section_type} '{section_title}':")
     print(f"  Title: {section_title_character_count} characters")
     print(f"  Text: {section_content_character_count} characters")
     
