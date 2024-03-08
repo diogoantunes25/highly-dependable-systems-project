@@ -20,6 +20,8 @@ import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
@@ -224,10 +226,9 @@ public class NodeService implements UDPService {
     /**
      * Handle consensus message 
      * @param message Consensus message
-     * Thread-safe.
+     * Thread-safe (but not mutual exclusion region)
      */
     private void handleMessage(ConsensusMessage message) {
-        // TODO: synchronize in a per instance basis
 
         int lambda = message.getConsensusInstance();
         Instanbul instance = getInstance(lambda);
@@ -337,6 +338,11 @@ public class NodeService implements UDPService {
             // Thread to listen on every request
             Thread networkListener = new Thread(() -> {
                 try {
+                    LOGGER.log(Level.FINER, MessageFormat.format("{0} Message listener - Setting up workers thread pool",
+                        config.getId()));
+
+                    ExecutorService pool = Executors.newCachedThreadPool();
+
                     while (this.running.get()) {
                         LOGGER.log(Level.FINER, MessageFormat.format("{0} Message listener - Trying to get new message",
                                 config.getId()));
@@ -381,7 +387,7 @@ public class NodeService implements UDPService {
                                     }
                                 }
 
-                                handleMessage(comessage);
+                                pool.execute(() -> handleMessage(comessage));
                             }
 
                             case ACK ->

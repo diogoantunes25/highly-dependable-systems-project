@@ -145,7 +145,7 @@ public class Instanbul {
 	/**
 	 * Sets timer to be used by protocol
 	 */
-	public void setTimer(Timer timer) {
+	public synchronized void setTimer(Timer timer) {
 		this.timer = Optional.of(timer);
 	}
 
@@ -163,7 +163,7 @@ public class Instanbul {
 	 * @param observer A function that takes a single argument and returns void
 	 * to be called when the instance delivers
 	 */
-	public void registerObserver(Consumer<String> observer) {
+	public synchronized void registerObserver(Consumer<String> observer) {
 		observers.add(observer);	
 	}
 
