@@ -45,11 +45,17 @@ Can be found inside the `resources/` folder of the `Service` module.
 ```json
 {
     "id": <NODE_ID>,
-    "isLeader": <IS_LEADER>,
     "hostname": "localhost",
     "port": <NODE_PORT>,
+    "port2": <NODE_PORT2>,
+    "N": <NUMBER_OF_NODES>,
+    "publicKeyPath": "<PATH_TO_PUBLIC_KEY>",
+    "privateKeyPath": "<PATH_TO_PRIVATE_KEY>",
 }
 ```
+
+The `port` is the port used by the HDSLedgerService, to receive requests from the 
+client and to respond to them. The `port2` is the port used by the NodeService for the QBFT messages.
 
 ## Dependencies
 
@@ -66,8 +72,7 @@ This should install the following dependencies:
 
 ## Puppet Master
 
-The puppet master is a python script `puppet-master.py` which is responsible for starting the nodes
-of the blockchain.
+The puppet master is a python script `puppet-master.py` which is responsible for starting the nodes of the blockchain.
 The script runs with `kitty` terminal emulator by default since it's installed on the RNL labs.
 
 To run the script you need to have `python3` installed.
@@ -91,25 +96,58 @@ It's also possible to run the project manually by using Maven.
 
 Compile and install all modules using:
 
-```
+```bash
+cd HDSLedger/
 mvn clean install
 ```
 
 ### Execution
+The clients and the blockchain nodes can be mannualy executed using the following command: (one for each terminal window)
 
-Run without arguments
-
-```
+```bash
 cd <module>/
-mvn compile exec:java
+mvn compile exec:java -Dexec.args="<id>"
 ```
 
-Run with arguments
+Where `<module>` is either `Service` or `Client`.
 
+Note: The `id` is the id of the blockchain node or the clients, according to the config file. For simplicity, the first `N-1` ids are for the blockchain nodes and the remaining 
+for the clients.
+
+## Running the tests
+
+To test the system, a lot of tests were implemented. To run everyone of them, use the following command:
+
+```bash
+cd HDSLedger/
+mvn test
 ```
+
+If you only want to run the tests of a specific module, use the following command:
+
+```bash
 cd <module>/
-mvn compile exec:java -Dexec.args="..."
+mvn test
 ```
+
+Where `<module>` is either `Communication`, `Consensus`, `PKI`, or `Service`.
+
+If you want to run a specific test class, use the following command:
+
+```bash
+cd <module>/
+mvn test -Dtest=<test-class>
+```
+
+Where `<test-class>` is the name of the test class you want to run.
+
+If you want to run a specific test of a specific test class, use the following command:
+
+```bash
+cd <module>/
+mvn test -Dtest=<test-class>#<test-method>
+```
+
+Where `<test-method>` is the name of the test method you want to run.
+
 ---
-This codebase was adapted from last year's project solution, which was kindly provided by the following group: [David Belchior](https://github.com/DavidAkaFunky), [Diogo Santos](https://github.com/DiogoSantoss), [Vasco Correia](https://github.com/Vaascoo). We thank all the group members for sharing their code.
-
