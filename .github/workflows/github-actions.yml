@@ -15,7 +15,5 @@ jobs:
           distribution: 'corretto'
       - name: Install dependencies
         run: ./install_deps.sh
-      - name: Compile project
-        run: mvn clean install
       - name: Unit tests
         run: mvn test
