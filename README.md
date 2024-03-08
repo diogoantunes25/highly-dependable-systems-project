@@ -110,7 +110,7 @@ The clients and the replicas can be manually started by running
 
 ```bash
 cd <module>/
-mvn compile exec:java -Dexec.args="<id>"
+mvn exec:java -Dexec.args="<id>"
 ```
 
 Where `<module>` is either `Service` or `Client`.
