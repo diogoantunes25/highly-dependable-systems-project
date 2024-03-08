@@ -49,8 +49,7 @@ consensus algorithm. For this stage, the main goal is to extend an incomplete ve
 of the IBFT  algorithm and use a Public Key Infrastructure (PKI) to ensure the 
 authenticity of the messages exchanged between the nodes.
 
-\section{Modules}
-\subsection{PKI}
+\section{PKI}
 The PKI module is responsible for managing the public and private keys of the nodes. 
 The blockchain members should use the PKI module to self-generate their public and 
 private keys, which are pre-distributed prior to the start of the system. Additionally, 
@@ -64,14 +63,14 @@ secret keys and HMACs for the communication between the nodes.
 % \end{figure}
 
 
-\subsection{Authenticated Perfect Links}
+\section{Authenticated Perfect Links}
 From the Fair-Loss Link abstraction, we built the Authenticated Perfect Link. Each message 
 sent through incorporates a digital signature (DS) that is computed by encrypting the 
 digest of the message with the sender's private key. Upon receiving a message the receiver 
 can then verify the signature and, if it is valid, store the message and reply with an 
 ACK, notifying the sender that the message was received.
 
-\subsection{HMAC Links}
+\section{HMAC Links}
 The HMAC Links are responsible for setting a secure channel between two nodes. Upon creation, 
 the node with lower ID will try to establish a secure channel with the other node. To do so, 
 this node will generate a secret key, sign it and cipher the secret key with the public key of 
@@ -85,29 +84,35 @@ with an ACK, notifying the sender that the message was received.
 This module is used to ensure the integrity and authenticity of the messages exchanged between 
 the nodes.
 
-\subsection{Sign Links}
-The Sign Links are responsible for sending authenticated messages between two nodes. When a 
-message is sent, the sender will sign the message with its private key and the receiver will 
-verify the signature with the sender's public key. If the signature is valid, the receiver will 
-store the message and reply with an ACK, notifying the sender that the message was received.
 
-
-\subsection{Consensus}
+\section{Consensus}
 Consensus is achieved by a set of nodes that follow the QBFT algorithm. Each node is listening 
 on a given port for requests from other nodes and on another port for requests form the clients. 
 The nodes communicate with each other using a broadcast primitive and with the clients using a send 
 primitive, all based on the Authenticated Perfect Links. 
 
-\subsection{Application}
+\section{Application}
 For this stage, the application is a simple client that reads commands from the terminal and calls 
-an API from the library, which is responsible for communicating with the consensus layer abstraction 
-and for storing the known blockchain state. 
+an API from the library, which is responsible for communicating with the Legder Service. We implemented 
+two services, one responsible for the communication with the clients (HDSLegderService) and another responsible 
+for communicating with the nodes in order to start consensus algorithm upon receiving a request from the client 
+(NodeService). 
+
+Upon receiving an append request from the client, the HDSLegderService will invoke the NodeService to start a new 
+consensus instance. The inputs are added to a blocking-queue by the NodeService once we do not start a new consensus 
+instance if there is already one running. The NodeService keeps a thread running where it listens for new messages 
+from the consensus algorithm. Once a consensus instance is finished, the NodeService will add the decision to a 
+... and the HDSLedgerService has an observer that is notified when a new decision is made ?????
 
 \section{Architecture}
-Our implementation is based on Google's gRPC with multiple services doing asynchronous work. This 
+Our implementation is based on multiple services doing asynchronous work. This 
 involves having a service that is responsible for receiveing the client's requests and responding to 
 them, and another service running on each node that is responsible for the IBFT consensus algorithm.
 To serialize and deserialize data we use Google's GSON library.
+
+mention assumption on ids,
+strategy to ensure protocol is O(n2), 
+approach to parallelization and locking
 
 
 \newpage
