@@ -967,6 +967,8 @@ public class Instanbul {
 
 		this.ri += 1;
 
+		startTimer(getTimeout(this.ri));
+
 		LOGGER.log(Level.INFO,
 				MessageFormat.format(
 					"{0} - Moved to round {2} at instance {1} due to timeout",
