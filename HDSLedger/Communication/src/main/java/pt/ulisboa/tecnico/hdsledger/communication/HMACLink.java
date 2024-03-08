@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Authenticated point to point link.
@@ -45,6 +46,8 @@ public class HMACLink implements Link {
     private final APLink apLink;
     // Send messages to self by pushing to queue instead of through the network
     private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
+    // Message counter
+    private final AtomicInteger messageCounter = new AtomicInteger(0);
 
     public HMACLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, false, 200);
@@ -99,6 +102,9 @@ public class HMACLink implements Link {
             return;
         }
 
+        int messageId = messageCounter.getAndIncrement();
+        data.setMessageId(messageId);
+
         if (sharedKeys.get(nodeId) == null) {
             new Thread(() -> {
                 int backoff = 10;
@@ -128,19 +134,36 @@ public class HMACLink implements Link {
     }
 
     private void sendWhenKeyIsReady(int nodeId, Message data) {
+        sendWhenKeyIsReady(nodeId, data, true);
+    }
+
+    private void sendWhenKeyIsReady(int nodeId, Message data, boolean reliable) {
         data.setReceiver(nodeId);
         String dataString = new Gson().toJson(data);
         Key sharedKey = sharedKeys.get(nodeId);
         byte[] hmac = SigningUtils.generateHMAC(dataString.getBytes(), sharedKey);
         HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), Type.HMAC, hmac, dataString);
-                LOGGER.log(Level.INFO, MessageFormat.format(
-                        "Sending message of type {0} to {1}:{2} with message ID {3} -" +
-                                "with HMAC: {4}",
-                        hmacMessage.getType(), nodes.get(nodeId).getHostname(),
-                        nodes.get(nodeId).getPort(), hmacMessage.getMessageId(),
-                        hmacMessage.getHmac()));
+        LOGGER.log(Level.INFO, MessageFormat.format(
+                    "Sending message of type {0} to {1}:{2} with message ID {3} -" +
+                    "with HMAC: {4}",
+                    hmacMessage.getType(), nodes.get(nodeId).getHostname(),
+                    nodes.get(nodeId).getPort(), hmacMessage.getMessageId(),
+                    hmacMessage.getHmac()));
         hmacMessage.setReceiver(nodeId);
-        apLink.send(nodeId, hmacMessage);
+        hmacMessage.setMessageId(data.getMessageId());
+        System.out.printf("[HMACLink] Sending message of type %s\n", data.getType());
+        if (reliable) {
+            apLink.send(nodeId, hmacMessage);
+        } else {
+            ProcessConfig node = nodes.get(nodeId);
+            try {
+                InetAddress destAddress = InetAddress.getByName(node.getHostname());
+                int destPort = node.getPort();
+                apLink.unreliableSend(destAddress, destPort, hmacMessage);
+            } catch (UnknownHostException e) {
+                e.printStackTrace();
+            }
+        }
     }
     /*
      * Receives a message from any node in the network (blocking)
@@ -173,7 +196,8 @@ public class HMACLink implements Link {
                 }
             }
 
-            if (!message.getType().equals(Type.IGNORE)) {
+            if (!message.getType().equals(Type.IGNORE) && !message.getType().equals(Type.ACK)) {
+                System.out.printf("sending ack to message\n");
                 // If we did not set the message to IGNORE, we send an ACK
                 // this is done because sometimes we might not have the necessary key to check the hmac,
                 // so we want to ignore the message in order to force the sending node to resend the message
@@ -184,14 +208,19 @@ public class HMACLink implements Link {
                 responseMessage.setMessageId(message.getMessageId());
                 responseMessage.setReceiver(message.getSenderId());
 
-                // ACK must also be send using authenticated channel
-                sendWhenKeyIsReady(message.getSenderId(), message);
+                // ACK must also be send using authenticated channel (but not aplink, because we don't want to ack ACKs)
+                sendWhenKeyIsReady(message.getSenderId(), responseMessage, false);
                 // apLink.unreliableSend(address, port, responseMessage);
             }
 
-            if (!message.getType().equals(Type.KEY_PROPOSAL)) {
-                break;
+            // I don't want to return these messages
+            if (message.getType().equals(Type.KEY_PROPOSAL) ||
+                    message.getType().equals(Type.ACK) ||
+                    message.getType().equals(Type.IGNORE)) {
+                continue;
             }
+
+            break;
         }
         return message;
     }
@@ -205,6 +234,13 @@ public class HMACLink implements Link {
         Message innerMessage = new Gson().fromJson(messageString, messageClass);
         innerMessage.setReceiver(message.getReceiver());
         Key sharedKey = sharedKeys.get(message.getSenderId());
+
+        // If it's a ACK, I need to tell AP link that I just received a valid ACK
+        if (innerMessage.getType().equals(Type.ACK)) {
+            apLink.ackSingle(innerMessage.getMessageId());
+            // apLink.ackSingle(message.getMessageId());
+        }
+
         if (!Arrays.equals(hmac, SigningUtils.generateHMAC(messageString.getBytes(), sharedKey))) {
             // if the hmac is invalid, we ignore the message as it is not valid
             innerMessage.setType(Message.Type.IGNORE);
@@ -218,6 +254,9 @@ public class HMACLink implements Link {
                 "Received message from {0}:{1} of type {2} with hmac {3}, and hmac is correct",
                 InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
                 nodes.get(innerMessage.getSenderId()).getPort(), innerMessage.getType(), hmac));
+
+        System.out.printf("Message inside HMAC Message is of type %s (idInner=%d, idOuter=%d)\n", innerMessage.getType(), innerMessage.getMessageId(), message.getMessageId());
+
         return innerMessage;
     }
 
@@ -306,7 +345,7 @@ public class HMACLink implements Link {
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "Sending key proposal to {0}:{1} with key: {2} and signature: {3}",
                         dest.getHostname(), dest.getPort(), keyProposal.getKey(), keyProposal.getSignature()));
-                apLink.send(dest.getId(), keyProposal);
+                apLink.send(dest.getId(), keyProposal, messageCounter.getAndIncrement());
             } catch (RuntimeException e) {
                 e.printStackTrace();
                 throw new HDSSException(ErrorMessage.GeneratingKeyError);

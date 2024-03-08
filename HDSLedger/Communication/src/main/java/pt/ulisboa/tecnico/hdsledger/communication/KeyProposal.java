@@ -23,6 +23,12 @@ public class KeyProposal extends Message implements Serializable {
 
     private String signature;
 
+    // Who sent the previous message
+    private int replyTo;
+
+    // Id of the previous message
+    private int replyToMessageId;
+
     public KeyProposal(int nodeID, Key key, String signature, String receiverPublicKey) {
         super(nodeID, Type.KEY_PROPOSAL);
         this.key = encrypt(key, receiverPublicKey);
@@ -32,6 +38,23 @@ public class KeyProposal extends Message implements Serializable {
     public byte[] getKey() { return key; }
 
     public void setKey(byte[] key) { this.key = key; }
+
+
+    public int getReplyTo() {
+        return replyTo;
+    }
+
+    public void setReplyTo(int replyTo) {
+        this.replyTo = replyTo;
+    }
+
+    public int getReplyToMessageId() {
+        return replyToMessageId;
+    }
+
+    public void setReplyToMessageId(int replyToMessageId) {
+        this.replyToMessageId = replyToMessageId;
+    }
 
     public String getSignature() { return signature; }
 

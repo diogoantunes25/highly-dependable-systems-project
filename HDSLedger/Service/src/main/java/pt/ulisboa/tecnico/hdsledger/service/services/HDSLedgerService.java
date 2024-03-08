@@ -117,9 +117,8 @@ public class HDSLedgerService implements UDPService {
                                 }
                                 default ->
                                     LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} - Received unknown message from {1}",
-                                            config.getId(), message.getSenderId()));  
-
+                                        MessageFormat.format("{0} (HDSLedgerService) - Received unknown message (of type {2}) from {1}",
+                                            config.getId(), message.getSenderId(), message.getType()));  
                             }
 
                         }).start();

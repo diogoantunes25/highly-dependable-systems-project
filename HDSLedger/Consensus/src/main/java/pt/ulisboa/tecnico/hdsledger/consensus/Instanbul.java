@@ -1060,7 +1060,7 @@ public class Instanbul {
 
 			default -> {
 				LOGGER.log(Level.INFO,
-						MessageFormat.format("{0} - Received unknown message from {1}",
+						MessageFormat.format("{0} - (Instanbul) Received unknown message from {1}",
 							config.getId(), message.getSenderId()));
 
 				yield new ArrayList<>();

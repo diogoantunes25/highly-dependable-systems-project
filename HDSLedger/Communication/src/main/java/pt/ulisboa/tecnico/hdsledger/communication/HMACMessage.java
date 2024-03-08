@@ -11,6 +11,13 @@ public class HMACMessage extends Message implements Serializable {
     // String serialized message
     private String message;
 
+    // Who sent the previous message
+    private int replyTo;
+
+    // Id of the previous message
+    private int replyToMessageId;
+
+
     public HMACMessage(int nodeID, Type type, byte[] hmac, String message) {
         super(nodeID, type);
         this.hmac = hmac;
@@ -24,4 +31,22 @@ public class HMACMessage extends Message implements Serializable {
     public String getMessage() { return message; }
 
     public void setMessage(String message) { this.message = message; }
+
+    public int getReplyTo() {
+        return replyTo;
+    }
+
+    public void setReplyTo(int replyTo) {
+        this.replyTo = replyTo;
+    }
+
+    public int getReplyToMessageId() {
+        return replyToMessageId;
+    }
+
+    public void setReplyToMessageId(int replyToMessageId) {
+        this.replyToMessageId = replyToMessageId;
+    }
+
+
 }

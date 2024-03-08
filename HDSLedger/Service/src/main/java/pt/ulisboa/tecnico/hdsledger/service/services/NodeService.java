@@ -328,7 +328,7 @@ public class NodeService implements UDPService {
 
                             default ->
                                 LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} Message listener - Received unknown message from {1}",
+                                        MessageFormat.format("{0} (NodeService) Message listener - Received unknown message from {1}",
                                                 config.getId(), message.getSenderId()));
                         }
                     }

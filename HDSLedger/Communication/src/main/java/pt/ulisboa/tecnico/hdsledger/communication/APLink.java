@@ -68,6 +68,10 @@ public class APLink implements Link {
         }
     }
 
+    public void ackSingle(Integer messageId) {
+        receivedAcks.add(messageId);
+    }
+
     public void ackAll(List<Integer> messageIds) {
         receivedAcks.addAll(messageIds);
     }
@@ -90,6 +94,11 @@ public class APLink implements Link {
      * @param data The message to be sent
      */
     public void send(int nodeId, Message data) {
+        int messageId = messageCounter.getAndIncrement();
+        send(nodeId, data, messageId);
+    }
+
+    public void send(int nodeId, Message data, int messageId) {
 
         // Spawn a new thread to send the message
         // To avoid blocking while waiting for ACK
@@ -104,13 +113,13 @@ public class APLink implements Link {
                     throw new HDSSException(ErrorMessage.NoSuchNode);
                 }
 
-                data.setMessageId(messageCounter.getAndIncrement());
+                // FIXME (dsa): fixme
+                data.setMessageId(messageId);
 
                 // If the message is not ACK, it will be resent
                 InetAddress destAddress = InetAddress.getByName(node.getHostname());
                 int destPort = node.getPort();
                 int count = 1;
-                int messageId = data.getMessageId();
                 int sleepTime = BASE_SLEEP_TIME;
 
                 // Send message to local queue instead of using network if destination in self
@@ -137,6 +146,10 @@ public class APLink implements Link {
                     // Receive method will set receivedAcks when sees corresponding ACK
                     if (receivedAcks.contains(messageId))
                         break;
+
+                    LOGGER.log(Level.INFO, MessageFormat.format(
+                            "{0} - Didnt reply to message from {1} to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
+                            data.getType(), destAddress, destPort, messageId, count++, nodeId));
 
                     sleepTime <<= 1;
                 }
@@ -260,13 +273,22 @@ public class APLink implements Link {
                 ConsensusMessage consensusMessage = (ConsensusMessage) message;
                 if (consensusMessage.getReplyTo() == config.getId())
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
+                return consensusMessage;
             }
             case KEY_PROPOSAL -> {
-                message = new Gson().fromJson(serialized, KeyProposal.class);
+                System.out.println("Received KEY_PROPOSAL");
+                KeyProposal keyProposalMessage = (KeyProposal) new Gson().fromJson(serialized, KeyProposal.class);
+                if (keyProposalMessage.getReplyTo() == config.getId())
+                    receivedAcks.add(keyProposalMessage.getReplyToMessageId());
+                return keyProposalMessage;
             }
 
             case HMAC -> {
-                message = new Gson().fromJson(serialized, HMACMessage.class);
+                System.out.println("Received HMAC");
+                HMACMessage hmacMessage = (HMACMessage) new Gson().fromJson(serialized, HMACMessage.class);
+                if (hmacMessage.getReplyTo() == config.getId())
+                    receivedAcks.add(hmacMessage.getReplyToMessageId());
+                return hmacMessage;
             }
             default -> {}
         }
