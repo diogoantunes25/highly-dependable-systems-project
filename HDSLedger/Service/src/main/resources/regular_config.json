@@ -41,7 +41,7 @@
         "port": 3005,
         "port2": -1,
         "N": 4,
-        "publicKeyPath": "../keys/client.pub",
-        "privateKeyPath": "../keys/client.priv"
+        "publicKeyPath": "../keys/client1.pub",
+        "privateKeyPath": "../keys/client1.priv"
     }
 ]
