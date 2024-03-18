@@ -14,15 +14,17 @@ import javafx.util.Pair;
 
 public class Client {
 
-    // private static String configPath = "../Service/src/main/resources/";
+    private static String configPath = "../Service/src/main/resources/";
     // FIXME (dsa)
-    private static String configPath = "/tmp/";
+    //private static String configPath = "/tmp/";
 
     private static final CustomLogger LOGGER = new CustomLogger(Client.class.getName());
 
     private static void printUsage() {
         System.out.println("Available commands:");
-        System.out.println("     append <string> - Append a string to the ledger.");
+        System.out.println("     help - Print this message.");
+        System.out.println("     transfer <sourcePublicKey> <destinationPublicKey> <amount> <tip> - Transfer <amount> from <sourcePublicKey> to <destinationPublicKey> with <tip>.");
+        System.out.println("     check_balance <publicKey> - Get the balance of <publicKey>.");
         System.out.println("     exit - Exit the application.");
     }
 
@@ -83,15 +85,34 @@ public class Client {
             String[] tokens = line.split(" ");
             String command = tokens[0];
             switch (command) {
-                case "append":
-                    String string = tokens[1];
-                    System.out.println("Appending <" + string + ">...");
-                    try {
-                        int slotId = stub.append(string);
-                        System.out.println("Appended <" + string + ">..." + " Slot ID: " + slotId);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
+                case "help":
+                    printUsage();
+                    break;
+                case "transfer":
+                    if (tokens.length != 5) {
+                        System.out.println("Invalid number of arguments.");
+                        printUsage();
+                        break;
                     }
+                    String sourcePublicKey = tokens[1];
+                    String destinationPublicKey = tokens[2];
+                    int amount = Integer.parseInt(tokens[3]);
+                    int tip = Integer.parseInt(tokens[4]);
+
+                    LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2} and tip {3}",
+                            sourcePublicKey, destinationPublicKey, amount, tip));
+                    stub.transfer(sourcePublicKey, destinationPublicKey, amount, tip);
+                    break;
+                case "check_balance":
+                    if (tokens.length != 2) {
+                        System.out.println("Invalid number of arguments.");
+                        printUsage();
+                        break;
+                    }
+                    String publicKey = tokens[1];
+                    LOGGER.log(Level.INFO, MessageFormat.format("Sending check balance request for {0}",
+                                publicKey));
+                    stub.checkBalance(publicKey);
                     break;
                 case "exit":
                     System.out.println("Exiting...");

@@ -84,6 +84,41 @@ public class ClientStub {
         return slotId.get();
     }
 
+    private TransferMessage createTransferRequestMessage(int id, int sequenceNumber, String senderPublicKey, String receiverPublicKey, int amount, int tip) {
+        TransferRequest transferRequest = new TransferRequest(senderPublicKey, receiverPublicKey, amount, tip, sequenceNumber);
+
+        TransferMessage message = new TransferMessage(id, Message.Type.TRANSFER_REQUEST);
+
+        message.setMessage(new Gson().toJson(transferRequest));
+        message.signSelf(this.config.getPrivateKey());
+
+        return message;
+    }
+
+    private BalanceMessage createBalanceRequestMessage(int id, int sequenceNumber, String publicKey) {
+        BalanceRequest balanceRequest = new BalanceRequest(publicKey, sequenceNumber);
+
+        BalanceMessage message = new BalanceMessage(id, Message.Type.BALANCE_REQUEST);
+
+        message.setMessage(new Gson().toJson(balanceRequest));
+        message.signSelf(this.config.getPrivateKey());
+
+        return message;
+    }
+
+    public void transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
+        int currentRequestId = this.requestId.getAndIncrement(); // nonce
+
+        TransferMessage request = createTransferRequestMessage(config.getId(), currentRequestId, sourcePublicKey, destinationPublicKey, amount, tip);
+        System.out.println("Sending transfer request: " + new Gson().toJson(request));
+    }
+
+    public void checkBalance(String publicKey) {
+        int currentRequestId = this.requestId.getAndIncrement(); // nonce
+        BalanceMessage balanceMessage = createBalanceRequestMessage(config.getId(), currentRequestId, publicKey);
+        System.out.println("Sending balance request: " + new Gson().toJson(balanceMessage));
+    }
+
     public void handleAppendReply(AppendMessage message) {
         System.out.println("Received append reply");
         AppendReply appendReply = message.deserializeAppendReply();
@@ -91,6 +126,10 @@ public class ClientStub {
         String key = String.format("%s_%s", appendReply.getValue(), appendReply.getSequenceNumber());
         receivedSlots.addSlot(appendReply.getSlot(), message.getSenderId());
         System.out.println("Response registered");
+    }
+
+    public void handleTransferReply(TransferMessage message) {
+        System.out.println("Received Transfer reply");
     }
 
     public void listen() {
@@ -104,6 +143,10 @@ public class ClientStub {
                             case APPEND_REPLY -> {
                                 AppendMessage reply = (AppendMessage) message;
                                 handleAppendReply(reply);
+                            }
+                            case TRANSFER_REPLY -> {
+                                TransferMessage reply = (TransferMessage) message;
+                                handleTransferReply(reply);
                             }
                             case ACK, IGNORE -> {
                                 continue; // maybe add to logger?
