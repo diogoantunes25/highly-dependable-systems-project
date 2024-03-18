@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.APLink;
 import pt.ulisboa.tecnico.hdsledger.communication.HMACLink;
 import pt.ulisboa.tecnico.hdsledger.service.services.HDSLedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;

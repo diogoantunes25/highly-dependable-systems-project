@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -19,20 +18,13 @@ import java.util.Queue;
 import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.PrePrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
-import pt.ulisboa.tecnico.hdsledger.consensus.InstanceInfo;
-import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
-import pt.ulisboa.tecnico.hdsledger.consensus.Instanbul;
+import pt.ulisboa.tecnico.hdsledger.consensus.Istanbul;
 import pt.ulisboa.tecnico.hdsledger.consensus.Timer;
 import pt.ulisboa.tecnico.hdsledger.consensus.SimpleTimer;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
@@ -40,8 +32,6 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 
 import com.google.gson.Gson;
 
@@ -65,7 +55,7 @@ public class NodeService implements UDPService {
     // We'll allow multiple instances to run in parallel if needed, so this
     // map needs to be thread-safe
     // Maps: lambda -> instance
-    private Map<Integer, Instanbul> instances = new ConcurrentHashMap<>();
+    private Map<Integer, Istanbul> instances = new ConcurrentHashMap<>();
 
     // Callback to call when a new input is finalized by consensus (only if
     // the input was provided by this replica)
@@ -97,7 +87,7 @@ public class NodeService implements UDPService {
     // List of paths to client public keys
     private List<String> clientPks;
 
-    // maps values to the slot they where finalized to (after
+    // maps values to the slot they were finalized to (after
     // coming out from consensus)
     Map<String, Slot> history = new ConcurrentHashMap<>();
 
@@ -151,7 +141,7 @@ public class NodeService implements UDPService {
         }
 
         // Check client signature is valid
-        AppendMessage hmacMessage = (AppendMessage) new Gson().fromJson(serializedProof, AppendMessage.class);
+        AppendMessage hmacMessage = new Gson().fromJson(serializedProof, AppendMessage.class);
 
         LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {1} - getting key at position {2}",
                 config.getId(), clientId, clientId-n));
@@ -161,7 +151,7 @@ public class NodeService implements UDPService {
     /**
      * Returns instance with id lambda and creates one if it doesn't exist
      */
-    private Instanbul getInstance(int lambda) {
+    private Istanbul getInstance(int lambda) {
         // TODO (dsa): check that lambda <= current lambda
         // if lambda > current lambda (or lambda > current lambda + 1 ?), then
         // i can't yet decide on the beta predicate to provide (because it depends
@@ -170,7 +160,7 @@ public class NodeService implements UDPService {
         // one and that the signature is correct
  
         return instances.computeIfAbsent(lambda, l -> {
-            Instanbul instance = new Instanbul(this.others, this.config, l, value -> this.checkIsValidValue(l, value));
+            Istanbul instance = new Istanbul(this.others, this.config, l, value -> this.checkIsValidValue(l, value));
             Timer timer = new SimpleTimer();
             Consumer<String> observer = s -> {
                 decided(l, s);
@@ -191,7 +181,7 @@ public class NodeService implements UDPService {
      * @param lambda
      */
     private void actuallyInput(int lambda, String value) {
-        Instanbul instance = getInstance(lambda);
+        Istanbul instance = getInstance(lambda);
 
         // Input into state machine
         List<ConsensusMessage> output = instance.start(value);
@@ -219,7 +209,7 @@ public class NodeService implements UDPService {
 
     /*
      * Start an instance of consensus for a cmd if one is not ongoing, otherwise
-     * just queues input to be evetually added to state.
+     * just queues input to be eventually added to state.
      * Thread-safe.
      *
      * @param cmd value to append to state
@@ -241,7 +231,7 @@ public class NodeService implements UDPService {
      */
     private void handleMessage(ConsensusMessage message) {
         int lambda = message.getConsensusInstance();
-        Instanbul instance = getInstance(lambda);
+        Istanbul instance = getInstance(lambda);
 
         // Input into state machine
         List<ConsensusMessage> output = instance.handleMessage(message); 
@@ -295,7 +285,7 @@ public class NodeService implements UDPService {
      * Takes string of form nonce::command and returns and Option with [nonce; command]
      * if it's in valid format, otherwise returns empty option.
      * */
-    public static Optional<List<String>> parseSrippedValue(String value) {
+    public static Optional<List<String>> parseStrippedValue(String value) {
         // Value is always of the form nonce::m if is proposed by correct process
         // if not, then it's considered invalid by all valid nodes and discarded
         
@@ -370,7 +360,7 @@ public class NodeService implements UDPService {
                                 ConsensusMessage comessage = (ConsensusMessage) message;
                                 int lambda = comessage.getConsensusInstance();
 
-                                // Only handle message for which we can have a predicate (i.e
+                                // Only handle message for which we can have a predicate (i.e.
                                 // for previous rounds)
                                 // Need to synchronize, otherwise after round check and
                                 // before adding to stashed and messages are effectively
@@ -557,7 +547,7 @@ public class NodeService implements UDPService {
 
 
                 } catch (InterruptedException e) {
-                    // interrup is used to stop thread
+                    // interrupt is used to stop thread
                 } finally {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - finished",

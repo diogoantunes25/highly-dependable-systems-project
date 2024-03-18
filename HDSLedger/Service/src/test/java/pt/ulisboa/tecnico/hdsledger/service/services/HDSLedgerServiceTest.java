@@ -2,17 +2,12 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.communication.APLink;
+import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.service.Node;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
 
 import java.util.List;
 import java.util.Map;
@@ -47,7 +42,7 @@ public class HDSLedgerServiceTest {
 
 	// n is set to 10 by default
 	@BeforeAll
-	private static void genKeys() {
+    public static void genKeys() {
 		// Gen keys for servers
 		int n = 10;
 		List<String> publicKeys = IntStream.range(0, n)
@@ -97,7 +92,7 @@ public class HDSLedgerServiceTest {
 		return configs
 				.stream()
 				.map(config -> 
-					new APLink(config,
+					new PerfectLink(config,
 						config.getPort(),
 						configsArray,
 						ConsensusMessage.class))
@@ -108,7 +103,7 @@ public class HDSLedgerServiceTest {
 		return clientConfigs
 				.stream()
 				.map(config -> 
-					new APLink(config,
+					new PerfectLink(config,
 						config.getPort(),
 						nodesConfigs.toArray(new ProcessConfig[n]),
 						AppendMessage.class))
@@ -120,7 +115,7 @@ public class HDSLedgerServiceTest {
 		return configs
 				.stream()
 				.map(config -> 
-					new APLink(config,
+					new PerfectLink(config,
 						config.getPort(),
 						configs.toArray(new ProcessConfig[n]),
 						messageClass))

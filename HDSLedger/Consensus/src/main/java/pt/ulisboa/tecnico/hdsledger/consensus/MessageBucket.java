@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.hdsledger.consensus;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.List;
 import java.util.ArrayList;
@@ -83,7 +82,7 @@ public class MessageBucket {
     private Optional<List<ConsensusMessage>> hasValidQuorum(int round, Message.Type type) {
         Map<String, List<ConsensusMessage>> grouped = groupByValue(round, type);
 
-        // Return the list of messages of size quorumSzie
+        // Return the list of messages of size quorumSize
         for (Map.Entry<String, List<ConsensusMessage>> entry: grouped.entrySet()) {
             if (entry.getValue().size() >= quorumSize) {
                 return Optional.of(entry.getValue());
@@ -94,13 +93,13 @@ public class MessageBucket {
     }
 
     /**
-     * Checks the existence of f+1 messages messages of provided type with same value
+     * Checks the existence of f+1 messages of provided type with same value
      * Returns the list that satisfies for one such value
      */
     private Optional<List<ConsensusMessage>> hasWeakSupport(int round, Message.Type type) {
         Map<String, List<ConsensusMessage>> grouped = groupByValue(round, type);
 
-        // Return the list of messages of size quorumSzie
+        // Return the list of messages of size quorumSize
         for (Map.Entry<String, List<ConsensusMessage>> entry: grouped.entrySet()) {
             if (entry.getValue().size() >= weakSupport) {
                 return Optional.of(entry.getValue());
@@ -112,7 +111,7 @@ public class MessageBucket {
     }
 
     /**
-     * Checks the existence a quorum of messages PREPARE messages
+     * Checks the existence a quorum of PREPARE messages
      * Returns the value of the prepares.
      */
     public Optional<String> hasValidPrepareQuorum(int round) {
@@ -131,7 +130,7 @@ public class MessageBucket {
     // hasValidPrepareQuorum are redundant
     
     /**
-     * Checks the existence a quorum of messages PREPARE messages
+     * Checks the existence a quorum of PREPARE messages
      * Returns the list of the prepares.
      */
     public Optional<List<ConsensusMessage>> getPrepareQuorumJustification(int round) {
@@ -139,7 +138,7 @@ public class MessageBucket {
     }
 
     /**
-     * Checks the exists a quorum of messages COMMIT messages
+     * Checks the exists a quorum of COMMIT messages
      */
     public Optional<String> hasValidCommitQuorum(int round) {
         Optional<List<ConsensusMessage>> messages = this.hasValidQuorum(round, Message.Type.COMMIT);

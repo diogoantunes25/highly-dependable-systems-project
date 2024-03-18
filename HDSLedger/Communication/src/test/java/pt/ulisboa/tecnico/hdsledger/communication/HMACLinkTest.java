@@ -1,12 +1,10 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
-import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 import java.io.IOException;
@@ -15,7 +13,7 @@ import java.text.MessageFormat;
 
 public class HMACLinkTest {
     @Test
-    public void testHMACLink(@TempDir Path tempDir) throws IOException, ClassNotFoundException {
+    public void testHMACLink(@TempDir Path tempDir) {
         // generate nodes private and public keys
         String privKeyPath1 = tempDir.resolve("pub1.key").toString();
         String pubKeyPath1 = tempDir.resolve("priv1.key").toString();
@@ -59,7 +57,7 @@ public class HMACLinkTest {
                 while (true) {
                     Message message = link.receive();
                     System.out.println(MessageFormat.format(
-                                "Received message from {0} of type {1} with hmac {2}",
+                                "Received message from {0} of type {1} with hmac",
                                 message.getSenderId(),
                                 message.getType()));
                 }

@@ -13,7 +13,6 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 
-import java.lang.reflect.Array;
 import java.net.*;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -33,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class HMACLink implements Link {
 
-    private static final CustomLogger LOGGER = new CustomLogger(APLink.class.getName());
+    private static final CustomLogger LOGGER = new CustomLogger(PerfectLink.class.getName());
     // Time to wait for an ACK before resending the message
     private final Map<Integer, ProcessConfig> nodes = new ConcurrentHashMap<>();
     // Reference to the node itself
@@ -42,8 +41,8 @@ public class HMACLink implements Link {
     private final Class<? extends Message> messageClass;
     // Send messages to self by pushing to queue instead of through the network
     private final Map<Integer, Key> sharedKeys = new ConcurrentHashMap<>();
-    // APLink reference
-    private final APLink apLink;
+    // PerfectLink reference
+    private final PerfectLink perfectLink;
     // Send messages to self by pushing to queue instead of through the network
     private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
     // Message counter
@@ -55,7 +54,7 @@ public class HMACLink implements Link {
 
     public HMACLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
                     boolean activateLogs, int baseSleepTime) {
-        this.apLink = new APLink(self, port, nodes, HMACMessage.class, activateLogs, baseSleepTime);
+        this.perfectLink = new PerfectLink(self, port, nodes, HMACMessage.class, activateLogs, baseSleepTime);
         this.config = self;
         this.messageClass = messageClass;
 
@@ -71,7 +70,7 @@ public class HMACLink implements Link {
     }
 
     public void ackAll(List<Integer> messageIds) {
-        apLink.ackAll(messageIds);
+        perfectLink.ackAll(messageIds);
     }
 
     /*
@@ -80,7 +79,7 @@ public class HMACLink implements Link {
      * @param data The message to be broadcast
      */
     public void broadcast(Message data) {
-        apLink.broadcast(data);
+        perfectLink.broadcast(data);
     }
 
     /*
@@ -153,13 +152,13 @@ public class HMACLink implements Link {
         hmacMessage.setMessageId(data.getMessageId());
         System.out.printf("[HMACLink] Sending message of type %s\n", data.getType());
         if (reliable) {
-            apLink.send(nodeId, hmacMessage);
+            perfectLink.send(nodeId, hmacMessage);
         } else {
             ProcessConfig node = nodes.get(nodeId);
             try {
                 InetAddress destAddress = InetAddress.getByName(node.getHostname());
                 int destPort = node.getPort();
-                apLink.unreliableSend(destAddress, destPort, hmacMessage);
+                perfectLink.unreliableSend(destAddress, destPort, hmacMessage);
             } catch (UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -173,7 +172,7 @@ public class HMACLink implements Link {
         Message message;
         while (true) {
 
-            if (this.localhostQueue.size() > 0) {
+            if (!this.localhostQueue.isEmpty()) {
                 message = this.localhostQueue.poll();
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "Received message of type {0} from local queue",
@@ -181,7 +180,7 @@ public class HMACLink implements Link {
                 break;
             }
 
-            message = apLink.receiveAndDeserializeWith(HMACMessage.class, sharedKeys.keySet());
+            message = perfectLink.receiveAndDeserializeWith(HMACMessage.class, sharedKeys.keySet());
             if (!message.getType().equals(Message.Type.IGNORE)) {
 
                 if (sharedKeys.containsKey(message.getSenderId()) && message.getType().equals(Type.HMAC)) {
@@ -198,20 +197,21 @@ public class HMACLink implements Link {
             }
 
             if (!message.getType().equals(Type.IGNORE) && !message.getType().equals(Type.ACK)) {
-                System.out.printf("sending ack to message\n");
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                        "Sending ACK to message of type {0} with message ID {1}",
+                            message.getType(), message.getMessageId()));
+
                 // If we did not set the message to IGNORE, we send an ACK
                 // this is done because sometimes we might not have the necessary key to check the hmac,
                 // so we want to ignore the message in order to force the sending node to resend the message
-                InetAddress address = InetAddress.getByName(nodes.get(message.getSenderId()).getHostname());
-                int port = nodes.get(message.getSenderId()).getPort();
 
                 Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
                 responseMessage.setMessageId(message.getMessageId());
                 responseMessage.setReceiver(message.getSenderId());
 
-                // ACK must also be send using authenticated channel (but not aplink, because we don't want to ack ACKs)
+                // ACK must also be sent using authenticated channel (but not perfectLink, because we don't want to ack ACKs)
                 sendWhenKeyIsReady(message.getSenderId(), responseMessage, false);
-                // apLink.unreliableSend(address, port, responseMessage);
+                // perfectLink.unreliableSend(address, port, responseMessage);
             }
 
             // I don't want to return these messages
@@ -236,10 +236,10 @@ public class HMACLink implements Link {
         innerMessage.setReceiver(message.getReceiver());
         Key sharedKey = sharedKeys.get(message.getSenderId());
 
-        // If it's a ACK, I need to tell AP link that I just received a valid ACK
+        // If it's an ACK, I need to tell AP link that I just received a valid ACK
         if (innerMessage.getType().equals(Type.ACK)) {
-            apLink.ackSingle(innerMessage.getMessageId());
-            // apLink.ackSingle(message.getMessageId());
+            perfectLink.ackSingle(innerMessage.getMessageId());
+            // perfectLink.ackSingle(message.getMessageId());
         }
 
         if (!Arrays.equals(hmac, SigningUtils.generateHMAC(messageString.getBytes(), sharedKey))) {
@@ -306,13 +306,6 @@ public class HMACLink implements Link {
         return message;
     }
 
-    /**
-     * Tries to receive a message from any node in the network (non-blocking)
-     */
-    public Optional<Message> tryReceive() throws IOException, ClassNotFoundException {
-        throw new UnsupportedOperationException("TODO");
-    }
-
     public void setupChannelKeys(ProcessConfig self, ProcessConfig[] nodes) {
         // setup shared keys between channels
         for (ProcessConfig dest : nodes) {
@@ -346,7 +339,7 @@ public class HMACLink implements Link {
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "Sending key proposal to {0}:{1} with key: {2} and signature: {3}",
                         dest.getHostname(), dest.getPort(), keyProposal.getKey(), keyProposal.getSignature()));
-                apLink.send(dest.getId(), keyProposal, messageCounter.getAndIncrement());
+                perfectLink.send(dest.getId(), keyProposal, messageCounter.getAndIncrement());
             } catch (RuntimeException e) {
                 e.printStackTrace();
                 throw new HDSSException(ErrorMessage.GeneratingKeyError);

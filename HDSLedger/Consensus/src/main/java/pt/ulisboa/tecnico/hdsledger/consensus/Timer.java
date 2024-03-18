@@ -10,7 +10,7 @@ public interface Timer {
 	 * Starts timer that times out after `timeout` milliseconds.
 	 * @return timer id
 	*/
-	public void setTimerToRunning(int timerId, int timeout);
+	void setTimerToRunning(int timerId, int timeout);
 
 	/**
 	 * Stops timer
@@ -22,5 +22,5 @@ public interface Timer {
 	 * Register callback for timeouts
 	 * @param callback callback takes the expired timer id
 	 */
-	public void registeTimeoutCallback(Consumer<Integer> callback);
+	void registeTimeoutCallback(Consumer<Integer> callback);
 }

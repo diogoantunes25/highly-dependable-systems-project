@@ -1,14 +1,11 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
-import pt.ulisboa.tecnico.hdsledger.communication.APLink;
+import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 
@@ -26,7 +23,6 @@ import java.util.concurrent.LinkedBlockingDeque;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.gson.Gson;
@@ -35,7 +31,7 @@ public class NodeServiceTest {
 
 	// n is set to 10 by default
 	@BeforeAll
-	private static void genKeys() {
+    public static void genKeys() {
 		int n = 10;
 		List<String> publicKeys = IntStream.range(0, n)
 			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
@@ -83,7 +79,7 @@ public class NodeServiceTest {
 		return configs
 				.stream()
 				.map(config -> 
-					new APLink(config,
+					new PerfectLink(config,
 						config.getPort(),
 						configsArray,
 						ConsensusMessage.class))

@@ -10,10 +10,10 @@ public class PrePrepareMessage {
     // Value
     private String value;
 
-    // ROUND-CHANGE messages part of justifiation
+    // ROUND-CHANGE messages part of justification
     private List<ConsensusMessage> justificationRoundChanges = null;
 
-    // PREPARE messages part of justifiation (no duplicates should exist
+    // PREPARE messages part of justification (no duplicates should exist
     // otherwise QBFT goes O(n3))
     private List<ConsensusMessage> justificationPrepares = null;
 

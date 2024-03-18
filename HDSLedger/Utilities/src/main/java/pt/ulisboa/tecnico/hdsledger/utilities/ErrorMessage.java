@@ -14,8 +14,6 @@ public enum ErrorMessage {
 
     EncryptionError("Error while encrypting message"),
 
-    DecryptionError("Error while decrypting message"),
-
     SigningError("Error while signing message");
 
     private final String message;

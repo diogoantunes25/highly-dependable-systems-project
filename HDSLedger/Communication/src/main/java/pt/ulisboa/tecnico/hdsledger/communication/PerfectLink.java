@@ -19,9 +19,9 @@ import java.util.logging.LogManager;
 /**
  * Authenticated point to point link.
  */
-public class APLink implements Link {
+public class PerfectLink implements Link {
 
-    private static final CustomLogger LOGGER = new CustomLogger(APLink.class.getName());
+    private static final CustomLogger LOGGER = new CustomLogger(PerfectLink.class.getName());
     // Time to wait for an ACK before resending the message
     private final int BASE_SLEEP_TIME;
     // UDP Socket
@@ -41,11 +41,11 @@ public class APLink implements Link {
     // Send messages to self by pushing to queue instead of through the network
     private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
 
-    public APLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
+    public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, false, 200);
     }
 
-    public APLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
+    public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
             boolean activateLogs, int baseSleepTime) {
 
         this.config = self;
@@ -79,7 +79,7 @@ public class APLink implements Link {
     /*
      * Broadcasts a message to all nodes in the network
      *
-     * @param data The message to be broadcasted
+     * @param data The message to be broadcast
      */
     public void broadcast(Message data) {
         Gson gson = new Gson();
@@ -190,14 +190,14 @@ public class APLink implements Link {
 
     }
 
-    public <T extends Message> Message receiveAndDeserializeWith(Class<T> targetClass, Set<Integer> disallowDuplicates) throws IOException, ClassNotFoundException {
+    public <T extends Message> Message receiveAndDeserializeWith(Class<T> targetClass, Set<Integer> disallowDuplicates) throws IOException {
 
-        Message message = null;
+        Message message;
         String serialized = "";
-        Boolean local = false;
+        boolean local = false;
         DatagramPacket response = null;
 
-        if (this.localhostQueue.size() > 0) {
+        if (!this.localhostQueue.isEmpty()) {
             message = this.localhostQueue.poll();
             local = true;
             this.receivedAcks.add(message.getMessageId());
@@ -239,20 +239,11 @@ public class APLink implements Link {
         }
 
         switch (message.getType()) {
-            case APPEND_REQUEST -> {
+            case APPEND_REQUEST, APPEND_REPLY -> {
                 AppendMessage request = (AppendMessage) message;
                 //TODO (cfc)
                 if (request.getReplyTo() == config.getId())
                     receivedAcks.add(request.getReplyToMessageId());
-
-                return message;
-            }
-            case APPEND_REPLY -> {
-                AppendMessage reply = (AppendMessage) message;
-                //TODO (cfc)
-                if (reply.getReplyTo() == config.getId())
-                    receivedAcks.add(reply.getReplyToMessageId());
-
                 return message;
             }
             case PRE_PREPARE -> {
@@ -277,7 +268,7 @@ public class APLink implements Link {
             }
             case KEY_PROPOSAL -> {
                 System.out.println("Received KEY_PROPOSAL");
-                KeyProposal keyProposalMessage = (KeyProposal) new Gson().fromJson(serialized, KeyProposal.class);
+                KeyProposal keyProposalMessage = new Gson().fromJson(serialized, KeyProposal.class);
                 if (keyProposalMessage.getReplyTo() == config.getId())
                     receivedAcks.add(keyProposalMessage.getReplyToMessageId());
                 return keyProposalMessage;
@@ -285,7 +276,7 @@ public class APLink implements Link {
 
             case HMAC -> {
                 System.out.println("Received HMAC");
-                HMACMessage hmacMessage = (HMACMessage) new Gson().fromJson(serialized, HMACMessage.class);
+                HMACMessage hmacMessage = new Gson().fromJson(serialized, HMACMessage.class);
                 if (hmacMessage.getReplyTo() == config.getId())
                     receivedAcks.add(hmacMessage.getReplyToMessageId());
                 return hmacMessage;
@@ -313,14 +304,7 @@ public class APLink implements Link {
     /*
      * Receives a message from any node in the network (blocking)
      */
-    public Message receive() throws IOException, ClassNotFoundException {
+    public Message receive() throws IOException {
         return receiveAndDeserializeWith(messageClass, nodes.keySet());
-    }
-
-    /**
-     * Tries to receive a message from any node in the network (non-blocking)
-     */
-    public Optional<Message> tryReceive() throws IOException, ClassNotFoundException {
-        throw new UnsupportedOperationException("TODO");
     }
 }

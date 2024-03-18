@@ -1,7 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-
 public class AppendRequest {
     
     // Value to append

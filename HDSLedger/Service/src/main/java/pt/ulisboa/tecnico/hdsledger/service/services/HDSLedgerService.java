@@ -3,15 +3,9 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.LinkedList;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Queue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
 import com.google.gson.Gson;
@@ -21,9 +15,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
-import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 

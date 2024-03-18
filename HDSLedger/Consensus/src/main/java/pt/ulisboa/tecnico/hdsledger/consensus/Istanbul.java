@@ -16,9 +16,7 @@ import java.util.stream.IntStream;
 import java.util.Collection;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.Collections;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,11 +24,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.util.Pair;
 
 /**
- * Instance of Instanbul consensus protocol.
+ * Instance of Istanbul consensus protocol.
  * It's thread safe (per instance)
  */
-public class Instanbul {
-	private static final CustomLogger LOGGER = new CustomLogger(Instanbul.class.getName());
+public class Istanbul {
+	private static final CustomLogger LOGGER = new CustomLogger(Istanbul.class.getName());
 
 	// First round of protocol
 	private static final int FIRST_ROUND = 0; 
@@ -77,7 +75,7 @@ public class Instanbul {
 	// Consensus Round -> List of round change messages
 	private final MessageBucket roundChangeMessages;
 
-	// Rounds for which PRE-PREPARE was already broadcasted
+	// Rounds for which PRE-PREPARE was already broadcast
 	private final Set<Integer> prePrepared = new HashSet<>();
 
 	// Whether pre-prepare for a given round was received
@@ -86,7 +84,7 @@ public class Instanbul {
 	// Callbacks to be called on deliver
 	private final List<Consumer<String>> observers = new ArrayList();
 
-	// Wheter start was called already
+	// Whether start was called already
 	private AtomicBoolean started = new AtomicBoolean(false);
 
 	// FIXME (dsa): I'm not sure that this is needed
@@ -110,14 +108,14 @@ public class Instanbul {
 	// Timer ids for each round
 	// The semantics are:
 	//	- if there's no entry for r, timer not stopped
-	//	- if there's a non-empty entry for r, timer running with the id inside the optinal
+	//	- if there's a non-empty entry for r, timer running with the id inside the optimal
 	//	- if there's an empty entry for r, timer stopped
 	// private Map<Integer, Optional<Integer>> roundTimerId = new HashMap<>();
 
-	// Validity verifying function (should not depende on instance state)
+	// Validity verifying function (should not depend on instance state)
 	private Predicate<String> beta;
 
-	public Instanbul(List<ProcessConfig> others, ProcessConfig config, int lambda, Predicate<String> beta) {
+	public Istanbul(List<ProcessConfig> others, ProcessConfig config, int lambda, Predicate<String> beta) {
 		int n = config.getN();
 		int f = Math.floorDiv(n - 1, 3);
 		this.quorumSize = Math.floorDiv(n + f, 2) + 1; // works because 4f+1 is odd
@@ -255,9 +253,9 @@ public class Instanbul {
 	 */
 	private ConsensusMessage createRoundChangeMessage(int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
 
-		// Note: this function is particularly subtle because of awkard
+		// Note: this function is particularly subtle because of awkward
 		// pre-existing message code. I can't sign the message with the
-		// justification on it (because I later want a RC mensage without
+		// justification on it (because I later want a RC message without
 		// the prepares there). For this reason, I have to create an
 		// entire message, sign it and then add justification. Undoing
 		// this to check signature must be done taking this into account.
@@ -322,7 +320,7 @@ public class Instanbul {
 					yield false;
 				}
 
-				// Message itself doesn't need to be signed, but the justifcation
+				// Message itself doesn't need to be signed, but the justification
 				// has messages (PREPAREs and ROUND-CHANGEs) that need to be signed
 
 				Optional<List<ConsensusMessage>> optQp = prePrepareMessage.getJustificationPrepares();
@@ -396,7 +394,7 @@ public class Instanbul {
 			}
 
 			case COMMIT -> {
-				// Doesn't need to be signed nor it has a justification
+				// Doesn't need to be signed, nor it has a justification
 				yield true;
 			}
 
@@ -430,9 +428,9 @@ public class Instanbul {
 
 				// MESSAGE CHECK
 
-				// Note: this part is particularly subtle because of awkard
+				// Note: this part is particularly subtle because of awkward
 				// pre-existing message code. I couldn't sign the message with the
-				// justification on it (because I later want a RC mensage without
+				// justification on it (because I later want a RC message without
 				// the prepares there). For this reason, I had to create an
 				// entire message, sign it and then add justification. Undoing
 				// this to check signature must be done taking this into account.
@@ -444,7 +442,7 @@ public class Instanbul {
 				// Note that ROUND-MESSAGE might not have any justification
 				// even though it has a value (because justification for round
 				// change messages is done as a set, what matters is that the
-				// set as a whole as the required PREPARE and they are all valid)
+				// set as a whole as the required PREPARE, and they are all valid)
 
 				roundChangeMessage.clearJustification();
 				message.setMessage(roundChangeMessage.toJson());
@@ -456,10 +454,10 @@ public class Instanbul {
 				if (justification.isPresent()) {
 					// Check each message in justification of round change
 					// Note that is not enough that we check when we receive prepares
-					// because these PREPARES might not have been received yet
+					// because these PREPAREs might not have been received yet
 
 					// I could just filter out the badly signed ones, but
-					// that is more cumbersome and it only happens if sender
+					// that is more cumbersome, and it only happens if sender
 					// is byzantine, so I won't do it - all must be correct
 					// then
 
@@ -506,7 +504,7 @@ public class Instanbul {
 			}
 
 			case COMMIT -> {
-				// Doesn't need to be signed nor it has a justification
+				// Doesn't need to be signed, nor it has a justification
 				yield message;
 			}
 
@@ -515,7 +513,7 @@ public class Instanbul {
 				RoundChangeMessage roundChangeMessage = message.deserializeRoundChangeMessage();
 				Optional<List<ConsensusMessage>> justification = roundChangeMessage.getJustification();
 
-				// Can't sign round change with justificaction (because I want
+				// Can't sign round change with justification (because I want
 				// to then send ROUND-CHANGE without the justification to get
 				// O(n2) complexity, not O(n3))
 				roundChangeMessage.clearJustification();
@@ -571,10 +569,10 @@ public class Instanbul {
 			// because if I was elected leader and didn't have input, that means
 			// I'm still on time to try to finish of the round
 			
-			// Mark that broacast of PRE-PREPARE was already made for this round
+			// Mark that broadcast of PRE-PREPARE was already made for this round
 			this.prePrepared.add(this.ri);
 
-			// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
+			// Broadcast message PRE-PREPARE(lambda, ri, inputValue)
 			return IntStream.range(0, this.config.getN())
 				.mapToObj(receiver -> this.createPrePrepareMessage(inputValue, this.lambda, this.ri, receiver, Optional.empty(), Optional.empty()))
 				.collect(Collectors.toList());
@@ -587,7 +585,7 @@ public class Instanbul {
 	}
 
 	/*
-	 * Handle pre prepare messages and if the message
+	 * Handle pre-prepare messages and if the message
 	 * came from leader and is justified then broadcast prepare
 	 *
 	 * @param Message message to be handled
@@ -605,7 +603,7 @@ public class Instanbul {
 			throw new RuntimeException("Should not be processing PREPARE message in wrong round");
 		}
 
-		// Already pre prepared for this round
+		// Already pre-prepared for this round
 		if (this.havePrePrepared.contains(round)) {
 			return new ArrayList<>();
 		}
@@ -660,7 +658,7 @@ public class Instanbul {
 		// Start timer for this round
 		this.startTimer(getTimeout(this.ri));
 
-		// Broadcast Prepare (labmda, round, value)
+		// Broadcast Prepare (lambda, round, value)
 		return IntStream.range(0, this.config.getN())
 			.mapToObj(receiver -> this.createPrepareMessage(prePrepareMessage, value, this.lambda, round, receiver, senderId, senderMessageId))
 			.collect(Collectors.toList());
@@ -790,9 +788,9 @@ public class Instanbul {
 	 * Checks that a round-change message is properly signed
 	 */
 	boolean roundChangeMessageIsValidSignedIsValid(ConsensusMessage message) {
-		// Note: this function is particularly subtle because of awkard
+		// Note: this function is particularly subtle because of awkward
 		// pre-existing message code. I couldn't sign the message with the
-		// justification on it (because I later want a RC mensage without
+		// justification on it (because I later want a RC message without
 		// the prepares there). For this reason, I had to create an
 		// entire message, sign it and then add justification. Undoing
 		// this to check signature must be done taking this into account.
@@ -805,7 +803,7 @@ public class Instanbul {
 		// Note that ROUND-MESSAGE might not have any justification
 		// even though it has a value (because justification for round
 		// change messages is done as a set, what matters is that the
-		// set as a whole as the required PREPARE and they are all valid)
+		// set as a whole as the required PREPARE, and they are all valid)
 
 		roundChangeMessage.clearJustification();
 		message.setMessage(roundChangeMessage.toJson());
@@ -817,10 +815,10 @@ public class Instanbul {
 		if (justification.isPresent()) {
 			// Check each message in justification of round change
 			// Note that is not enough that we check when we receive prepares
-			// because these PREPARES might not have been received yet
+			// because these PREPAREs might not have been received yet
 				
 			// I could just filter out the badly signed ones, but
-			// that is more cumbersome and it only happens if sender
+			// that is more cumbersome, and it only happens if sender
 			// is byzantine, so I won't do it - all must be correct
 			// then
 
@@ -891,11 +889,11 @@ public class Instanbul {
 	}
 
 	/**
-	 * Approximation of JUSTIFYPREPREPARE from paper
+	 * Approximation of JUSTIFY-PRE-PREPARE from paper
 	 * Assumes each round change and each prepare message was already verified
 	 * @param value value is to be verified
-	 * @param QrcPrepare optional of list of round change messages (shoult not be empty optional even if list is empty)
-	 * @param QrcRoundChange optinal of list of round change messages
+	 * @param optQp optional of list of round change messages (should not be empty optional even if list is empty)
+	 * @param optQrc optimal of list of round change messages
 	 */
 	boolean justifyPrePrepare(int round, String value, Optional<List<ConsensusMessage>> optQp, Optional<List<ConsensusMessage>> optQrc) {
 
@@ -905,7 +903,7 @@ public class Instanbul {
 
 		if (!optQrc.isPresent() || !optQp.isPresent()) {
 			LOGGER.log(Level.INFO,
-					MessageFormat.format("{0} - justification of preprepare was asked for round {1} (which is not the first) without either PREPARE",
+					MessageFormat.format("{0} - justification of pre-prepare was asked for round {1} (which is not the first) without either PREPARE",
 						config.getId(), round));
 
 			return false;
@@ -917,7 +915,7 @@ public class Instanbul {
 
 		if (Qrc.size() < this.quorumSize) {
 			LOGGER.log(Level.INFO,
-					MessageFormat.format("{0} - justification of preprepare was asked for a quorum with less than required size {1} < {2} (which is strange)",
+					MessageFormat.format("{0} - justification of pre-prepare was asked for a quorum with less than required size {1} < {2} (which is strange)",
 						config.getId(), Qrc.size(), this.quorumSize));
 
 			return false;
@@ -932,7 +930,7 @@ public class Instanbul {
 			return true;
 		}
 
-		// By now we now that there's a highest prepared value
+		// By now we now that there's the highest prepared value
 		String pv = optPair.get().getKey();
 		int pr = optPair.get().getValue();
 
@@ -945,7 +943,7 @@ public class Instanbul {
 
 		if (count < this.quorumSize) {
 			LOGGER.log(Level.INFO,
-					MessageFormat.format("{0} - justification of preprepare was asked but not enough good prepares were provided",
+					MessageFormat.format("{0} - justification of pre-prepare was asked but not enough good prepares were provided",
 						config.getId()));
 
 			return false;
@@ -955,10 +953,10 @@ public class Instanbul {
 	}
 
 	/**
-	 * Approximation of JUSTIFYROUNDCHANGE from paper
+	 * Approximation of JUSTIFY-ROUND-CHANGE from paper
 	 * Assumes each round change message was already verified
 	 * @param Qrc list of round change messages
-	 * @return nothing if verify failed or justification for preprepare if passed (ROUND-CHANGES and then PREPARES)
+	 * @return nothing if verify failed or justification for pre-prepare if passed (ROUND-CHANGES and then PREPARES)
 	 */
 	Optional<Pair<List<ConsensusMessage>, List<ConsensusMessage>>> justifyRoundChange(List<ConsensusMessage> Qrc) {
 		if (Qrc.size() < this.quorumSize) {
@@ -997,7 +995,7 @@ public class Instanbul {
 			.collect(Collectors.toList());
 		
 		// Deduplicate messages from same sender (unfortunately Java Stream API
-		// doesn't strem to provide this facility, so it's done manually)
+		// doesn't seem to provide this facility, so it's done manually)
 		Set<Integer> sendersChecked = new HashSet<>();
 		List<ConsensusMessage> prepares = new ArrayList<>();
 		for (ConsensusMessage message: preparesDuplicate) {
@@ -1023,7 +1021,7 @@ public class Instanbul {
 	/*
 	 * Handle round change messages
 	 *
-	 * @param message Message to be handled
+	 * @param message to be handled
 	 */
 	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
 		List<ConsensusMessage> messages = new ArrayList<>();
@@ -1052,7 +1050,7 @@ public class Instanbul {
 					config.getId(), this.lambda, this.ri));
 
 
-			// No need to check whether I already broadcasted a ROUND-CHANGE (because
+			// No need to check whether I already broadcast a ROUND-CHANGE (because
 			// I just changed rounds)
 
 			// start timer
@@ -1077,7 +1075,7 @@ public class Instanbul {
 
 		if (this.prePrepared.contains(this.ri)) {
 			LOGGER.log(Level.INFO,
-				MessageFormat.format("{0} - Already broadcasted PRE-PREPARE for this round, nothing to do (Consensus Instance {2}, Round {3})",
+				MessageFormat.format("{0} - Already broadcast PRE-PREPARE for this round, nothing to do (Consensus Instance {2}, Round {3})",
 					config.getId(), message.getSenderId(), this.lambda, this.ri));
 
 			return messages;
@@ -1087,14 +1085,14 @@ public class Instanbul {
 			MessageFormat.format("{0} - Checking the existence of a good quorum of ROUND-CHANGE messages - Consensus Instance {2}, Round {3}",
 				config.getId(), message.getSenderId(), this.lambda, this.ri));
 
-		// Check existance of quorum
+		// Check existence of quorum
 		Optional<List<ConsensusMessage>> optQrc = roundChangeMessages.hasValidRoundChangeQuorum(this.ri);
 		if (optQrc.isPresent()) {
 			Optional<Pair<List<ConsensusMessage>, List<ConsensusMessage>>> optJustification = justifyRoundChange(optQrc.get());
 			if (optJustification.isPresent()) {
 
 				LOGGER.log(Level.INFO,
-						MessageFormat.format("{0} - Justified quorum of ROUND-CHANGE messages found - Consensus Instance {2}, Round {3}",
+						MessageFormat.format("{0} - Justified quorum of ROUND-CHANGE messages found - Consensus Instance {1}, Round {2}",
 							config.getId(), message.getSenderId(), this.lambda, this.ri));
 
 
@@ -1117,10 +1115,10 @@ public class Instanbul {
 							MessageFormat.format("{0} -  I was just \"elected\", sending a PRE-PREPARE with {3} ROUND-CHANGES and {4} PREPARES for justification: Consensus Instance {1}, Round {2}",
 								config.getId(), this.lambda, round, justificationRoundChanges.size(), justificationPrepares.size()));
 
-					// Mark that broacast of PRE-PREPARE was already made for this round
+					// Mark that broadcast of PRE-PREPARE was already made for this round
 					this.prePrepared.add(this.ri);
 
-					// Broadcast message PRE-PREPARE(lambda, ri, inputvalue)
+					// Broadcast message PRE-PREPARE(lambda, ri, inputValue)
 					messages.addAll(IntStream.range(0, this.config.getN())
 						.mapToObj(receiver -> this.createPrePrepareMessage(v.get(), this.lambda, this.ri, receiver, Optional.of(justificationPrepares), Optional.of(justificationRoundChanges)))
 						.collect(Collectors.toList()));
@@ -1143,7 +1141,7 @@ public class Instanbul {
 
 	public List<ConsensusMessage> signAll(List<ConsensusMessage> messages) {
         return messages.stream()
-            .map(m -> Instanbul.sign(m, this.config.getPrivateKey()))
+            .map(m -> Istanbul.sign(m, this.config.getPrivateKey()))
 			.collect(Collectors.toList());
 	}
 
@@ -1158,7 +1156,7 @@ public class Instanbul {
 	 * Handles protocol messages and returns messages to be sent over the network
 	 */
 	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
-        if (!Instanbul.checkSignature(message, this.others, this.beta)) {
+        if (!Istanbul.checkSignature(message, this.others, this.beta)) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Detected message with bad signature from {1} in {2} message, ignoring",
@@ -1188,55 +1186,55 @@ public class Instanbul {
 					config.getId(), this.lambda, this.ri));
 
 
-		// Broadcast RoundChange (labmda, round, pvi, pri)
+		// Broadcast RoundChange (lambda, round, pvi, pri)
 		return IntStream.range(0, this.config.getN())
 			.mapToObj(receiver -> this.createRoundChangeMessage(this.lambda, this.ri, receiver, this.pvi, this.pri, this.preparationJustification))
 			.collect(Collectors.toList());
 	}
 
 	private synchronized List<ConsensusMessage> _handleMessage(ConsensusMessage message) {
-		int mround = message.getRound();
+		int messageRound = message.getRound();
 
 		return switch (message.getType()) {
 			case PRE_PREPARE -> {
-				if (mround == this.ri) {
+				if (messageRound == this.ri) {
 					yield prePrepare(message);
 				} else if (message.getRound() < this.ri) {
 					// PRE-PREPARES from previous rounds can be dropped
 					LOGGER.log(Level.INFO,
 							MessageFormat.format(
 								"{0} - Ignored PRE-PREPARE at instance {1}, Round {2} (message was for {3}, which I've already moved from)",
-						config.getId(), this.lambda, this.ri, mround));
+						config.getId(), this.lambda, this.ri, messageRound));
 					yield new ArrayList<>();
 				} else {
-					// PRE-PREPARE from future rounds can't processed right
+					// PRE-PREPARE from future rounds can't be processed right
 					// now, but should be processed when we change rounds
 					LOGGER.log(Level.INFO,
 							MessageFormat.format(
 								"{0} - Stashed PRE-PREPARE at instance {1}, Round {2} (message was for {3})",
-						config.getId(), this.lambda, this.ri, mround));
-					this.stashedPrePrepare.putIfAbsent(mround, new ArrayList<>());
-					List<ConsensusMessage> stashed = stashedPrePrepare.get(mround);
+						config.getId(), this.lambda, this.ri, messageRound));
+					this.stashedPrePrepare.putIfAbsent(messageRound, new ArrayList<>());
+					List<ConsensusMessage> stashed = stashedPrePrepare.get(messageRound);
 					stashed.add(message);
 					yield new ArrayList<>();
 				}
 			}
 
 			case PREPARE -> {
-				if (mround == this.ri) {
+				if (messageRound == this.ri) {
 					yield prepare(message);
 				} else if (message.getRound() < this.ri) {
 					// PREPARES from previous rounds can be dropped
 					yield new ArrayList<>();
 				} else {
-					// PREPARE from future rounds can't processed right
+					// PREPARE from future rounds can't be processed right
 					// now, but should be processed when round is changed
 					LOGGER.log(Level.INFO,
 							MessageFormat.format(
 								"{0} - Stashed PRE-PREPARE at instance {1}, Round {2} (message was for {3})",
-						config.getId(), this.lambda, this.ri, mround));
-					this.stashedPrepare.putIfAbsent(mround, new ArrayList<>());
-					List<ConsensusMessage> stashed = stashedPrepare.get(mround);
+						config.getId(), this.lambda, this.ri, messageRound));
+					this.stashedPrepare.putIfAbsent(messageRound, new ArrayList<>());
+					List<ConsensusMessage> stashed = stashedPrepare.get(messageRound);
 					stashed.add(message);
 					yield new ArrayList<>();
 				}
@@ -1250,7 +1248,7 @@ public class Instanbul {
 
 			default -> {
 				LOGGER.log(Level.INFO,
-						MessageFormat.format("{0} - (Instanbul) Received unknown message from {1}",
+						MessageFormat.format("{0} - (Istanbul) Received unknown message from {1}",
 							config.getId(), message.getSenderId()));
 
 				yield new ArrayList<>();

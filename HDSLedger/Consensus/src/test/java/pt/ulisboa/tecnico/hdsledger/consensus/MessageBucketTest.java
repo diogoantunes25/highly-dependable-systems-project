@@ -23,7 +23,7 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBu
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 public class MessageBucketTest {
-	// TODO (dsa): also exists in Instanbul class, factor out to some utils type thing
+	// TODO (dsa): also exists in Istanbul class, factor out to some utils type thing
 	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
 		PrepareMessage prepareMessage = new PrepareMessage(value);
 

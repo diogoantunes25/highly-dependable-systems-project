@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.pki;
 
-import javax.crypto.spec.SecretKeySpec;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -8,8 +7,6 @@ import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.nio.file.Path;
-import java.io.File;
 
 public class RSAKeyGenerator {
 

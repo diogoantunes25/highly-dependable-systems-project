@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /*
- * Starts timerout and notifies when it ends 
+ * Starts timeout and notifies when it ends
  * Thread-safe.
  */
 public class SimpleTimer implements Timer {

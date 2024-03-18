@@ -106,7 +106,7 @@ public class ConsensusMessage extends Message {
 
         Signable toSign = this.getToSign();
         String serialized = new Gson().toJson(toSign);
-        System.out.printf("signSelf - signing %s\n", serialized);
+        System.out.printf("signSelf - signing %s\n", serialized); // switch to logger
         try {
             this.signature = SigningUtils.sign(serialized, pathToPrivateKey);
         } catch (NoSuchAlgorithmException | InvalidKeyException | InvalidKeySpecException |

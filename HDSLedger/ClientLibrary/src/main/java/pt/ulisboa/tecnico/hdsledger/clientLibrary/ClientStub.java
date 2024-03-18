@@ -2,18 +2,12 @@ package pt.ulisboa.tecnico.hdsledger.clientLibrary;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
-
-import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.PrePrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
 
 import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClientStub {

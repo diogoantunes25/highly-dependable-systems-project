@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import com.google.gson.Gson;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;

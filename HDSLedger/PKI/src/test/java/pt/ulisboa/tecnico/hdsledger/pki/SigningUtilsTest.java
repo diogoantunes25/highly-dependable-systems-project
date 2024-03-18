@@ -1,7 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.pki;
 
 import java.nio.file.Path;
-import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.Key;

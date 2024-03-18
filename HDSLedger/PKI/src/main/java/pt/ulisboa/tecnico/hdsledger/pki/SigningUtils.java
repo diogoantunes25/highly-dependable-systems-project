@@ -6,7 +6,6 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
 
 import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
 
 public class SigningUtils {
     public static String encrypt(byte[] data, String pathToPrivateKey)
@@ -28,9 +27,8 @@ public class SigningUtils {
         PublicKey publicKey = (PublicKey) RSAKeyGenerator.read(pathToPublicKey, "pub");
         Cipher encryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         encryptCipher.init(Cipher.WRAP_MODE, publicKey);
-        byte[] encryptedData = encryptCipher.wrap(key);
 
-        return encryptedData;
+        return encryptCipher.wrap(key);
     }
 
     public static String decrypt(byte[] data, String pathToPublicKey)
@@ -53,18 +51,14 @@ public class SigningUtils {
         Cipher decryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         decryptCipher.init(Cipher.UNWRAP_MODE, privateKey);
         Key sessionKey = decryptCipher.unwrap(data, "AES", Cipher.SECRET_KEY);
-
-        byte[] sessionKeyBytes = sessionKey.getEncoded();
-
-
-        return sessionKeyBytes;
+        
+        return sessionKey.getEncoded();
     }
     public static byte[] generateHMAC(byte[] data, Key key) {
         try {
             Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
             sha256_HMAC.init(key);
-            byte[] macData = sha256_HMAC.doFinal(data);
-            return macData;
+            return sha256_HMAC.doFinal(data);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -84,16 +78,15 @@ public class SigningUtils {
             NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException {
 
         String digest = digest(data);
-        String digestBase64 = encrypt(digest.getBytes(), pathToPrivateKey);
 
-        return digestBase64;
+        return encrypt(digest.getBytes(), pathToPrivateKey);
     }
 
     public static boolean verifySignature(String data, String signature, String pathToPublicKey) {
         try {
             String hash = digest(data);
             byte[] signatureBytes = Base64.getDecoder().decode(signature);
-            String decryptedHash = new String(decrypt(signatureBytes, pathToPublicKey));
+            String decryptedHash = decrypt(signatureBytes, pathToPublicKey);
             return hash.equals(decryptedHash);
 
         } catch (Exception e) {

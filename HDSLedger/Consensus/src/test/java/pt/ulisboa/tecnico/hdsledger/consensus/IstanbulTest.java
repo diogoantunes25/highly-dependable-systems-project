@@ -3,18 +3,14 @@ package pt.ulisboa.tecnico.hdsledger.consensus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import org.junit.jupiter.api.io.TempDir;
 
 import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 
 import java.security.*;
-import java.nio.file.Path;
-import java.io.File;
 import java.io.IOException;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
@@ -23,7 +19,6 @@ import java.util.function.Predicate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Deque;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -33,7 +28,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 
 import javafx.util.Pair;
 
-public class InstanbulTest {
+public class IstanbulTest {
 
 	// n is set to 10 by default
 	@BeforeAll
@@ -114,19 +109,19 @@ public class InstanbulTest {
 	/*
 	 * Create set of instances that doen't use external predicate.
 	 */
-	private List<Instanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages) {
+	private List<Istanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages) {
 		return defaultInstancesWithPredicate(n, confirmed, lambda, messages, value -> true);
 	}
 
-	private List<Instanbul> defaultInstancesWithPredicate(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages, Predicate<String> beta) {
+	private List<Istanbul> defaultInstancesWithPredicate(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages, Predicate<String> beta) {
 		List<ProcessConfig> configs = defaultConfigs(n);
 		
 		System.out.printf("pk 0: %s\n", configs.get(0).getPublicKey());
 
-		List<Instanbul> instances = configs.stream()
+		List<Istanbul> instances = configs.stream()
 			.map(config -> {
 				// Create instance
-				Instanbul i = new Instanbul(configs, config, lambda, beta);
+				Istanbul i = new Istanbul(configs, config, lambda, beta);
 
 				// Register callback for deliver
 				int id = config.getId();
@@ -138,7 +133,7 @@ public class InstanbulTest {
 			}).collect(Collectors.toList());
 
 		for (int i = 0; i < n; i++) {
-			Instanbul instance = instances.get(i);
+			Istanbul instance = instances.get(i);
 
 			// Create a callaback that handles timeout and stores messages
 			Consumer<Integer> callback = timerId -> {
@@ -202,7 +197,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -249,7 +244,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -301,7 +296,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -352,7 +347,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -395,7 +390,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -442,7 +437,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -501,7 +496,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -570,7 +565,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -638,7 +633,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -696,7 +691,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstancesWithPredicate(n, confirmed, lambda, messages, s -> false);
+		List<Istanbul> instances = defaultInstancesWithPredicate(n, confirmed, lambda, messages, s -> false);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -749,7 +744,7 @@ public class InstanbulTest {
 		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
 
 		// Consensus instances
-		List<Instanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -785,7 +780,7 @@ public class InstanbulTest {
 					message.setMessage(roundChangeMessage.toJson());
 				}
 
-				Instanbul instance = instances.get(receiver);
+				Istanbul instance = instances.get(receiver);
 				if (instance == null) System.out.println("[test] instance is null");
 				if (message == null) System.out.println("[test] message is null");
 				List<ConsensusMessage> output = instance.handleMessage(message);
@@ -836,7 +831,7 @@ public class InstanbulTest {
 			.mapToObj(i -> createRoundChangeMessage(me, 0, nextRound, i, Optional.empty(), Optional.empty(), Optional.empty()))
 			.collect(Collectors.toList());
 
-		Optional<Pair<String, Integer>> optPair = Instanbul.highestPrepared(Qrc); 
+		Optional<Pair<String, Integer>> optPair = Istanbul.highestPrepared(Qrc); 
 		assert(optPair.isEmpty());
 	}
 
@@ -861,7 +856,7 @@ public class InstanbulTest {
 			.mapToObj(i -> createRoundChangeMessage(me, 0, nextRound, i, Optional.of(value), Optional.of(round), Optional.of(prepares)))
 			.collect(Collectors.toList());
 
-		Optional<Pair<String, Integer>> optPair = Instanbul.highestPrepared(Qrc); 
+		Optional<Pair<String, Integer>> optPair = Istanbul.highestPrepared(Qrc); 
 		assert(optPair.isPresent());
 		assertEquals(optPair.get().getKey(), value);
 		assertEquals(optPair.get().getValue(), round);
@@ -898,7 +893,7 @@ public class InstanbulTest {
 				})
 			.collect(Collectors.toList());
 
-		Optional<Pair<String, Integer>> optPair = Instanbul.highestPrepared(Qrc); 
+		Optional<Pair<String, Integer>> optPair = Istanbul.highestPrepared(Qrc); 
 		assert(optPair.isPresent());
 		assertEquals(optPair.get().getKey(), String.format("value_%d", n-1));
 		assertEquals(optPair.get().getValue(), n-1);
