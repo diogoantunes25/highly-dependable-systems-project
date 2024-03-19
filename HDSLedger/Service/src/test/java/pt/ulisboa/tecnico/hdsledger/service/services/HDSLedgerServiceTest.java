@@ -2,13 +2,14 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 
 import java.util.List;
 import java.util.Map;

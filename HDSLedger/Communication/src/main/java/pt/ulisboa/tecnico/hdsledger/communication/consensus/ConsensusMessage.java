@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.consensus.message;
+package pt.ulisboa.tecnico.hdsledger.communication.consensus;
 
 import java.util.Optional;
 import java.security.NoSuchAlgorithmException;
@@ -14,6 +14,8 @@ import javax.crypto.NoSuchPaddingException;
 
 import com.google.gson.Gson;
 
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 public class ConsensusMessage extends Message {

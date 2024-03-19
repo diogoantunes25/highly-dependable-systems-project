@@ -1,9 +1,9 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
-import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.TransferRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import java.util.Optional;

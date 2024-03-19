@@ -7,9 +7,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 

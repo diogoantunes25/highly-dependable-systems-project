@@ -2,8 +2,8 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 

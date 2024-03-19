@@ -2,7 +2,13 @@ package pt.ulisboa.tecnico.hdsledger.clientLibrary;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendReply;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
 import com.google.gson.Gson;
 

@@ -1,7 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-
 import java.io.Serializable;
 
 public class HMACMessage extends Message implements Serializable {

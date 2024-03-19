@@ -7,10 +7,10 @@ import java.util.stream.Collectors;
 import java.util.List;
 import java.util.ArrayList;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.PrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 /**

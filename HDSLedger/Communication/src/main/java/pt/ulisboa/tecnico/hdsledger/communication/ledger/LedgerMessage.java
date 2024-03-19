@@ -1,24 +1,21 @@
-package pt.ulisboa.tecnico.hdsledger.communication;
+package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 
-import java.util.Optional;
-import java.security.NoSuchAlgorithmException;
-import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.spec.InvalidKeySpecException;
+import com.google.gson.Gson;
+
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
+import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import java.io.IOException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.util.Optional;
 
-import com.google.gson.Gson;
-
-import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-
-public class AppendMessage extends Message {
-
-    // To whom the message is to be delivered
-    private int receiver;
+public class LedgerMessage extends Message {
 
     // Message (REQUEST, REPLY) - serialized version
     private String message;
@@ -32,16 +29,24 @@ public class AppendMessage extends Message {
     // Id of the previous message
     private int replyToMessageId;
 
-    public AppendMessage(int senderId, Message.Type type, int receiver) {
+    public LedgerMessage(int senderId, Message.Type type) {
         super(senderId, type);
     }
 
-    public AppendRequest deserializeAppendRequest() {
-        return new Gson().fromJson(this.message, AppendRequest.class);
+    public BalanceRequest deserializeBalanceRequest() {
+        return new Gson().fromJson(this.message, BalanceRequest.class);
     }
 
-    public AppendReply deserializeAppendReply() {
-        return new Gson().fromJson(this.message, AppendReply.class);
+    public BalanceReply deserializeBalanceReply() {
+        return new Gson().fromJson(this.message, BalanceReply.class);
+    }
+
+    public TransferRequest deserializeTransferRequest() {
+        return new Gson().fromJson(this.message, TransferRequest.class);
+    }
+
+    public TransferReply deserializeTransferReply() {
+        return new Gson().fromJson(this.message, TransferReply.class);
     }
 
     public String getMessage() {
@@ -52,8 +57,8 @@ public class AppendMessage extends Message {
         this.message = message;
     }
 
-    private Signable getToSign() {
-        return new Signable(this.message);
+    private LedgerMessage.Signable getToSign() {
+        return new LedgerMessage.Signable(this.message);
     }
 
     public int getReplyTo() {
@@ -72,7 +77,6 @@ public class AppendMessage extends Message {
         this.replyToMessageId = replyToMessageId;
     }
 
-
     /**
      * Signs itself and stores signature
      */
@@ -80,13 +84,13 @@ public class AppendMessage extends Message {
         // serialize myself with null signature
         this.signature = null;
 
-        Signable toSign = this.getToSign();
+        LedgerMessage.Signable toSign = this.getToSign();
         String serialized = new Gson().toJson(toSign);
         System.out.printf("signSelf - signing %s\n", serialized);
         try {
             this.signature = SigningUtils.sign(serialized, pathToPrivateKey);
         } catch (NoSuchAlgorithmException | InvalidKeyException | InvalidKeySpecException |
-            NoSuchPaddingException | IllegalBlockSizeException | BadPaddingException | IOException  e) {
+                 NoSuchPaddingException | IllegalBlockSizeException | BadPaddingException | IOException e) {
             throw new RuntimeException(e);
         }
     }
@@ -129,5 +133,5 @@ public class AppendMessage extends Message {
         Signable(String message) {
             this.message = message;
         }
-    }
+    }    
 }
