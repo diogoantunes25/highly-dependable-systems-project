@@ -920,14 +920,23 @@ public class Istanbul {
 		List<ConsensusMessage> Qrc = optQrc.get();
 		List<ConsensusMessage> Qp = optQp.get();
 
-		if (Qrc.size() < this.quorumSize) {
+		// deduplicate Qrc
+		Set<Integer> sendersChecked = new HashSet<>();
+		List<ConsensusMessage> roundChanges = new ArrayList<>();
+		for (ConsensusMessage message: Qrc) {
+			if (!sendersChecked.contains(message.getSenderId())) {
+				sendersChecked.add(message.getSenderId());
+				roundChanges.add(message);
+			}
+		}
+
+		if (roundChanges.size() < this.quorumSize) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format("{0} - justification of pre-prepare was asked for a quorum with less than required size {1} < {2} (which is strange)",
 						config.getId(), Qrc.size(), this.quorumSize));
 
 			return false;
 		}
-
 
 		// TODO (dsa): 
 		// Check 
@@ -948,12 +957,7 @@ public class Istanbul {
 			.filter(m -> m.getRound() == pr)
 			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv)).toList();
 
-		// deduplicate messages from same sender (unfortunately Java Stream API
-		// doesn't seem to provide this facility, so it's done manually)
-		// (there can't be any two messages for same sender otherwise
-		// protocol goes O(n3))
-
-		Set<Integer> sendersChecked = new HashSet<>();
+		sendersChecked = new HashSet<>();
 		List<ConsensusMessage> prepares = new ArrayList<>();
 		for (ConsensusMessage message: preparesDuplicate) {
 			if (!sendersChecked.contains(message.getSenderId())) {
