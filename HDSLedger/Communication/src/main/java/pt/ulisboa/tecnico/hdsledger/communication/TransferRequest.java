@@ -8,13 +8,10 @@ public class TransferRequest {
 
     private int amount;
 
-    private int sequenceNumber;
-
-    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount, int sequenceNumber) {
+    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount) {
         this.sourcePublicKey = sourcePublicKey;
         this.destinationPublicKey = destinationPublicKey;
         this.amount = amount;
-        this.sequenceNumber = sequenceNumber;
     }
 
     public String getSourcePublicKey() {
@@ -39,13 +36,5 @@ public class TransferRequest {
 
     public void setAmount(int amount) {
         this.amount = amount;
-    }
-
-    public int getSequenceNumber() {
-        return sequenceNumber;
-    }
-
-    public void setSequenceNumber(int sequenceNumber) {
-        this.sequenceNumber = sequenceNumber;
     }
 }

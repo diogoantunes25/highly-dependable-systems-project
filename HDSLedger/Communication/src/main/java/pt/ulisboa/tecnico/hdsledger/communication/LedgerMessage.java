@@ -27,6 +27,8 @@ public class LedgerMessage extends Message {
     // Id of the previous message
     private int replyToMessageId;
 
+    private int sequenceNumber;
+
     public LedgerMessage(int senderId, Message.Type type) {
         super(senderId, type);
     }
@@ -73,6 +75,14 @@ public class LedgerMessage extends Message {
 
     public void setReplyToMessageId(int replyToMessageId) {
         this.replyToMessageId = replyToMessageId;
+    }
+
+    public int getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    public void setSequenceNumber(int sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
     }
 
     /**

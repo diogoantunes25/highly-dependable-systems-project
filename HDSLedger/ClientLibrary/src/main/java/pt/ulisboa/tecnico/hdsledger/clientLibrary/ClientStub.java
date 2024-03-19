@@ -88,8 +88,9 @@ public class ClientStub {
         return slotId.get();
     }
 
-    private LedgerMessage createLedgerMessage(int id, Message.Type type, String message) {
+    private LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequenceNumber) {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
+        ledgerMessage.setSequenceNumber(sequenceNumber);
         ledgerMessage.setMessage(message);
         ledgerMessage.signSelf(this.config.getPrivateKey());
         return ledgerMessage;
@@ -97,8 +98,8 @@ public class ClientStub {
 
     public int transfer(String sourcePublicKey, String destinationPublicKey, int amount) {
         int currentRequestId = this.requestId++; // nonce
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, currentRequestId);
-        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest));
+        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
 
         IntStream.range(0, n).forEach(i -> this.link.send(i, request));
@@ -127,8 +128,8 @@ public class ClientStub {
 
     public void checkBalance(String publicKey) {
         int currentRequestId = this.requestId++; // nonce
-        BalanceRequest balanceRequest = new BalanceRequest(publicKey, currentRequestId);
-        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest));
+        BalanceRequest balanceRequest = new BalanceRequest(publicKey);
+        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         System.out.println("Sending balance request: " + new Gson().toJson(request));
     }
 
