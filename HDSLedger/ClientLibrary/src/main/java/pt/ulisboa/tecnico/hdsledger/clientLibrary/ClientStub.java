@@ -84,7 +84,7 @@ public class ClientStub {
         Optional<Integer> slotId = receivedMessages.getDecidedValue();
         
         if (slotId.isPresent()) {
-            System.out.println("Slot decided after f+1 confirmations");
+            LOGGER.log(Level.INFO, "Value decided after f+1 confirmations");
         } else {
             throw new RuntimeException("Slot is not present where it should");
         }
@@ -104,7 +104,7 @@ public class ClientStub {
         int currentRequestId = this.requestId++; // nonce
         TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
-        System.out.println("Sending transfer request: " + new Gson().toJson(request));
+        LOGGER.log(Level.INFO, "Sending transfer request: " + new Gson().toJson(request));
 
         return sendRequest(request);
     }
@@ -113,7 +113,7 @@ public class ClientStub {
         int currentRequestId = this.requestId++; // nonce
         BalanceRequest balanceRequest = new BalanceRequest(publicKey);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
-        System.out.println("Sending balance request: " + new Gson().toJson(request));
+        LOGGER.log(Level.INFO, "Sending balance request: " + new Gson().toJson(request));
 
         return sendRequest(request);
     }
@@ -135,7 +135,7 @@ public class ClientStub {
         Optional<Integer> value = receivedMessages.getDecidedValue();
 
         if (value.isPresent()) {
-            System.out.println("Value decided after f+1 confirmations");
+            LOGGER.log(Level.INFO, "Value decided after f+1 confirmations");
         } else {
             throw new RuntimeException("Value is not present where it should");
         }
@@ -144,17 +144,17 @@ public class ClientStub {
     }
 
     public void handleTransferReply(LedgerMessage message) {
-        System.out.println("Received Transfer reply");
+        LOGGER.log(Level.INFO, "Received Transfer reply");
         TransferReply transferReply = message.deserializeTransferReply();
         receivedMessages.addSlot(transferReply.getSlot(), message.getSenderId());
-        System.out.println("Response registered");
+        LOGGER.log(Level.INFO, "Response registered");
     }
 
     public void handleBalanceReply(LedgerMessage message) {
-        System.out.println("Received Balance reply");
+        LOGGER.log(Level.INFO, "Received Balance reply");
         BalanceReply balanceReply = message.deserializeBalanceReply();
         receivedMessages.addSlot(balanceReply.getValue(), message.getSenderId());
-        System.out.println("Response registered");
+        LOGGER.log(Level.INFO, "Response registered");
     }
 
     public void listen() {
@@ -178,7 +178,7 @@ public class ClientStub {
                             }
                             case ACK, IGNORE -> LOGGER.log(Level.INFO, "Received ACK or IGNORE message. Ignoring.");
                             default -> {
-                                System.out.println(message.getType());
+                                LOGGER.log(Level.WARNING, "Received unknown message type: " + message.getType());
                                 throw new HDSSException(ErrorMessage.CannotParseMessage);
                             }
                         }
@@ -209,7 +209,7 @@ public class ClientStub {
         }
 
         public synchronized void addSlot(int slotId, int senderId) {
-            System.out.printf("Received %d from %d\n", slotId, senderId);
+            LOGGER.log(Level.INFO, "Received slot " + slotId + " from " + senderId);
             slots.putIfAbsent(senderId, slotId);
         
             // Histogram
@@ -220,11 +220,11 @@ public class ClientStub {
                 .forEach(slot -> histogram.put(slot, histogram.getOrDefault(slot, 0) + 1));
 
             for (Map.Entry<Integer, Integer> e: slots.entrySet()) {
-                System.out.printf("slots %d: %d\n", e.getKey(), e.getValue());
+                LOGGER.log(Level.INFO, "Slot " + e.getKey() + ": " + e.getValue());
             }
 
             for (Map.Entry<Integer, Integer> e: histogram.entrySet()) {
-                System.out.printf("Histogram %d: %d\n", e.getKey(), e.getValue());
+                LOGGER.log(Level.INFO, "Histogram " + e.getKey() + ": " + e.getValue());
             }
 
             Optional<Integer> opt = histogram.entrySet()
@@ -238,7 +238,7 @@ public class ClientStub {
             if (opt.isPresent()) {
                 decision = opt;
             } else {
-                System.out.println("No decision yet");
+                LOGGER.log(Level.INFO, "No decision yet");
             }
         }
 

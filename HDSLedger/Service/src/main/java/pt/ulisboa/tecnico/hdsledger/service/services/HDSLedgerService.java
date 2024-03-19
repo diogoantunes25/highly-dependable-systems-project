@@ -185,15 +185,21 @@ public class HDSLedgerService implements UDPService {
                             switch (message.getType()) {
 
                                 case APPEND_REQUEST -> {
-                                    System.out.println("Received request: "+ message.getClass().getName());
+                                    LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} (HDSLedgerService) - Received append request from {1}",
+                                            config.getId(), message.getSenderId()));
                                     append((AppendMessage) message);
                                 }
                                 case TRANSFER_REQUEST -> {
-                                    System.out.println("Received transfer request: "+ message.getClass().getName());
+                                    LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} (HDSLedgerService) - Received transfer request from {1}",
+                                            config.getId(), message.getSenderId()));
                                     transfer((LedgerMessage) message);
                                 }
                                 case BALANCE_REQUEST -> {
-                                    System.out.println("Received balance request: "+ message.getClass().getName());
+                                    LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} (HDSLedgerService) - Received balance request from {1}",
+                                            config.getId(), message.getSenderId()));
                                     checkBalance((LedgerMessage) message);
                                 }
                                 default ->

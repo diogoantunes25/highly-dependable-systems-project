@@ -268,7 +268,7 @@ public class PerfectLink implements Link {
                 return consensusMessage;
             }
             case KEY_PROPOSAL -> {
-                System.out.println("Received KEY_PROPOSAL");
+                LOGGER.log(Level.INFO, "Received Key Proposal");
                 KeyProposal keyProposalMessage = new Gson().fromJson(serialized, KeyProposal.class);
                 if (keyProposalMessage.getReplyTo() == config.getId())
                     receivedAcks.add(keyProposalMessage.getReplyToMessageId());
@@ -276,7 +276,7 @@ public class PerfectLink implements Link {
             }
 
             case HMAC -> {
-                System.out.println("Received HMAC");
+                LOGGER.log(Level.INFO, "Received HMAC");
                 HMACMessage hmacMessage = new Gson().fromJson(serialized, HMACMessage.class);
                 if (hmacMessage.getReplyTo() == config.getId())
                     receivedAcks.add(hmacMessage.getReplyToMessageId());

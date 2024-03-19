@@ -4,19 +4,17 @@ import java.util.Optional;
 import java.security.NoSuchAlgorithmException;
 import java.io.IOException;
 import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.logging.Level;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 
 import com.google.gson.Gson;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
-import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
+import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;;
 
 public class ConsensusMessage extends Message {
 
@@ -108,7 +106,6 @@ public class ConsensusMessage extends Message {
 
         Signable toSign = this.getToSign();
         String serialized = new Gson().toJson(toSign);
-        System.out.printf("signSelf - signing %s\n", serialized); // switch to logger
         try {
             this.signature = SigningUtils.sign(serialized, pathToPrivateKey);
         } catch (NoSuchAlgorithmException | InvalidKeyException | InvalidKeySpecException |
@@ -125,13 +122,11 @@ public class ConsensusMessage extends Message {
      **/
     public boolean checkConsistentSig(String pathToPublicKey) {
         if (this.signature == null) {
-            System.out.println("checkConsistentSig - bad signature because is null");
             return false;
         }
 
         // Check signature
         String serialized = new Gson().toJson(this.getToSign());
-        System.out.printf("checkConsistentSig - checking signature for %s\n", serialized);
         boolean result = SigningUtils.verifySignature(serialized, this.signature, pathToPublicKey);
 
         return result;

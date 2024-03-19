@@ -149,7 +149,6 @@ public class HMACLink implements Link {
                     hmacMessage.getHmac()));
         hmacMessage.setReceiver(nodeId);
         hmacMessage.setMessageId(data.getMessageId());
-        System.out.printf("[HMACLink] Sending message of type %s\n", data.getType());
         if (reliable) {
             perfectLink.send(nodeId, hmacMessage);
         } else {
@@ -254,8 +253,9 @@ public class HMACLink implements Link {
                 "Received message from {0}:{1} of type {2} with hmac {3}, and hmac is correct",
                 InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
                 nodes.get(innerMessage.getSenderId()).getPort(), innerMessage.getType(), hmac));
-
-        System.out.printf("Message inside HMAC Message is of type %s (idInner=%d, idOuter=%d)\n", innerMessage.getType(), innerMessage.getMessageId(), message.getMessageId());
+        LOGGER.log(Level.INFO, MessageFormat.format(
+                "Message inside HMAC Message is of type {0} (idInner={1}, idOuter={2})",
+                innerMessage.getType(), innerMessage.getMessageId(), message.getMessageId()));
 
         return innerMessage;
     }
