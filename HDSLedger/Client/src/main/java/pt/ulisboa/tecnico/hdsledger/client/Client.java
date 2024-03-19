@@ -31,15 +31,8 @@ public class Client {
     public static void main(String[] args) {
 
         final int clientId = Integer.parseInt(args[0]);
-        // TODO (dsa): add again
-        // configPath += args[1];
 
         configPath += "regular_config.json";
-        boolean showDebugLogs = false;
-        // if (args.length 4) {
-        //     showDebugLogs = args[3].equals("-debug");
-        // }
-        showDebugLogs = true;
 
         LOGGER.log(Level.INFO, MessageFormat.format("Using clientId = {0}",
                     clientId));
@@ -74,7 +67,7 @@ public class Client {
         String line = "";
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
 
-        ClientStub stub = new ClientStub(n, config, configs, showDebugLogs);
+        ClientStub stub = new ClientStub(n, config, configs);
         stub.listen();
 
         while (true) {
@@ -111,7 +104,8 @@ public class Client {
                     String publicKey = tokens[1];
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending check balance request for {0}",
                                 publicKey));
-                    stub.checkBalance(publicKey);
+                    int balance = stub.checkBalance(publicKey);
+                    System.out.println(MessageFormat.format("Balance for {0} is {1}", publicKey, balance));
                     break;
                 case "exit":
                     System.out.println("Exiting...");
