@@ -2,7 +2,6 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Link interface.

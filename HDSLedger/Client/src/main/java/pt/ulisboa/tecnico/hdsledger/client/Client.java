@@ -7,7 +7,6 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import java.text.MessageFormat;
 import java.util.Scanner;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import javafx.util.Pair;
@@ -23,7 +22,7 @@ public class Client {
     private static void printUsage() {
         System.out.println("Available commands:");
         System.out.println("     help - Print this message.");
-        System.out.println("     transfer <sourcePublicKey> <destinationPublicKey> <amount> <tip> - Transfer <amount> from <sourcePublicKey> to <destinationPublicKey> with <tip>.");
+        System.out.println("     transfer <sourcePublicKey> <destinationPublicKey> <amount> - Transfer <amount> from <sourcePublicKey> to <destinationPublicKey> with.");
         System.out.println("     check_balance <publicKey> - Get the balance of <publicKey>.");
         System.out.println("     exit - Exit the application.");
     }
@@ -31,15 +30,8 @@ public class Client {
     public static void main(String[] args) {
 
         final int clientId = Integer.parseInt(args[0]);
-        // TODO (dsa): add again
-        // configPath += args[1];
 
         configPath += "regular_config.json";
-        boolean showDebugLogs = false;
-        // if (args.length 4) {
-        //     showDebugLogs = args[3].equals("-debug");
-        // }
-        showDebugLogs = true;
 
         LOGGER.log(Level.INFO, MessageFormat.format("Using clientId = {0}",
                     clientId));
@@ -71,10 +63,10 @@ public class Client {
         printUsage();
         final Scanner scanner = new Scanner(System.in);
 
-        String line = "";
+        String line;
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
 
-        ClientStub stub = new ClientStub(n, config, configs, showDebugLogs);
+        ClientStub stub = new ClientStub(n, config, configs);
         stub.listen();
 
         while (true) {
@@ -89,7 +81,7 @@ public class Client {
                     printUsage();
                     break;
                 case "transfer":
-                    if (tokens.length != 5) {
+                    if (tokens.length != 4) {
                         System.out.println("Invalid number of arguments.");
                         printUsage();
                         break;
@@ -97,13 +89,13 @@ public class Client {
                     String sourcePublicKey = tokens[1];
                     String destinationPublicKey = tokens[2];
                     int amount = Integer.parseInt(tokens[3]);
-                    int tip = Integer.parseInt(tokens[4]);
 
-                    LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2} and tip {3}",
-                            sourcePublicKey, destinationPublicKey, amount, tip));
-                    stub.transfer(sourcePublicKey, destinationPublicKey, amount, tip);
+                    LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
+                            sourcePublicKey, destinationPublicKey, amount));
+                    int slot = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
+                    System.out.println(MessageFormat.format("Transfer request sent. Slot: {0}", slot));
                     break;
-                case "check_balance":
+                case "balance":
                     if (tokens.length != 2) {
                         System.out.println("Invalid number of arguments.");
                         printUsage();
@@ -112,7 +104,8 @@ public class Client {
                     String publicKey = tokens[1];
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending check balance request for {0}",
                                 publicKey));
-                    stub.checkBalance(publicKey);
+                    int balance = stub.checkBalance(publicKey);
+                    System.out.println(MessageFormat.format("Balance for {0} is {1}", publicKey, balance));
                     break;
                 case "exit":
                     System.out.println("Exiting...");

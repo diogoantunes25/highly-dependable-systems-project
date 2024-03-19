@@ -1,10 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeAll;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.io.TempDir;
@@ -23,21 +21,8 @@ import java.io.IOException;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
-import java.util.List;
-import java.util.Optional;
-import java.util.Deque;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import javafx.util.Pair;
 
 public class TimerTest {
 
@@ -62,11 +47,11 @@ public class TimerTest {
 
         Thread.sleep(100);
 
-        assertTrue(!triggered.get());
+        Assertions.assertFalse(triggered.get());
 
         Thread.sleep(timeout);
 
-        assertTrue(triggered.get());
+        Assertions.assertTrue(triggered.get());
     }
 
     /**
@@ -93,7 +78,7 @@ public class TimerTest {
 
             Thread.sleep(timeout + 100);
 
-            assertFalse(triggered.get());
+            Assertions.assertFalse(triggered.get());
 
         }
 
@@ -121,7 +106,7 @@ public class TimerTest {
 
         Thread.sleep(timeout + 100);
 
-        assertFalse(triggered.get());
+        Assertions.assertFalse(triggered.get());
     }
 
     /**

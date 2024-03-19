@@ -3,20 +3,25 @@ package pt.ulisboa.tecnico.hdsledger.clientLibrary;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceReply;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferReply;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
 import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
+import java.util.logging.Level;
 
 public class ClientStub {
+
+    // Logger
+    private static final CustomLogger LOGGER = new CustomLogger(ClientStub.class.getName());
 
     // Client identifier (self)
     private final ProcessConfig config;
@@ -26,26 +31,23 @@ public class ClientStub {
 
     // Link to communicate with nodes
     private final Link link;
-
-    // Map of responses from nodes
-    private final Map<Integer, AppendRequest> responses = new HashMap<>(); // TODO - Change AppendRequest to appropriate type of Response
     
     // Current request ID
     private int requestId = 0;
 
     private final int n;
 
-    private ReceivedSlots receivedSlots;
+    private ReceivedMessages receivedMessages;
 
-    public ClientStub(int n, ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs) throws HDSSException {
+    public ClientStub(int n, ProcessConfig clientConfig, ProcessConfig[] nodeConfigs) throws HDSSException {
         this.config = clientConfig;
         this.others = nodeConfigs;
         this.n = n;
         this.link = new HMACLink(clientConfig,
 						clientConfig.getPort(),
 						nodeConfigs,
-						AppendMessage.class);
-        this.receivedSlots = new ReceivedSlots(n);
+						LedgerMessage.class);
+        this.receivedMessages = new ReceivedMessages(n);
     }
 
     private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
@@ -68,9 +70,9 @@ public class ClientStub {
             this.link.send(i, request);
         }
 
-        receivedSlots = new ReceivedSlots(n);
+        receivedMessages = new ReceivedMessages(n);
 
-        while (!receivedSlots.hasDecided()) {
+        while (!receivedMessages.hasDecided()) {
             try {
                 // TODO (dsa): bad
                 Thread.sleep(100);
@@ -79,7 +81,7 @@ public class ClientStub {
             }
         }
 
-        Optional<Integer> slotId = receivedSlots.getDecidedSlot();
+        Optional<Integer> slotId = receivedMessages.getDecidedValue();
         
         if (slotId.isPresent()) {
             System.out.println("Slot decided after f+1 confirmations");
@@ -89,39 +91,70 @@ public class ClientStub {
 
         return slotId.get();
     }
-    
-    private LedgerMessage createLedgerMessage(int id, Message.Type type, String message) {
+
+    private LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequenceNumber) {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
+        ledgerMessage.setSequenceNumber(sequenceNumber);
         ledgerMessage.setMessage(message);
         ledgerMessage.signSelf(this.config.getPrivateKey());
         return ledgerMessage;
     }
 
-    public void transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
+    public int transfer(String sourcePublicKey, String destinationPublicKey, int amount) {
         int currentRequestId = this.requestId++; // nonce
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, tip, currentRequestId);
-        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest));
+        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
+
+        return sendRequest(request);
     }
 
-    public void checkBalance(String publicKey) {
+    public int checkBalance(String publicKey) {
         int currentRequestId = this.requestId++; // nonce
-        BalanceRequest balanceRequest = new BalanceRequest(publicKey, currentRequestId);
-        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest));
+        BalanceRequest balanceRequest = new BalanceRequest(publicKey);
+        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         System.out.println("Sending balance request: " + new Gson().toJson(request));
+
+        return sendRequest(request);
     }
 
-    public void handleAppendReply(AppendMessage message) {
-        System.out.println("Received append reply");
-        AppendReply appendReply = message.deserializeAppendReply();
+    private int sendRequest(LedgerMessage request) {
+        IntStream.range(0, n).forEach(i -> this.link.send(i, request));
 
-        String key = String.format("%s_%s", appendReply.getValue(), appendReply.getSequenceNumber());
-        receivedSlots.addSlot(appendReply.getSlot(), message.getSenderId());
-        System.out.println("Response registered");
+        receivedMessages = new ReceivedMessages(n);
+
+        while (!receivedMessages.hasDecided()) {
+            try {
+                // TODO (dsa): bad
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        Optional<Integer> value = receivedMessages.getDecidedValue();
+
+        if (value.isPresent()) {
+            System.out.println("Value decided after f+1 confirmations");
+        } else {
+            throw new RuntimeException("Value is not present where it should");
+        }
+
+        return value.get();
     }
 
     public void handleTransferReply(LedgerMessage message) {
         System.out.println("Received Transfer reply");
+        TransferReply transferReply = message.deserializeTransferReply();
+        receivedMessages.addSlot(transferReply.getSlot(), message.getSenderId());
+        System.out.println("Response registered");
+    }
+
+    public void handleBalanceReply(LedgerMessage message) {
+        System.out.println("Received Balance reply");
+        BalanceReply balanceReply = message.deserializeBalanceReply();
+        receivedMessages.addSlot(balanceReply.getValue(), message.getSenderId());
+        System.out.println("Response registered");
     }
 
     public void listen() {
@@ -134,15 +167,16 @@ public class ClientStub {
                         switch (message.getType()) {
                             case APPEND_REPLY -> {
                                 AppendMessage reply = (AppendMessage) message;
-                                handleAppendReply(reply);
                             }
                             case TRANSFER_REPLY -> {
                                 LedgerMessage reply = (LedgerMessage) message;
                                 handleTransferReply(reply);
                             }
-                            case ACK, IGNORE -> {
-                                continue; // maybe add to logger?
+                            case BALANCE_REPLY -> {
+                                LedgerMessage reply = (LedgerMessage) message;
+                                handleBalanceReply(reply);
                             }
+                            case ACK, IGNORE -> LOGGER.log(Level.INFO, "Received ACK or IGNORE message. Ignoring.");
                             default -> {
                                 System.out.println(message.getType());
                                 throw new HDSSException(ErrorMessage.CannotParseMessage);
@@ -158,8 +192,8 @@ public class ClientStub {
         }
     }
 
-    // class that holds the received slots for each value   
-    private static class ReceivedSlots {
+    // class that holds the received messages for each value
+    private static class ReceivedMessages {
         // value -> replica -> slot confirmed
         private final Map<Integer, Integer> slots = new HashMap<>();
 
@@ -169,7 +203,7 @@ public class ClientStub {
 
         private final int f;
 
-        public ReceivedSlots(int n) {
+        public ReceivedMessages(int n) {
             this.n = n;
             this.f = (n-1)/3;
         }
@@ -202,7 +236,7 @@ public class ClientStub {
 
             // TODO: change prints to proper logger
             if (opt.isPresent()) {
-                decision = Optional.of(opt.get());
+                decision = opt;
             } else {
                 System.out.println("No decision yet");
             }
@@ -213,7 +247,7 @@ public class ClientStub {
             return decision.isPresent();
         }
 
-        public synchronized Optional<Integer> getDecidedSlot() {
+        public synchronized Optional<Integer> getDecidedValue() {
             return decision;
         }
     }

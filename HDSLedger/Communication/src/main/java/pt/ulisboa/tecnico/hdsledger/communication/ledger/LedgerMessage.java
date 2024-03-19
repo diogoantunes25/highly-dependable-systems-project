@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 import com.google.gson.Gson;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import javax.crypto.BadPaddingException;
@@ -28,6 +27,8 @@ public class LedgerMessage extends Message {
     private int replyTo;
     // Id of the previous message
     private int replyToMessageId;
+
+    private int sequenceNumber;
 
     public LedgerMessage(int senderId, Message.Type type) {
         super(senderId, type);
@@ -77,6 +78,14 @@ public class LedgerMessage extends Message {
         this.replyToMessageId = replyToMessageId;
     }
 
+    public int getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    public void setSequenceNumber(int sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
+    }
+
     /**
      * Signs itself and stores signature
      */
@@ -84,7 +93,7 @@ public class LedgerMessage extends Message {
         // serialize myself with null signature
         this.signature = null;
 
-        LedgerMessage.Signable toSign = this.getToSign();
+        pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage.Signable toSign = this.getToSign();
         String serialized = new Gson().toJson(toSign);
         System.out.printf("signSelf - signing %s\n", serialized);
         try {
@@ -133,5 +142,5 @@ public class LedgerMessage extends Message {
         Signable(String message) {
             this.message = message;
         }
-    }    
+    }
 }

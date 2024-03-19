@@ -28,7 +28,7 @@ public class BankCommand implements Command {
         String messageSource = SigningUtils.publicKeyHash(transferRequest.getSourcePublicKey());
         String messageDestination = SigningUtils.publicKeyHash(transferRequest.getDestinationPublicKey());
 
-        if (seq != transferRequest.getSequenceNumber() &&
+        if (seq != proof.getSequenceNumber() &&
                 !source.equals(messageSource) &&
                 !destination.equals(messageDestination) &&
                 amount != transferRequest.getAmount()) {

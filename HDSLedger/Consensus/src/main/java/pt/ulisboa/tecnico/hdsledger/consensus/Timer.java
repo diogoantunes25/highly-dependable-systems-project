@@ -8,15 +8,14 @@ import java.util.function.Consumer;
 public interface Timer {
 	/**
 	 * Starts timer that times out after `timeout` milliseconds.
-	 * @return timer id
-	*/
+	 */
 	void setTimerToRunning(int timerId, int timeout);
 
 	/**
 	 * Stops timer
 	 * @param id timer id (as returned by setTimerToRunning)
 	 */
-	public void setTimerToStopped(int id);
+	void setTimerToStopped(int id);
 
 	/**
 	 * Register callback for timeouts

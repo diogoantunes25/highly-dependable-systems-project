@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedList;
-import java.util.Queue;
 import java.util.logging.Level;
 
 import com.google.gson.Gson;
@@ -14,10 +12,14 @@ import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendReply;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceReply;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferReply;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
-import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
@@ -37,9 +39,6 @@ public class HDSLedgerService implements UDPService {
     // Node service that allows start consensus instances
     private final NodeService nodeService;
 
-    // Confirmed queue
-    private Queue<String> confirmed = new LinkedList<>();
-
     public HDSLedgerService(ProcessConfig[] others, Link link, ProcessConfig config, NodeService nodeService) {
         this.others = others;
         this.link = link;   
@@ -56,6 +55,14 @@ public class HDSLedgerService implements UDPService {
         message.setMessage(new Gson().toJson(appendReply));
 
         return message;
+    }
+
+    private LedgerMessage createLedgerMessage(int id, Message.Type type, String serializedMessage) {
+       LedgerMessage message = new LedgerMessage(id, type);
+
+       message.setMessage(serializedMessage);
+
+       return message;
     }
 
     public void append(AppendMessage message) {
@@ -80,6 +87,66 @@ public class HDSLedgerService implements UDPService {
 
         String value = request.getValue();
         nodeService.startConsensus(clientId, sequenceNumber, value, message);
+    }
+
+    public void transfer(LedgerMessage message) {
+        TransferRequest transferRequest = message.deserializeTransferRequest();
+
+        // check if the signature is consistent
+        if (!message.checkConsistentSig(others[message.getSenderId()].getPublicKey())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Bad signature from client {1}",
+                        config.getId(), message.getSenderId()));
+            return;
+        }
+
+        // check if the source public key is valid and corresponds to the client id
+        if (!transferRequest.getSourcePublicKey().equals(others[message.getSenderId()].getPublicKey())) {
+            // TODO (dgm): think about this verification
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Source public key does not match client id {1}",
+                        config.getId(), message.getSenderId()));
+            return;
+        }
+
+        int clientId = message.getSenderId();
+
+        TransferReply transferReply = new TransferReply(true, 1, 1);
+        // Send the decided value to the client
+        LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REPLY, new Gson().toJson(transferReply));
+        link.send(clientId, reply);
+    }
+
+    public void checkBalance(LedgerMessage message) {
+        BalanceRequest balanceRequest = message.deserializeBalanceRequest();
+
+        // check if the signature is consistent
+        if (!message.checkConsistentSig(others[message.getSenderId()].getPublicKey())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Bad signature from client {1}",
+                        config.getId(), message.getSenderId()));
+            return;
+        }
+
+        // check if the public key is valid and corresponds to the client id
+        if (!balanceRequest.getSourcePublicKey().equals(others[message.getSenderId()].getPublicKey())) {
+            // TODO (dgm): think about this verification
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Public key does not match client id {1}",
+                        config.getId(), message.getSenderId()));
+            return;
+        }
+
+        int clientId = message.getSenderId();
+
+        BalanceReply balanceReply = new BalanceReply(345, 1);
+        // Send the decided value to the client
+        LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.BALANCE_REPLY, new Gson().toJson(balanceReply));
+        link.send(clientId, reply);
     }
 
     /**
@@ -120,6 +187,14 @@ public class HDSLedgerService implements UDPService {
                                 case APPEND_REQUEST -> {
                                     System.out.println("Received request: "+ message.getClass().getName());
                                     append((AppendMessage) message);
+                                }
+                                case TRANSFER_REQUEST -> {
+                                    System.out.println("Received transfer request: "+ message.getClass().getName());
+                                    transfer((LedgerMessage) message);
+                                }
+                                case BALANCE_REQUEST -> {
+                                    System.out.println("Received balance request: "+ message.getClass().getName());
+                                    checkBalance((LedgerMessage) message);
                                 }
                                 default ->
                                     LOGGER.log(Level.INFO,

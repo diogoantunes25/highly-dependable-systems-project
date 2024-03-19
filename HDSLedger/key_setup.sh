@@ -1,70 +1,68 @@
-#! /bin/bash
+#!/bin/bash
 
-die() {
-	cat << EOF
-	Usage: <n_nodes> <n_replicas> <config_file>
-
-	Script to setup public key infrastructure.
-EOF
-	
-	exit 1
-}
-
-if [[ $# -ne 3 ]]; then
-	die
+# Check if correct number of arguments are provided
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <n_replicas> <n_clients> <config_path>"
+    exit 1
 fi
 
-n=$1
-n2=$2
-config=$3
+n_replicas=$1
+n_clients=$2
+config_path=$3
 
-cd PKI || exit 1
-mvn clean install -DskipTests
+# Function to generate JSON objects for replicas
+generate_replica_config() {
+    local i=$1
+    local json="{"
+    json+="\"id\": \"$i\","
+    json+="\"hostname\": \"localhost\","
+    json+="\"port\": $((3000+i)),"
+    json+="\"port2\": $((4000+i)),"
+    json+="\"N\": $n_replicas,"
+    json+="\"publicKeyPath\": \"/tmp/node$i.pub\","
+    json+="\"privateKeyPath\": \"/tmp/node$i.priv\""
+    json+="}"
+    echo "$json"
+}
 
-for i in $(seq 0 $((n+n2))); do
-	mvn exec:java -Dexec.args="w /tmp/priv_$i.key /tmp/pub_$i.key"
+# Function to generate JSON objects for clients
+generate_client_config() {
+    local j=$1
+    local json="{"
+    json+="\"id\": \"$j\","
+    json+="\"hostname\": \"localhost\","
+    json+="\"port\": $((3000+j)),"
+    json+="\"port2\": -1,"
+    json+="\"N\": $n_replicas,"
+    json+="\"publicKeyPath\": \"/tmp/client$j.pub\","
+    json+="\"privateKeyPath\": \"/tmp/client$j.priv\""
+    json+="}"
+    echo "$json"
+}
+
+# Change directory to PKI
+cd PKI || exit
+
+# Generate configs for replicas
+config="["
+for ((i=0; i<n_replicas; i++)); do
+    mvn exec:java -Dexec.args="w /tmp/node$i.priv /tmp/node$i.pub"
+    config+=$(generate_replica_config "$i")
+    config+=","
 done
 
-echo "[" > $config
-
-i=0
-cat >> $config <<EOF
-    {
-        "id": "$i",
-        "hostname": "localhost",
-		"port": $((3000+i)),
-        "port2": $((4000+i)),
-        "N": $n,
-        "publicKeyPath": "/tmp/pub_$i.key",
-        "privateKeyPath": "/tmp/priv_$i.key"
-EOF
-
-for i in $(seq 1 $n); do
-	cat >> $config <<EOF
-	},
-    {
-        "id": "$i",
-        "hostname": "localhost",
-		"port": $((3000+i)),
-        "port2": $((4000+i)),
-        "N": $n,
-        "publicKeyPath": "/tmp/pub_$i.key",
-        "privateKeyPath": "/tmp/priv_$i.key"
-EOF
+# Generate configs for clients
+for ((j=n_replicas; j<n_replicas+n_clients; j++)); do
+    mvn exec:java -Dexec.args="w /tmp/client$j.priv /tmp/client$j.pub"
+    config+=$(generate_client_config "$j")
+    if [ "$j" -ne "$((n_replicas + n_clients - 1))" ]; then
+        config+=","
+    fi
 done
+config+="]"
 
-for i in $(seq $n $((n+n2))); do
-	cat >> $config <<EOF
-	},
-    {
-        "id": "$i",
-        "hostname": "localhost",
-		"port": $((3000+i)),
-        "port2": -1,
-        "N": $n,
-        "publicKeyPath": "/tmp/pub_$i.key",
-        "privateKeyPath": "/tmp/priv_$i.key"
-EOF
-done
+cd ../
+# Write the config to the specified path
+echo "$config" > "$config_path"
 
-echo "} ]" >> $config
+echo "Configuration generated and saved to $config_path"

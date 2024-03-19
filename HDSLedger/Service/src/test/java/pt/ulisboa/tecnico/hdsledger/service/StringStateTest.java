@@ -36,7 +36,7 @@ public class StringStateTest {
 	// no real encryption is tested, only one client key is generated to be used
 	// where needed
 	@BeforeAll
-	private static void genKeys() {
+	public static void genKeys() {
 		int n = 5;
 		List<String> publicKeys = IntStream.range(0, n)
 			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))

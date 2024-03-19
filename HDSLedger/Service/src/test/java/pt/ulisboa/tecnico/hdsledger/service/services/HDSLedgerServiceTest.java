@@ -37,42 +37,41 @@ public class HDSLedgerServiceTest {
 		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
 		
 		message.setMessage(new Gson().toJson(appendRequest));
-        message.signSelf(String.format("/tmp/priv_%d.key", id));
+        message.signSelf(String.format("/tmp/node%d.priv", id));
 
 		return message;
 	}
 
 	// n is set to 10 by default
 	@BeforeAll
-    public static void genKeys() {
-		// Gen keys for servers
+	public static void genKeys() throws GeneralSecurityException, IOException {
 		int n = 10;
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
-			.collect(Collectors.toList());
+				.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+				.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
-			.collect(Collectors.toList());
+				.mapToObj(i -> String.format("/tmp/node%d.priv", i))
+				.collect(Collectors.toList());
 
 		for (int i = 0 ; i < n; i++) {
 			try {
-				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+				RSAKeyGenerator.read(privateKeys.get(i), "priv");
+				RSAKeyGenerator.read(publicKeys.get(i), "pub");
 			} catch (GeneralSecurityException | IOException e) {
-				throw new RuntimeException(e);
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
 			}
 		}
 	}
 
-
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
 			.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.priv", i))
 			.collect(Collectors.toList());
 
 		return IntStream.range(0, n).mapToObj(i ->
@@ -87,31 +86,6 @@ public class HDSLedgerServiceTest {
 			)
 		).collect(Collectors.toList());
 	}
-
-	private List<Link> defaultLinks(int n, List<ProcessConfig> configs) {
-		ProcessConfig[] configsArray = new ProcessConfig[n];
-		configs.toArray(configsArray);	
-		return configs
-				.stream()
-				.map(config -> 
-					new PerfectLink(config,
-						config.getPort(),
-						configsArray,
-						ConsensusMessage.class))
-				.collect(Collectors.toList());
-	}
-
-	private List<Link> defaultLinksClient(int n, List<ProcessConfig> clientConfigs, List<ProcessConfig> nodesConfigs) {
-		return clientConfigs
-				.stream()
-				.map(config -> 
-					new PerfectLink(config,
-						config.getPort(),
-						nodesConfigs.toArray(new ProcessConfig[n]),
-						AppendMessage.class))
-				.collect(Collectors.toList());
-	}
-
 	private List<Link> linksFromConfigs(List<ProcessConfig> configs, Class<? extends Message> messageClass) {
 		int n = configs.size();
 		return configs
@@ -172,7 +146,7 @@ public class HDSLedgerServiceTest {
 
 	private List<String> defaultClientKeys(int n, int nClients) {
 		return IntStream.range(n, n+nClients)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
 			.collect(Collectors.toList());
 	}
 

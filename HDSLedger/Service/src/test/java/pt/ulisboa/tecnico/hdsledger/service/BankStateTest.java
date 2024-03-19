@@ -24,9 +24,10 @@ import java.util.Optional;
 import com.google.gson.Gson;
 
 public class BankStateTest {
-    private static LedgerMessage createLedgerMessage(int id, Message.Type type, String message) {
+    private static LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequencNumber) {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
         ledgerMessage.setMessage(message);
+		ledgerMessage.setSequenceNumber(sequencNumber);
         ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", id));
         return ledgerMessage;
     }
@@ -34,14 +35,14 @@ public class BankStateTest {
 	private static LedgerMessage createTransferRequest(int requestId, int source, int destination, int amount) {
 		String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
 		String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, 0, requestId);
-        return createLedgerMessage(source, Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest));
+        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        return createLedgerMessage(source, Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), requestId);
 	}
 
 	// no real encryption is tested, only one client key is generated to be used
 	// where needed
 	@BeforeAll
-	private static void genKeys() {
+	public static void genKeys() {
 		int n = 5;
 		List<String> publicKeys = IntStream.range(0, n)
 			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))

@@ -3,12 +3,8 @@ package pt.ulisboa.tecnico.hdsledger.consensus;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
