@@ -897,6 +897,8 @@ public class Istanbul {
 	 */
 	boolean justifyPrePrepare(int round, String value, Optional<List<ConsensusMessage>> optQp, Optional<List<ConsensusMessage>> optQrc) {
 
+		// TODO (dsa): if message is not bottom, it should have some justification
+
 		if (round == FIRST_ROUND) {
 			return true;
 		}
@@ -922,6 +924,7 @@ public class Istanbul {
 		}
 
 
+		// TODO (dsa): 
 		// Check 
 		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
 
@@ -966,6 +969,8 @@ public class Istanbul {
 
 			return Optional.empty();
 		}
+
+		// TODO (dsa): if message is not bottom, it should have some justification
 
 		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
 
@@ -1233,7 +1238,8 @@ public class Istanbul {
 							MessageFormat.format(
 								"{0} - Stashed PRE-PREPARE at instance {1}, Round {2} (message was for {3})",
 						config.getId(), this.lambda, this.ri, messageRound));
-					this.stashedPrepare.putIfAbsent(messageRound, new ArrayList<>());
+					// TODO (dsa): this is not parsed
+					this.stashedPrepare.putIfAbsent(message, new ArrayList<>());
 					List<ConsensusMessage> stashed = stashedPrepare.get(messageRound);
 					stashed.add(message);
 					yield new ArrayList<>();
