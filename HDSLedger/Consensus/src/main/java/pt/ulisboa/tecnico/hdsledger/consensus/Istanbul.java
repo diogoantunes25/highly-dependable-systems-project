@@ -92,6 +92,9 @@ public class Istanbul {
 	// Whether start was called already
 	private AtomicBoolean started = new AtomicBoolean(false);
 
+	// Commit message for this instance (if decided)
+	private Optional<List<ConsensusMessage>> commitQuorums = Optional.empty();
+
 	// FIXME (dsa): I'm not sure that this is needed
 	private Optional<CommitMessage> commitMessage;
 
@@ -399,7 +402,13 @@ public class Istanbul {
 			}
 
 			case COMMIT -> {
-				// Doesn't need to be signed, nor it has a justification
+				int senderId = message.getSenderId();
+				if (!message.checkConsistentSig(others.get(senderId).getPublicKey())) {
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+									"Received COMMIT message from {0} - BAD SIGNATURE", senderId));
+					yield false;
+				}
 				yield true;
 			}
 
@@ -509,7 +518,7 @@ public class Istanbul {
 			}
 
 			case COMMIT -> {
-				// Doesn't need to be signed, nor it has a justification
+				message.signSelf(myPrivateKeyPath);
 				yield message;
 			}
 
@@ -775,6 +784,10 @@ public class Istanbul {
 						"{0} - Decided on Consensus Instance {1}, Round {2}",
 						config.getId(), this.lambda, round));
 
+			// Store quorum of commit messages in case replica receives
+			// a round change message for this instance
+			commitQuorums = Optional.of(commitMessages.getMessages(round).values().stream().collect(Collectors.toList()));
+
 			return new ArrayList<>();
 		}
 
@@ -1030,6 +1043,7 @@ public class Istanbul {
 				sendersChecked.add(message.getSenderId());
 				prepares.add(message);
 			}
+
 		}
 
 		// Get ROUND-CHANGE messages without justifications
@@ -1051,6 +1065,15 @@ public class Istanbul {
 	 * @param message to be handled
 	 */
 	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
+
+		if (!commitQuorums.isEmpty()) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format("{0} - Received ROUND-CHANGE message but already decided, sending quorum of commits that lead to decide",
+						config.getId()));
+
+			return commitQuorums.get();
+		}
+
 		List<ConsensusMessage> messages = new ArrayList<>();
 
 		int round = message.getRound();
