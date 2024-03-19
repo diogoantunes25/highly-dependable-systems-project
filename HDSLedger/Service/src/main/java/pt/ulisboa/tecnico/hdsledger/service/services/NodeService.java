@@ -22,12 +22,13 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.Istanbul;
 import pt.ulisboa.tecnico.hdsledger.consensus.Timer;
 import pt.ulisboa.tecnico.hdsledger.consensus.SimpleTimer;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
@@ -35,7 +36,6 @@ import pt.ulisboa.tecnico.hdsledger.service.State;
 import pt.ulisboa.tecnico.hdsledger.service.StringState;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.service.Command;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 
 import com.google.gson.Gson;
 

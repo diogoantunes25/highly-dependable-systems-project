@@ -1,6 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.CommitMessage;
 
 public class InstanceInfo {
 

@@ -9,9 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.io.TempDir;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.builder.ConsensusMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.*;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;

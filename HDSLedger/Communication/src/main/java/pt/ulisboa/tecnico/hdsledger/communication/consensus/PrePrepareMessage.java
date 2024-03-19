@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.consensus.message;
+package pt.ulisboa.tecnico.hdsledger.communication.consensus;
 
 import java.util.List;
 import java.util.Optional;

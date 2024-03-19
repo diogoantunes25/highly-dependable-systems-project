@@ -1,7 +1,12 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.builder.ConsensusMessageBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrePrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.RoundChangeMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 

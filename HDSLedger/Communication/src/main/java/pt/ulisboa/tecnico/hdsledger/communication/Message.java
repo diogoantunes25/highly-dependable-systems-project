@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.consensus.message;
+package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.io.Serializable;
 

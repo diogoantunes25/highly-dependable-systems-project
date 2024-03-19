@@ -10,11 +10,11 @@ import java.util.logging.Level;
 
 import com.google.gson.Gson;
 
-import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendReply;
-import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendReply;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;

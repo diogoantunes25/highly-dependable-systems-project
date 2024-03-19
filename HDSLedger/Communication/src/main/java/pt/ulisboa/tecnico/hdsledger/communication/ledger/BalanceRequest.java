@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.communication;
+package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 
 public class BalanceRequest {
 

@@ -2,8 +2,9 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import com.google.gson.Gson;
 
-import pt.ulisboa.tecnico.hdsledger.consensus.message.*;
-import pt.ulisboa.tecnico.hdsledger.consensus.message.Message.Type;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 
 import java.io.IOException;
