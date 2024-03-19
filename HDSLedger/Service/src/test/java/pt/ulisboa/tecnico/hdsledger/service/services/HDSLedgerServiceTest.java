@@ -37,7 +37,7 @@ public class HDSLedgerServiceTest {
 		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
 		
 		message.setMessage(new Gson().toJson(appendRequest));
-        message.signSelf(String.format("/tmp/node%d.priv", id));
+        message.signSelf(String.format("/tmp/priv_%d.key", id));
 
 		return message;
 	}
@@ -47,11 +47,11 @@ public class HDSLedgerServiceTest {
 	public static void genKeys() throws GeneralSecurityException, IOException {
 		int n = 10;
 		List<String> publicKeys = IntStream.range(0, n)
-				.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+				.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
 				.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-				.mapToObj(i -> String.format("/tmp/node%d.priv", i))
+				.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
 				.collect(Collectors.toList());
 
 		for (int i = 0 ; i < n; i++) {
@@ -67,11 +67,11 @@ public class HDSLedgerServiceTest {
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
 			.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/node%d.priv", i))
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
 			.collect(Collectors.toList());
 
 		return IntStream.range(0, n).mapToObj(i ->
@@ -146,7 +146,7 @@ public class HDSLedgerServiceTest {
 
 	private List<String> defaultClientKeys(int n, int nClients) {
 		return IntStream.range(n, n+nClients)
-			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
 			.collect(Collectors.toList());
 	}
 

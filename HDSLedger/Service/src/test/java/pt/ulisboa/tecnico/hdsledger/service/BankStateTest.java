@@ -42,7 +42,7 @@ public class BankStateTest {
 	// no real encryption is tested, only one client key is generated to be used
 	// where needed
 	@BeforeAll
-	public static void genKeys() {
+	public static void genKeys() throws GeneralSecurityException, IOException {
 		int n = 5;
 		List<String> publicKeys = IntStream.range(0, n)
 			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
@@ -54,9 +54,10 @@ public class BankStateTest {
 
 		for (int i = 0 ; i < n; i++) {
 			try {
-				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+				RSAKeyGenerator.read(publicKeys.get(i), "pub");
+				RSAKeyGenerator.read(privateKeys.get(i), "priv");
 			} catch (GeneralSecurityException | IOException e) {
-				throw new RuntimeException(e);
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
 			}
 		}
 	}

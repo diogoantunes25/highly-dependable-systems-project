@@ -38,11 +38,11 @@ public class IstanbulTest {
     public static void genKeys() throws GeneralSecurityException, IOException {
 		int n = 12;
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
 			.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/node%d.priv", i))
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
 			.collect(Collectors.toList());
 
 		for (int i = 0 ; i < n; i++) {
@@ -79,11 +79,11 @@ public class IstanbulTest {
 
 	private List<ProcessConfig> defaultConfigs(int n) {
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
 			.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/node%d.priv", i))
+			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
 			.collect(Collectors.toList());
 
 		return IntStream.range(0, n).mapToObj(i ->
