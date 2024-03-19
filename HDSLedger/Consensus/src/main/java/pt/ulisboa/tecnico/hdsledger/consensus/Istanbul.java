@@ -1228,7 +1228,7 @@ public class Istanbul {
 			case PREPARE -> {
 				if (messageRound == this.ri) {
 					yield prepare(message);
-				} else if (message.getRound() < this.ri) {
+				} else if (messageRound < this.ri) {
 					// PREPARES from previous rounds can be dropped
 					yield new ArrayList<>();
 				} else {
@@ -1239,7 +1239,7 @@ public class Istanbul {
 								"{0} - Stashed PRE-PREPARE at instance {1}, Round {2} (message was for {3})",
 						config.getId(), this.lambda, this.ri, messageRound));
 					// TODO (dsa): this is not parsed
-					this.stashedPrepare.putIfAbsent(message, new ArrayList<>());
+					this.stashedPrepare.putIfAbsent(messageRound, new ArrayList<>());
 					List<ConsensusMessage> stashed = stashedPrepare.get(messageRound);
 					stashed.add(message);
 					yield new ArrayList<>();
