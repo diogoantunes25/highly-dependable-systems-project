@@ -13,7 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Optional;
 
-public class BalanceMessage extends Message {
+public class LedgerMessage extends Message {
 
     // Message (REQUEST, REPLY) - serialized version
     private String message;
@@ -27,7 +27,7 @@ public class BalanceMessage extends Message {
     // Id of the previous message
     private int replyToMessageId;
 
-    public BalanceMessage(int senderId, Message.Type type) {
+    public LedgerMessage(int senderId, Message.Type type) {
         super(senderId, type);
     }
 
@@ -39,6 +39,14 @@ public class BalanceMessage extends Message {
         return new Gson().fromJson(this.message, BalanceReply.class);
     }
 
+    public TransferRequest deserializeTransferRequest() {
+        return new Gson().fromJson(this.message, TransferRequest.class);
+    }
+
+    public TransferReply deserializeTransferReply() {
+        return new Gson().fromJson(this.message, TransferReply.class);
+    }
+
     public String getMessage() {
         return message;
     }
@@ -47,8 +55,8 @@ public class BalanceMessage extends Message {
         this.message = message;
     }
 
-    private BalanceMessage.Signable getToSign() {
-        return new BalanceMessage.Signable(this.message);
+    private LedgerMessage.Signable getToSign() {
+        return new LedgerMessage.Signable(this.message);
     }
 
     public int getReplyTo() {
@@ -67,7 +75,6 @@ public class BalanceMessage extends Message {
         this.replyToMessageId = replyToMessageId;
     }
 
-
     /**
      * Signs itself and stores signature
      */
@@ -75,7 +82,7 @@ public class BalanceMessage extends Message {
         // serialize myself with null signature
         this.signature = null;
 
-        BalanceMessage.Signable toSign = this.getToSign();
+        LedgerMessage.Signable toSign = this.getToSign();
         String serialized = new Gson().toJson(toSign);
         System.out.printf("signSelf - signing %s\n", serialized);
         try {
@@ -124,5 +131,5 @@ public class BalanceMessage extends Message {
         Signable(String message) {
             this.message = message;
         }
-    }
+    }    
 }
