@@ -1,37 +1,29 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
-import org.junit.jupiter.api.Test;
+import javafx.util.Pair;
 import org.junit.jupiter.api.BeforeAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.RoundChangeMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.builder.ConsensusMessageBuilder;
+import org.junit.jupiter.api.Test;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
-import java.security.*;
 import java.io.IOException;
-import java.util.stream.IntStream;
-import java.util.stream.Collectors;
+import java.security.GeneralSecurityException;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.List;
-import java.util.Optional;
-import java.util.Deque;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-import javafx.util.Pair;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class IstanbulTest {
+
+
 
 	// n is set to 10 by default
 	@BeforeAll
@@ -53,28 +45,6 @@ public class IstanbulTest {
 				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
 			}
 		}
-	}
-
-	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
-		PrepareMessage prepareMessage = new PrepareMessage(value);
-
-		return new ConsensusMessageBuilder(id, Message.Type.PREPARE)
-			.setConsensusInstance(instance)
-			.setRound(round)
-			.setMessage(prepareMessage.toJson())
-			.setReceiver(receiver)
-			.build();
-	}
-
-	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
-		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri, justification);
-
-		return new ConsensusMessageBuilder(id, Message.Type.ROUND_CHANGE)
-			.setConsensusInstance(instance)
-			.setRound(round)
-			.setMessage(roundChangeMessage.toJson())
-			.setReceiver(receiver)
-			.build();
 	}
 
 	private List<ProcessConfig> defaultConfigs(int n) {
@@ -821,7 +791,7 @@ public class IstanbulTest {
 		int nextRound = 1;
 		int me = 0;
 		List<ConsensusMessage> Qrc = IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(me, 0, nextRound, i, Optional.empty(), Optional.empty(), Optional.empty()))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(me, 0, nextRound, i, Optional.empty(), Optional.empty(), Optional.empty()))
 			.collect(Collectors.toList());
 
 		Optional<Pair<String, Integer>> optPair = Istanbul.highestPrepared(Qrc); 
@@ -842,11 +812,11 @@ public class IstanbulTest {
 		int round = 3;
 
 		List<ConsensusMessage> prepares = IntStream.range(0, n)
-			.mapToObj(i -> createPrepareMessage(me, value, lambda, round, i))
+			.mapToObj(i -> MessageCreator.createPrepareMessage(me, value, lambda, round, i))
 			.collect(Collectors.toList());
 
 		List<ConsensusMessage> Qrc = IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(me, 0, nextRound, i, Optional.of(value), Optional.of(round), Optional.of(prepares)))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(me, 0, nextRound, i, Optional.of(value), Optional.of(round), Optional.of(prepares)))
 			.collect(Collectors.toList());
 
 		Optional<Pair<String, Integer>> optPair = Istanbul.highestPrepared(Qrc); 
@@ -869,7 +839,7 @@ public class IstanbulTest {
 		int round = 3;
 
 		List<ConsensusMessage> prepares = IntStream.range(0, n)
-			.mapToObj(i -> createPrepareMessage(me, String.format("a%d", i), lambda, i, i))
+			.mapToObj(i -> MessageCreator.createPrepareMessage(me, String.format("a%d", i), lambda, i, i))
 			.collect(Collectors.toList());
 
 		List<ConsensusMessage> Qrc = IntStream.range(0, n)
@@ -879,10 +849,10 @@ public class IstanbulTest {
 
 				// Get justification for prepared value for round i
 				List<ConsensusMessage> justification = IntStream.range(0, n)
-					.mapToObj(j -> createPrepareMessage(me, value, lambda, i, j))
+					.mapToObj(j -> MessageCreator.createPrepareMessage(me, value, lambda, i, j))
 					.collect(Collectors.toList());
 
-				return createRoundChangeMessage(me, 0, nextRound, i, Optional.of(pv), Optional.of(pr), Optional.of(justification));
+				return MessageCreator.createRoundChangeMessage(me, 0, nextRound, i, Optional.of(pv), Optional.of(pr), Optional.of(justification));
 				})
 			.collect(Collectors.toList());
 

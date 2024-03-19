@@ -3,13 +3,10 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
@@ -21,23 +18,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.Optional;
 
-import com.google.gson.Gson;
-
 public class BankStateTest {
-    private static LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequencNumber) {
-        LedgerMessage ledgerMessage = new LedgerMessage(id, type);
-        ledgerMessage.setMessage(message);
-		ledgerMessage.setSequenceNumber(sequencNumber);
-        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", id));
-        return ledgerMessage;
-    }
-
-	private static LedgerMessage createTransferRequest(int requestId, int source, int destination, int amount) {
-		String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
-		String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
-        return createLedgerMessage(source, Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), requestId);
-	}
 
 	// no real encryption is tested, only one client key is generated to be used
 	// where needed
@@ -86,7 +67,7 @@ public class BankStateTest {
 
 		System.out.println(state);
 
-		LedgerMessage request = createTransferRequest(seq, source, destination, amount);
+		LedgerMessage request = MessageCreator.createTransferRequest(seq, source, destination, amount);
 		BankCommand cmd = new BankCommand(seq, sourceId, destinationId, amount, request); 
 
 		assertEquals(Optional.of(1), state.update(cmd));
@@ -116,13 +97,13 @@ public class BankStateTest {
 
 		System.out.println(state);
 
-		LedgerMessage request1 = createTransferRequest(1, A, B, 5);
+		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
 		BankCommand cmd1 = new BankCommand(1, AId, BId, 5, request1); 
 
-		LedgerMessage request2 = createTransferRequest(2, A, B, 4);
+		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 4);
 		BankCommand cmd2 = new BankCommand(2, AId, BId, 4, request2); 
 
-		LedgerMessage request3 = createTransferRequest(1, B, A, 3);
+		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
 		BankCommand cmd3 = new BankCommand(1, BId, AId, 3, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
@@ -156,13 +137,13 @@ public class BankStateTest {
 
 		System.out.println(state);
 
-		LedgerMessage request1 = createTransferRequest(1, A, B, 5);
+		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
 		BankCommand cmd1 = new BankCommand(1, AId, BId, 5, request1); 
 
-		LedgerMessage request2 = createTransferRequest(2, A, B, 6);
+		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 6);
 		BankCommand cmd2 = new BankCommand(2, AId, BId, 6, request2); 
 
-		LedgerMessage request3 = createTransferRequest(1, B, A, 3);
+		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
 		BankCommand cmd3 = new BankCommand(1, BId, AId, 3, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
@@ -197,13 +178,13 @@ public class BankStateTest {
 
 		System.out.println(state);
 
-		LedgerMessage request1 = createTransferRequest(1, A, B, 5);
+		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
 		BankCommand cmd1 = new BankCommand(1, AId, BId, 5, request1); 
 
-		LedgerMessage request2 = createTransferRequest(2, A, B, 4);
+		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 4);
 		BankCommand cmd2 = new BankCommand(2, AId, BId, 4, request2); 
 
-		LedgerMessage request3 = createTransferRequest(1, B, A, 3);
+		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
 		BankCommand cmd3 = new BankCommand(1, BId, AId, 3, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));

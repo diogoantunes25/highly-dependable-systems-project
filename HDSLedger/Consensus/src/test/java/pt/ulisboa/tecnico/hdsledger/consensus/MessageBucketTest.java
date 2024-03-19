@@ -8,49 +8,9 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrePrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrepareMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.RoundChangeMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.builder.ConsensusMessageBuilder;
-import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
-import pt.ulisboa.tecnico.hdsledger.communication.consensus.CommitMessage;
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 
 public class MessageBucketTest {
-	// TODO (dsa): also exists in Istanbul class, factor out to some utils type thing
-	private ConsensusMessage createPrepareMessage(int id, String value, int instance, int round, int receiver) {
-		PrepareMessage prepareMessage = new PrepareMessage(value);
-
-		return new ConsensusMessageBuilder(id, Type.PREPARE)
-			.setConsensusInstance(instance)
-			.setRound(round)
-			.setMessage(prepareMessage.toJson())
-			.setReceiver(receiver)
-			.build();
-	}
-
-	private ConsensusMessage createCommitMessage(int id, String value, int instance, int round, int receiver) {
-		CommitMessage commitMessage = new CommitMessage(value);
-
-		return new ConsensusMessageBuilder(id, Type.COMMIT)
-			.setConsensusInstance(instance)
-			.setRound(round)
-			.setMessage(commitMessage.toJson())
-			.setReceiver(receiver)
-			.build();
-	}
-
-	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
-		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri, justification);
-
-		return new ConsensusMessageBuilder(id, Type.ROUND_CHANGE)
-			.setConsensusInstance(instance)
-			.setRound(round)
-			.setMessage(roundChangeMessage.toJson())
-			.setReceiver(receiver)
-			.build();
-	}
-
 	// TODO (dsa): move this to parameterized test
 
 	/**
@@ -66,7 +26,7 @@ public class MessageBucketTest {
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
 					.mapToObj(i ->
-						createPrepareMessage(i, value, instance, round, receiver))
+							MessageCreator.createPrepareMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<String> optValue = bucket.hasValidPrepareQuorum(round);	
@@ -89,7 +49,7 @@ public class MessageBucketTest {
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, quorumSize)
 					.mapToObj(i ->
-						createPrepareMessage(i, value, instance, round, receiver))
+							MessageCreator.createPrepareMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<String> optValue = bucket.hasValidPrepareQuorum(round);	
@@ -112,7 +72,7 @@ public class MessageBucketTest {
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, quorumSize-1)
 					.mapToObj(i ->
-						createPrepareMessage(i, value, instance, round, receiver))
+							MessageCreator.createPrepareMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<String> optValue = bucket.hasValidPrepareQuorum(round);	
@@ -152,7 +112,7 @@ public class MessageBucketTest {
 		IntStream.range(0, n)
 					.mapToObj(i -> {
 						String value = i < quorumSize ? good : bad;
-						return createPrepareMessage(i, value, instance, round, receiver);
+						return MessageCreator.createPrepareMessage(i, value, instance, round, receiver);
 					})
 					.forEach(m -> bucket.addMessage(m));
 	
@@ -174,7 +134,7 @@ public class MessageBucketTest {
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
 					.mapToObj(i ->
-						createCommitMessage(i, value, instance, round, receiver))
+							MessageCreator.createCommitMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
@@ -197,7 +157,7 @@ public class MessageBucketTest {
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, quorumSize)
 					.mapToObj(i ->
-						createCommitMessage(i, value, instance, round, receiver))
+							MessageCreator.createCommitMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
@@ -220,7 +180,7 @@ public class MessageBucketTest {
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, quorumSize-1)
 					.mapToObj(i ->
-						createCommitMessage(i, value, instance, round, receiver))
+							MessageCreator.createCommitMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
@@ -260,7 +220,7 @@ public class MessageBucketTest {
 		IntStream.range(0, n)
 					.mapToObj(i -> {
 						String value = i < quorumSize ? good : bad;
-						return createCommitMessage(i, value, instance, round, receiver);
+						return MessageCreator.createCommitMessage(i, value, instance, round, receiver);
 					})
 					.forEach(m -> bucket.addMessage(m));
 	
@@ -286,7 +246,7 @@ public class MessageBucketTest {
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1, receiver, pvi, pri, justification))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(i, instance, round+1, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -311,7 +271,7 @@ public class MessageBucketTest {
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri, justification))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(i, instance, round, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -335,7 +295,7 @@ public class MessageBucketTest {
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round+1+i, receiver, pvi, pri, justification))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(i, instance, round+1+i, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -362,7 +322,7 @@ public class MessageBucketTest {
 
 		// 2f request are stale
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+(i+1), receiver, pvi, pri, justification))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(i, instance, round-2*f+(i+1), receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -389,7 +349,7 @@ public class MessageBucketTest {
 
 		// 2f+1 request are stale
 		IntStream.range(0, n)
-			.mapToObj(i -> createRoundChangeMessage(i, instance, round-2*f+i, receiver, pvi, pri, justification))
+			.mapToObj(i -> MessageCreator.createRoundChangeMessage(i, instance, round-2*f+i, receiver, pvi, pri, justification))
 			.forEach(m -> bucket.addMessage(m));
 
 		Optional<Integer> optValue = bucket.hasValidWeakRoundChangeSupport(round);	
@@ -414,7 +374,7 @@ public class MessageBucketTest {
 				  //
 		MessageBucket bucket = new MessageBucket(n);
 		IntStream.range(0, quorumSize)
-					.mapToObj(i -> createRoundChangeMessage(i, instance, round, receiver, pvi, pri, justification))
+					.mapToObj(i -> MessageCreator.createRoundChangeMessage(i, instance, round, receiver, pvi, pri, justification))
 					.forEach(m -> bucket.addMessage(m));
 	
 		Optional<List<ConsensusMessage>> optLst = bucket.hasValidRoundChangeQuorum(round);	

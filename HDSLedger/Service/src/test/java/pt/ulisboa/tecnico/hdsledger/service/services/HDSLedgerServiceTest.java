@@ -7,7 +7,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 
@@ -30,17 +30,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.google.gson.Gson;
 
 public class HDSLedgerServiceTest {
-
-	private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
-		AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
-
-		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
-		
-		message.setMessage(new Gson().toJson(appendRequest));
-        message.signSelf(String.format("/tmp/priv_%d.key", id));
-
-		return message;
-	}
 
 	// n is set to 10 by default
 	@BeforeAll
@@ -184,7 +173,7 @@ public class HDSLedgerServiceTest {
 		});
 
 		for (int i = 0; i < n_Nodes; i++) {
-			AppendMessage request = createAppendRequestMessage(clientId, i, value, seq);
+			AppendMessage request = MessageCreator.createAppendRequestMessage(clientId, i, value, seq);
 			clientLink.send(i, request);
 		}
 

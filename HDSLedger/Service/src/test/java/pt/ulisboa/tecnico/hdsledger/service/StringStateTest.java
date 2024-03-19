@@ -3,15 +3,12 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeAll;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
-import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
+
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -22,16 +19,6 @@ import java.util.stream.IntStream;
 import com.google.gson.Gson;
 
 public class StringStateTest {
-	private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
-		AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
-
-		AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
-
-		message.setMessage(new Gson().toJson(appendRequest));
-		message.signSelf(String.format("/tmp/priv_%d.key", id));
-
-		return message;
-	}
 
 	// no real encryption is tested, only one client key is generated to be used
 	// where needed
@@ -64,13 +51,13 @@ public class StringStateTest {
 		int clientId1 = 4;
 		int seq1 = 1;
 		String value1 = "a";
-		AppendMessage proof1 = createAppendRequestMessage(clientId1, receiver, value1, seq1);
+		AppendMessage proof1 = MessageCreator.createAppendRequestMessage(clientId1, receiver, value1, seq1);
 		StringCommand cmd1 = new StringCommand(clientId1, seq1, value1, proof1);
 
 		int clientId2 = 4;
 		int seq2 = 2;
 		String value2 = "b";
-		AppendMessage proof2 = createAppendRequestMessage(clientId2, receiver, value2, seq2);
+		AppendMessage proof2 = MessageCreator.createAppendRequestMessage(clientId2, receiver, value2, seq2);
 		StringCommand cmd2 = new StringCommand(clientId2, seq2, value2, proof2);
 
 		state.update(cmd1);
@@ -92,7 +79,7 @@ public class StringStateTest {
 		int seq = 1;
 		String value = "a";
 		String otherValue = "b";
-		AppendMessage proof = createAppendRequestMessage(clientId, receiver, value, seq);
+		AppendMessage proof = MessageCreator.createAppendRequestMessage(clientId, receiver, value, seq);
 
 		try {
 			StringCommand cmd = new StringCommand(clientId, seq, otherValue, proof);
