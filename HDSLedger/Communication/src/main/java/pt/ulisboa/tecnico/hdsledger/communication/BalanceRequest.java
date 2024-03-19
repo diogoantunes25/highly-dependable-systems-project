@@ -6,11 +6,11 @@ public class BalanceRequest {
 
     private String sourcePublicKey;
 
-    private int nonce;
+    private int sequenceNumber;
 
-    public BalanceRequest(String sourcePublicKey, int nonce) {
+    public BalanceRequest(String sourcePublicKey, int sequenceNumber) {
         this.sourcePublicKey = sourcePublicKey;
-        this.nonce = nonce;
+        this.sequenceNumber = sequenceNumber;
     }
 
     public String getSourcePublicKey() {
@@ -21,11 +21,11 @@ public class BalanceRequest {
         this.sourcePublicKey = sourcePublicKey;
     }
 
-    public int getNonce() {
-        return nonce;
+    public int getSequenceNumber() {
+        return sequenceNumber;
     }
 
-    public void setNonce(int nonce) {
-        this.nonce = nonce;
+    public void setSequenceNumber(int sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
     }
 }

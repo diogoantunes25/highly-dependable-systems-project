@@ -4,7 +4,7 @@ public class BalanceReply {
     // Value to append
     private int value;
 
-    //nonce
+    // nonce
     private int sequenceNumber;
     public BalanceReply(int value, int sequenceNumber) {
         this.value = value;

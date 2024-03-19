@@ -12,14 +12,14 @@ public class TransferRequest {
 
     private int tip;
 
-    private int nonce;
+    private int sequenceNumber;
 
-    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount, int tip, int nonce) {
+    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount, int tip, int sequenceNumber) {
         this.sourcePublicKey = sourcePublicKey;
         this.destinationPublicKey = destinationPublicKey;
         this.amount = amount;
         this.tip = tip;
-        this.nonce = nonce;
+        this.sequenceNumber = sequenceNumber;
     }
 
     public String getSourcePublicKey() {
@@ -54,11 +54,11 @@ public class TransferRequest {
         this.tip = tip;
     }
 
-    public int getNonce() {
-        return nonce;
+    public int getSequenceNumber() {
+        return sequenceNumber;
     }
 
-    public void setNonce(int nonce) {
-        this.nonce = nonce;
+    public void setSequenceNumber(int sequenceNumber) {
+        this.sequenceNumber = sequenceNumber;
     }
 }
