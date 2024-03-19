@@ -84,10 +84,10 @@ public class ClientStub {
         return slotId.get();
     }
 
-    private TransferMessage createTransferRequestMessage(int id, int sequenceNumber, String senderPublicKey, String receiverPublicKey, int amount, int tip) {
+    private LedgerMessage createTransferRequestMessage(int id, int sequenceNumber, String senderPublicKey, String receiverPublicKey, int amount, int tip) {
         TransferRequest transferRequest = new TransferRequest(senderPublicKey, receiverPublicKey, amount, tip, sequenceNumber);
 
-        TransferMessage message = new TransferMessage(id, Message.Type.TRANSFER_REQUEST);
+        LedgerMessage message = new LedgerMessage(id, Message.Type.TRANSFER_REQUEST);
 
         message.setMessage(new Gson().toJson(transferRequest));
         message.signSelf(this.config.getPrivateKey());
@@ -95,10 +95,10 @@ public class ClientStub {
         return message;
     }
 
-    private BalanceMessage createBalanceRequestMessage(int id, int sequenceNumber, String publicKey) {
+    private LedgerMessage createBalanceRequestMessage(int id, int sequenceNumber, String publicKey) {
         BalanceRequest balanceRequest = new BalanceRequest(publicKey, sequenceNumber);
 
-        BalanceMessage message = new BalanceMessage(id, Message.Type.BALANCE_REQUEST);
+        LedgerMessage message = new LedgerMessage(id, Message.Type.BALANCE_REQUEST);
 
         message.setMessage(new Gson().toJson(balanceRequest));
         message.signSelf(this.config.getPrivateKey());
@@ -109,13 +109,13 @@ public class ClientStub {
     public void transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
         int currentRequestId = this.requestId.getAndIncrement(); // nonce
 
-        TransferMessage request = createTransferRequestMessage(config.getId(), currentRequestId, sourcePublicKey, destinationPublicKey, amount, tip);
+        LedgerMessage request = createTransferRequestMessage(config.getId(), currentRequestId, sourcePublicKey, destinationPublicKey, amount, tip);
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
     }
 
     public void checkBalance(String publicKey) {
         int currentRequestId = this.requestId.getAndIncrement(); // nonce
-        BalanceMessage balanceMessage = createBalanceRequestMessage(config.getId(), currentRequestId, publicKey);
+        LedgerMessage balanceMessage = createBalanceRequestMessage(config.getId(), currentRequestId, publicKey);
         System.out.println("Sending balance request: " + new Gson().toJson(balanceMessage));
     }
 
@@ -128,7 +128,7 @@ public class ClientStub {
         System.out.println("Response registered");
     }
 
-    public void handleTransferReply(TransferMessage message) {
+    public void handleTransferReply(LedgerMessage message) {
         System.out.println("Received Transfer reply");
     }
 
@@ -145,7 +145,7 @@ public class ClientStub {
                                 handleAppendReply(reply);
                             }
                             case TRANSFER_REPLY -> {
-                                TransferMessage reply = (TransferMessage) message;
+                                LedgerMessage reply = (LedgerMessage) message;
                                 handleTransferReply(reply);
                             }
                             case ACK, IGNORE -> {
