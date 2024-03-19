@@ -54,11 +54,11 @@ public class NodeServiceTest {
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
 			.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.priv", i))
 			.collect(Collectors.toList());
 
 		return IntStream.range(0, n).mapToObj(i ->
@@ -89,7 +89,7 @@ public class NodeServiceTest {
 
 	private List<String> defaultClientKeys(int n, int nClients) {
 		return IntStream.range(n, n+nClients)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
 			.collect(Collectors.toList());
 	}
 
@@ -132,7 +132,7 @@ public class NodeServiceTest {
 
         AppendMessage message = new AppendMessage(clientId, Message.Type.APPEND_REQUEST, 0);
         message.setMessage(new Gson().toJson(appendRequest));
-        message.signSelf(String.format("/tmp/priv_%d.key", clientId));
+        message.signSelf(String.format("/tmp/node%d.priv", clientId));
 
         return message;
 

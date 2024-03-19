@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
@@ -14,10 +15,10 @@ public class HMACLinkTest {
     @Test
     public void testHMACLink() throws GeneralSecurityException, IOException {
         // generate nodes private and public keys
-        String privKeyPath1 = "/tmp/priv1.key";
-        String pubKeyPath1 = "/tmp/pub1.key";
-        String privKeyPath2 = "/tmp/priv2.key";
-        String pubKeyPath2 = "/tmp/pub2.key";
+        String privKeyPath1 = "/tmp/node1.priv";
+        String pubKeyPath1 = "/tmp/node1.pub";
+        String privKeyPath2 = "/tmp/node2.priv";
+        String pubKeyPath2 = "/tmp/node2.pub";
         try {
             RSAKeyGenerator.read(privKeyPath1, "priv");
             RSAKeyGenerator.read(pubKeyPath1, "pub");
