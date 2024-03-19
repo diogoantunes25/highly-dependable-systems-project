@@ -8,9 +8,13 @@ import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
+import java.util.logging.Level;
 
 public class ClientStub {
+
+    // Logger
+    private static final CustomLogger LOGGER = new CustomLogger(ClientStub.class.getName());
 
     // Client identifier (self)
     private final ProcessConfig config;
@@ -38,7 +42,7 @@ public class ClientStub {
         this.link = new HMACLink(clientConfig,
 						clientConfig.getPort(),
 						nodeConfigs,
-						AppendMessage.class);
+						LedgerMessage.class);
         this.receivedSlots = new ReceivedSlots(n);
     }
 
@@ -83,7 +87,7 @@ public class ClientStub {
 
         return slotId.get();
     }
-    
+
     private LedgerMessage createLedgerMessage(int id, Message.Type type, String message) {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
         ledgerMessage.setMessage(message);
@@ -91,11 +95,34 @@ public class ClientStub {
         return ledgerMessage;
     }
 
-    public void transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
+    public int transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
         int currentRequestId = this.requestId++; // nonce
         TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, tip, currentRequestId);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest));
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
+
+        IntStream.range(0, n).forEach(i -> this.link.send(i, request));
+
+        receivedSlots = new ReceivedSlots(n);
+
+        while (!receivedSlots.hasDecided()) {
+            try {
+                // TODO (dsa): bad
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        Optional<Integer> slotId = receivedSlots.getDecidedSlot();
+
+        if (slotId.isPresent()) {
+            System.out.println("Slot decided after f+1 confirmations");
+        } else {
+            throw new RuntimeException("Slot is not present where it should");
+        }
+
+        return slotId.get();
     }
 
     public void checkBalance(String publicKey) {
@@ -116,6 +143,16 @@ public class ClientStub {
 
     public void handleTransferReply(LedgerMessage message) {
         System.out.println("Received Transfer reply");
+        TransferReply transferReply = message.deserializeTransferReply();
+        receivedSlots.addSlot(transferReply.getSlot(), message.getSenderId());
+        System.out.println("Response registered");
+    }
+
+    public void handleBalanceReply(LedgerMessage message) {
+        System.out.println("Received Balance reply");
+        BalanceReply balanceReply = message.deserializeBalanceReply();
+        receivedSlots.addSlot(balanceReply.getValue(), message.getSenderId());
+        System.out.println("Response registered");
     }
 
     public void listen() {
@@ -134,8 +171,13 @@ public class ClientStub {
                                 LedgerMessage reply = (LedgerMessage) message;
                                 handleTransferReply(reply);
                             }
+                            case BALANCE_REPLY -> {
+                                LedgerMessage reply = (LedgerMessage) message;
+                                handleBalanceReply(reply);
+                            }
                             case ACK, IGNORE -> {
-                                continue; // maybe add to logger?
+                                LOGGER.log(Level.INFO, "Received ACK or IGNORE message. Ignoring.");
+                                continue;
                             }
                             default -> {
                                 System.out.println(message.getType());

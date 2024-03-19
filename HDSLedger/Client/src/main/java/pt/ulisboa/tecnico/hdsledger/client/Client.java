@@ -101,9 +101,9 @@ public class Client {
 
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2} and tip {3}",
                             sourcePublicKey, destinationPublicKey, amount, tip));
-                    stub.transfer(sourcePublicKey, destinationPublicKey, amount, tip);
+                    int slot = stub.transfer(sourcePublicKey, destinationPublicKey, amount, tip);
                     break;
-                case "check_balance":
+                case "balance":
                     if (tokens.length != 2) {
                         System.out.println("Invalid number of arguments.");
                         printUsage();

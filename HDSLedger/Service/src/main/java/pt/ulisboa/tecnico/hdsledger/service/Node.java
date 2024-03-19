@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
@@ -21,8 +22,8 @@ public class Node {
 
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
     // Hardcoded path to files
-    // private static String configPath = "src/main/resources/";
-    private static String configPath = "/tmp/regular_config.json";
+    private static String configPath = "src/main/resources/regular_config.json";
+    // private static String configPath = "/tmp/regular_config.json";
 
     public static void main(String[] args) {
 
@@ -57,7 +58,7 @@ public class Node {
 
             // Get a link that has all parties in the system
             Link ledgerLink = new HMACLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
-                    AppendMessage.class);
+                    LedgerMessage.class);
 
             NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs, clientPks);
             HDSLedgerService hdsLedgerService = new HDSLedgerService(ledgerConfigs, ledgerLink, ledgerConfig, nodeService);
