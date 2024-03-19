@@ -7,6 +7,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 
 import java.util.List;
@@ -183,7 +184,7 @@ public class HDSLedgerServiceTest {
 		int basePortHDS = 40000;
 		int clientId = n_Nodes; // must be greater than n-1
 		int seq = 0;
-		String cmd = "a";
+		String value = "a";
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n_Nodes);
 
 		// Setup node service
@@ -208,7 +209,7 @@ public class HDSLedgerServiceTest {
 		});
 
 		for (int i = 0; i < n_Nodes; i++) {
-			AppendMessage request = createAppendRequestMessage(clientId, i, cmd, seq);
+			AppendMessage request = createAppendRequestMessage(clientId, i, value, seq);
 			clientLink.send(i, request);
 		}
 
@@ -225,18 +226,20 @@ public class HDSLedgerServiceTest {
 		// Check output to clients is what was expected
 		for (int i = 0; i < n_Nodes; i++) {
 			assertEquals(1, confirmedSlots.get(i).size());
-			Slot s = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s = confirmedSlots.get(i).removeFirst();
+			StringCommand cmd = s.getCmd();
+
 			assertEquals(s.getSlotId(), 1);
-			assertEquals(s.getClientId(), clientId);
-			assertEquals(s.getSeq(), seq);
-			assertEquals(s.getMessage(), cmd);
+			assertEquals(cmd.getClientId(), clientId);
+			assertEquals(cmd.getSeq(), seq);
+			assertEquals(cmd.getValue(), value);
 		}
 		
 		// Check state is what was expected
 		for (NodeService service: nodeServices) {
 			List<String> ledger = service.getLedger();
 			assertEquals(ledger.size(), 1);
-			assertEquals(ledger.get(0), cmd);
+			assertEquals(ledger.get(0), value);
 		}
 	}
 

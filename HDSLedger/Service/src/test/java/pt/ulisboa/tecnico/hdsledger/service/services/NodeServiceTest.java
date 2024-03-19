@@ -7,6 +7,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.service.Command;
+import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 
 import java.security.*;
@@ -144,8 +146,8 @@ public class NodeServiceTest {
 		int basePort = 10000;
 		int clientId = n;
 		int seq = 134;
-		String cmd = "a";
-		AppendMessage proof = getDefaultProof(clientId, seq, cmd);
+		String value = "a";
+		AppendMessage proof = getDefaultProof(clientId, seq, value);
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
 		List<NodeService> services = setupServices(n, basePort, nClients);
@@ -156,7 +158,7 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(clientId, seq, cmd, proof));
+		services.forEach(service -> service.startConsensus(clientId, seq, value, proof));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -173,18 +175,19 @@ public class NodeServiceTest {
 		// Check output to clients is what was expected
 		for (int i = 0; i < n; i++) {
 			assertEquals(1, confirmedSlots.get(i).size());
-			Slot s = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s = confirmedSlots.get(i).removeFirst();
 			assertEquals(s.getSlotId(), 1);
-			assertEquals(s.getClientId(), clientId);
-			assertEquals(s.getSeq(), seq);
-			assertEquals(s.getMessage(), cmd);
+			StringCommand cmd = s.getCmd();
+			assertEquals(cmd.getClientId(), clientId);
+			assertEquals(cmd.getSeq(), seq);
+			assertEquals(cmd.getValue(), value);
 		}
 		
 		// Check state is what was expected
 		for (NodeService service: services) {
 			List<String> ledger = service.getLedger();
 			assertEquals(ledger.size(), 1);
-			assertEquals(ledger.get(0), cmd);
+			assertEquals(ledger.get(0), value);
 		}
 	}
 
@@ -196,13 +199,13 @@ public class NodeServiceTest {
 
 		int clientId1 = n;
 		int seq1 = 13241;
-		String cmd1 = "a";
-		AppendMessage proof1 = getDefaultProof(clientId1, seq1, cmd1);
+		String value1 = "a";
+		AppendMessage proof1 = getDefaultProof(clientId1, seq1, value1);
 
 		int clientId2 = n;
 		int seq2 = 13223;
-		String cmd2 = "b";
-		AppendMessage proof2 = getDefaultProof(clientId2, seq2, cmd2);
+		String value2 = "b";
+		AppendMessage proof2 = getDefaultProof(clientId2, seq2, value2);
 
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
@@ -215,8 +218,8 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(clientId1, seq1, cmd1, proof1));
-		services.forEach(service -> service.startConsensus(clientId2, seq2, cmd2, proof2));
+		services.forEach(service -> service.startConsensus(clientId1, seq1, value1, proof1));
+		services.forEach(service -> service.startConsensus(clientId2, seq2, value2, proof2));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -233,24 +236,26 @@ public class NodeServiceTest {
 		// Check output to clients is what was expected
 		for (int i = 0; i < n; i++) {
 			assertEquals(2, confirmedSlots.get(i).size());
-			Slot s1 = confirmedSlots.get(i).removeFirst();
-			Slot s2 = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s1 = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s2 = confirmedSlots.get(i).removeFirst();
+			StringCommand cmd1 = s1.getCmd();
+			StringCommand cmd2 = s2.getCmd();
 
-			assertEquals(clientId1, s1.getClientId());
-			assertEquals(seq1, s1.getSeq());
-			assertEquals(cmd1, s1.getMessage());
+			assertEquals(clientId1, cmd1.getClientId());
+			assertEquals(seq1, cmd1.getSeq());
+			assertEquals(value1, cmd1.getValue());
 
-			assertEquals(clientId2, s2.getClientId());
-			assertEquals(seq2, s2.getSeq());
-			assertEquals(cmd2, s2.getMessage());
+			assertEquals(clientId2, cmd2.getClientId());
+			assertEquals(seq2, cmd2.getSeq());
+			assertEquals(value2, cmd2.getValue());
 		}
 		
 		// Check state is what was expected
 		for (NodeService service: services) {
 			List<String> ledger = service.getLedger();
 			assertEquals(ledger.size(), 2);
-			assertEquals(ledger.get(0), cmd1);
-			assertEquals(ledger.get(1), cmd2);
+			assertEquals(ledger.get(0), value1);
+			assertEquals(ledger.get(1), value2);
 		}
 	}
 
@@ -262,13 +267,13 @@ public class NodeServiceTest {
 
 		int clientId1 = n;
 		int seq1 = 13241;
-		String cmd1 = "a";
-		AppendMessage proof1 = getDefaultProof(clientId1, seq1, cmd1);
+		String value1 = "a";
+		AppendMessage proof1 = getDefaultProof(clientId1, seq1, value1);
 
 		int clientId2 = n;
 		int seq2 = 13223;
-		String cmd2 = "b";
-		AppendMessage proof2 = getDefaultProof(clientId2, seq2, cmd2);
+		String value2 = "b";
+		AppendMessage proof2 = getDefaultProof(clientId2, seq2, value2);
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
@@ -283,11 +288,11 @@ public class NodeServiceTest {
 		// Start consensus with different order - first half starts the first consensus instance with cmd1, second half with cmd2
 		services.forEach(service -> {
 			if (service.getId() < n/2) {
-				service.startConsensus(clientId1, seq1, cmd1, proof1);
-				service.startConsensus(clientId2, seq2, cmd2, proof2);
+				service.startConsensus(clientId1, seq1, value1, proof1);
+				service.startConsensus(clientId2, seq2, value2, proof2);
 			} else {
-				service.startConsensus(clientId2, seq2, cmd2, proof2);
-				service.startConsensus(clientId1, seq1, cmd1, proof1);
+				service.startConsensus(clientId2, seq2, value2, proof2);
+				service.startConsensus(clientId1, seq1, value1, proof1);
 			}
 		});
 
@@ -307,27 +312,32 @@ public class NodeServiceTest {
 
 		// Check output to clients is what was expected
 		assertEquals(2, confirmedSlots.get(0).size());
-		Slot s1_0 = confirmedSlots.get(0).removeFirst();
-		Slot s2_0 = confirmedSlots.get(0).removeFirst();
+		Slot<StringCommand> s1_0 = confirmedSlots.get(0).removeFirst();
+		Slot<StringCommand> s2_0 = confirmedSlots.get(0).removeFirst();
+		StringCommand cmd1_0 = s1_0.getCmd();
+		StringCommand cmd2_0 = s2_0.getCmd();
+
 		for (int i = 1; i < n; i++) {
 			assertEquals(2, confirmedSlots.get(i).size());
-			Slot s1 = confirmedSlots.get(i).removeFirst();
-			Slot s2 = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s1 = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s2 = confirmedSlots.get(i).removeFirst();
+			StringCommand cmd1 = s1.getCmd();
+			StringCommand cmd2 = s2.getCmd();
 
 			assert(
-				(s1_0.getClientId() == s1.getClientId() &&
-				s1_0.getSeq() == s1.getSeq() &&
-				s1_0.getMessage().equals(s1.getMessage()) &&
-				s2_0.getClientId() == s2.getClientId() &&
-				s2_0.getSeq() == s2.getSeq() &&
-				s2_0.getMessage().equals(s2.getMessage()))
+				(cmd1_0.getClientId() == cmd1.getClientId() &&
+				cmd1_0.getSeq() == cmd1.getSeq() &&
+				cmd1_0.getValue().equals(cmd1.getValue()) &&
+				cmd2_0.getClientId() == cmd2.getClientId() &&
+				cmd2_0.getSeq() == cmd2.getSeq() &&
+				cmd2_0.getValue().equals(cmd2.getValue()))
 				||
-				(s2_0.getClientId() == s1.getClientId() &&
-				s2_0.getSeq() == s1.getSeq() &&
-				s2_0.getMessage().equals(s1.getMessage()) &&
-				s1_0.getClientId() == s2.getClientId() &&
-				s1_0.getSeq() == s2.getSeq() &&
-				s1_0.getMessage().equals(s2.getMessage()))
+				(cmd2_0.getClientId() == cmd1.getClientId() &&
+				cmd2_0.getSeq() == cmd1.getSeq() &&
+				cmd2_0.getValue().equals(cmd1.getValue()) &&
+				cmd1_0.getClientId() == cmd2.getClientId() &&
+				cmd1_0.getSeq() == cmd2.getSeq() &&
+				cmd1_0.getValue().equals(cmd2.getValue()))
 			);
 		}
 		
@@ -336,11 +346,11 @@ public class NodeServiceTest {
 			List<String> ledger = service.getLedger();
 			assertEquals(ledger.size(), 2);
 			assert(
-				(ledger.get(0).equals(s1_0.getMessage()) &&
-				ledger.get(1).equals(s2_0.getMessage()))
+				(ledger.get(0).equals(cmd1_0.getValue()) &&
+				ledger.get(1).equals(cmd2_0.getValue()))
 				||
-				(ledger.get(1).equals(s1_0.getMessage()) &&
-				ledger.get(0).equals(s2_0.getMessage()))
+				(ledger.get(1).equals(cmd1_0.getValue()) &&
+				ledger.get(0).equals(cmd2_0.getValue()))
 			);
 		}
 
@@ -354,13 +364,13 @@ public class NodeServiceTest {
 
 		int clientId1 = n;
 		int seq1 = 13241;
-		String cmd1 = "a";
-		AppendMessage proof1 = getDefaultProof(clientId1, seq1, cmd1);
+		String value1 = "a";
+		AppendMessage proof1 = getDefaultProof(clientId1, seq1, value1);
 
 		int clientId2 = n;
 		int seq2 = 13223;
-		String cmd2 = "b";
-		AppendMessage proof2 = getDefaultProof(clientId2, seq2, cmd2);
+		String value2 = "b";
+		AppendMessage proof2 = getDefaultProof(clientId2, seq2, value2);
 
 		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n);
 
@@ -374,8 +384,8 @@ public class NodeServiceTest {
 
 		services.forEach(service -> {
 			if (service.getId() != 0) {
-				service.startConsensus(clientId1, seq1, cmd1, proof1);
-				service.startConsensus(clientId2, seq2, cmd2, proof2);
+				service.startConsensus(clientId1, seq1, value1, proof1);
+				service.startConsensus(clientId2, seq2, value2, proof2);
 			}
 		});
 
@@ -390,8 +400,8 @@ public class NodeServiceTest {
 
 		System.out.println("[test] all but 0 got somewhere");
 
-		services.get(0).startConsensus(clientId2, seq2, cmd2, proof2);
-		services.get(0).startConsensus(clientId1, seq1, cmd1, proof1);
+		services.get(0).startConsensus(clientId2, seq2, value2, proof2);
+		services.get(0).startConsensus(clientId1, seq1, value1, proof1);
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -409,43 +419,48 @@ public class NodeServiceTest {
 		// Replica 0 is the only that might output in different order
 
 		// Check replica 0
-		Slot s1_0 = confirmedSlots.get(0).removeFirst();
-		Slot s2_0 = confirmedSlots.get(0).removeFirst();
+		Slot<StringCommand> s1_0 = confirmedSlots.get(0).removeFirst();
+		Slot<StringCommand> s2_0 = confirmedSlots.get(0).removeFirst();
+		StringCommand cmd1_0 = s1_0.getCmd();
+		StringCommand cmd2_0 = s2_0.getCmd();
+
 		assert(
-				(seq1 == s1_0.getSeq() &&
-				 clientId1 == s1_0.getClientId() &&
-				 cmd1.equals(s1_0.getMessage()) &&
-				 seq2 == s2_0.getSeq() &&
-				 clientId2 == s2_0.getClientId() &&
-				 cmd2.equals(s2_0.getMessage())
+				(seq1 == cmd1_0.getSeq() &&
+				 clientId1 == cmd1_0.getClientId() &&
+				 value1.equals(cmd1_0.getValue()) &&
+				 seq2 == cmd2_0.getSeq() &&
+				 clientId2 == cmd2_0.getClientId() &&
+				 value2.equals(cmd2_0.getValue())
 				||
-				(seq2 == s1_0.getSeq()) &&
-				 clientId2 == s1_0.getClientId() &&
-				 cmd2.equals(s1_0.getMessage()) &&
-				 seq1 == s2_0.getSeq() &&
-				 clientId1 == s2_0.getClientId() &&
-				 cmd1.equals(s2_0.getMessage()))
+				(seq2 == cmd1_0.getSeq()) &&
+				 clientId2 == cmd1_0.getClientId() &&
+				 value2.equals(cmd1_0.getValue()) &&
+				 seq1 == cmd2_0.getSeq() &&
+				 clientId1 == cmd2_0.getClientId() &&
+				 value1.equals(cmd2_0.getValue()))
 			  );
 
 		// Check other replicas
 		for (int i = 1; i < n; i++) {
 			assertEquals(2, confirmedSlots.get(i).size());
-			Slot s1 = confirmedSlots.get(i).removeFirst();
-			Slot s2 = confirmedSlots.get(i).removeFirst();
-			assertEquals(seq1, s1.getSeq());
-			assertEquals(seq2, s2.getSeq());
-			assertEquals(clientId1, s1.getClientId());
-			assertEquals(clientId2, s2.getClientId());
-			assertEquals(cmd1, s1.getMessage());
-			assertEquals(cmd2, s2.getMessage());
+			Slot<StringCommand> s1 = confirmedSlots.get(i).removeFirst();
+			Slot<StringCommand> s2 = confirmedSlots.get(i).removeFirst();
+			StringCommand cmd1 = s1.getCmd();
+			StringCommand cmd2 = s2.getCmd();
+			assertEquals(seq1, cmd1.getSeq());
+			assertEquals(seq2, cmd2.getSeq());
+			assertEquals(clientId1, cmd1.getClientId());
+			assertEquals(clientId2, cmd2.getClientId());
+			assertEquals(value1, cmd1.getValue());
+			assertEquals(value2, cmd2.getValue());
 		}
 		
 		// Check state is what was expected
 		for (NodeService service: services) {
 			List<String> ledger = service.getLedger();
 			assertEquals(ledger.size(), 2);
-			assertEquals(ledger.get(0), cmd1);
-			assertEquals(ledger.get(1), cmd2);
+			assertEquals(ledger.get(0), value1);
+			assertEquals(ledger.get(1), value2);
 		}
 	}
 

@@ -31,6 +31,10 @@ import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.service.State;
+import pt.ulisboa.tecnico.hdsledger.service.StringState;
+import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
+import pt.ulisboa.tecnico.hdsledger.service.Command;
 import pt.ulisboa.tecnico.hdsledger.communication.AppendMessage;
 
 import com.google.gson.Gson;
@@ -50,7 +54,7 @@ public class NodeService implements UDPService {
 
     // Ledger (for now, just a list of strings)
     // TODO (dsa): factor out to a state class
-    private ArrayList<String> ledger = new ArrayList<String>();
+    private StringState ledger = new StringState();
 
     // We'll allow multiple instances to run in parallel if needed, so this
     // map needs to be thread-safe
@@ -62,7 +66,7 @@ public class NodeService implements UDPService {
     private Queue<Consumer<Slot>> observers = new ConcurrentLinkedQueue<>();
 
     // Blocking queue of pending inputs (thread-safe)
-    private BlockingQueue<String> inputs = new LinkedBlockingQueue<>();
+    private BlockingQueue<StringCommand> inputs = new LinkedBlockingQueue<>();
 
     // Blocking queue of decisions (thread-safe)
     private BlockingQueue<Decision> decisions = new LinkedBlockingQueue<>(); 
@@ -89,7 +93,7 @@ public class NodeService implements UDPService {
 
     // maps values to the slot they were finalized to (after
     // coming out from consensus)
-    Map<String, Slot> history = new ConcurrentHashMap<>();
+    Map<StringCommand, Slot<StringCommand>> history = new ConcurrentHashMap<>();
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig, List<String> clientPks) {
@@ -103,23 +107,25 @@ public class NodeService implements UDPService {
         return this.config;
     }
 
-    public ArrayList<String> getLedger() {
-        return this.ledger;
+    public List<String> getLedger() {
+        return this.ledger.getState();
     }
 
     /**
      * Check that value is valid
      */
     private boolean checkIsValidValue(int lambda, String value) {
-        Optional<List<String>> parts = parseValue(value);
-        if (!parts.isPresent()) {
+        Optional<StringCommand> cmdOpt = StringCommand.deserialize(value);
+        if (!cmdOpt.isPresent()) {
             return false;
         }
 
-        int clientId = Integer.parseInt(parts.get().get(0));
-        int seq = Integer.parseInt(parts.get().get(1));
-        String cmd = parts.get().get(2);
-        String serializedProof = parts.get().get(3);
+        StringCommand cmd = cmdOpt.get();
+
+        int clientId = cmd.getClientId();
+        int seq = cmd.getSeq();
+        String cmdValue = cmd.getValue();
+        AppendMessage proof = cmd.getProof();
 
         int n = this.others.size();
         if (clientId < n) {
@@ -134,18 +140,19 @@ public class NodeService implements UDPService {
         boolean repeated = history.entrySet()
             .stream()
             .map(e -> e.getValue())
-            .anyMatch(s -> s.getSeq() == seq && s.getClientId() == clientId &&
-                s.getMessage().equals(cmd));
+            .anyMatch(s -> s.getCmd().equals(cmd));
+
         if (repeated) {
             return false;
         }
 
         // Check client signature is valid
-        AppendMessage hmacMessage = new Gson().fromJson(serializedProof, AppendMessage.class);
+        // AppendMessage hmacMessage = new Gson().fromJson(serializedProof, AppendMessage.class);
 
         LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {1} - getting key at position {2}",
                 config.getId(), clientId, clientId-n));
-        return hmacMessage.checkConsistentSig(this.clientPks.get(clientId - n));
+
+        return proof.checkConsistentSig(this.clientPks.get(clientId - n));
     }
 
     /**
@@ -213,15 +220,11 @@ public class NodeService implements UDPService {
      * Thread-safe.
      *
      * @param cmd value to append to state
-     * @param nonce should be unique and not contain `::`
      * @param proof message proving that client did submit the transaction to be appended
      */
     public synchronized void startConsensus(int clientId, int seq, String cmd, AppendMessage proof) {
-        String serializedProof = new Gson().toJson(proof);
-        String value = String.format("%s::%s::%s::%s", clientId, seq, cmd, serializedProof);
-
         // note: add must be used instead of put as it's non-blocking
-        inputs.add(value); 
+        inputs.add(new StringCommand(clientId, seq, cmd, proof));
     }
 
     /**
@@ -252,7 +255,16 @@ public class NodeService implements UDPService {
                         "{0} - Decided on Consensus Instance {1} with value {2}",
                         config.getId(), lambda, value));
 
-        Decision d = new Decision(lambda, value);
+        Optional<StringCommand> cmdOpt = StringCommand.deserialize(value);
+        if (!cmdOpt.isPresent()) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Invalid value came out of consensus instance {1} {2} - discarding",
+                            config.getId(), lambda, value));
+            return;
+        }
+
+        Decision<StringCommand> d = new Decision<>(lambda, cmdOpt.get());
         decisions.add(d);
     }
 
@@ -269,60 +281,72 @@ public class NodeService implements UDPService {
      * Takes string of form nonce::command and returns and Option with [nonce; command]
      * if it's in valid format, otherwise returns empty option.
      * */
-    public static Optional<List<String>> parseValue(String value) {
-        // Value is always of the form nonce::m if is proposed by correct process
-        // if not, then it's considered invalid by all valid nodes and discarded
-        
-        String[] parts = value.split("::");
-        if (parts.length != 4) {
-            return Optional.empty();
-        }
-
-        return Optional.of(Arrays.asList(parts));
-    }
+    // public static Optional<List<String>> parseValue(String value) {
+    //     // Value is always of the form nonce::m if is proposed by correct process
+    //     // if not, then it's considered invalid by all valid nodes and discarded
+    //     
+    //     String[] parts = value.split("::");
+    //     if (parts.length != 4) {
+    //         return Optional.empty();
+    //     }
+    //
+    //     return Optional.of(Arrays.asList(parts));
+    // }
 
     /*
      * Takes string of form nonce::command and returns and Option with [nonce; command]
      * if it's in valid format, otherwise returns empty option.
      * */
-    public static Optional<List<String>> parseStrippedValue(String value) {
-        // Value is always of the form nonce::m if is proposed by correct process
-        // if not, then it's considered invalid by all valid nodes and discarded
-        
-        String[] parts = value.split("::");
-        if (parts.length != 3) {
-            return Optional.empty();
-        }
+    // public static Optional<List<String>> parseSrippedValue(String value) {
+    //     // Value is always of the form nonce::m if is proposed by correct process
+    //     // if not, then it's considered invalid by all valid nodes and discarded
+    //     
+    //     String[] parts = value.split("::");
+    //     if (parts.length != 3) {
+    //         return Optional.empty();
+    //     }
+    //
+    //     return Optional.of(Arrays.asList(parts));
+    // }
 
-        return Optional.of(Arrays.asList(parts));
-    }
-
-    public static Optional<String> stripProof(String value) {
-        Optional<List<String>> partsOpt = parseValue(value);
-
-        if (!partsOpt.isPresent()) {
-            return Optional.empty();
-        }
-
-        List<String> parts = partsOpt.get();
-
-        String stripped = String.format("%s::%s::%s", parts.get(0), parts.get(1), parts.get(2));
-
-        return Optional.of(stripped);
-    }
+    // public static Optional<String> stripProof(String value) {
+    //     Optional<List<String>> partsOpt = parseValue(value);
+    //
+    //     if (!partsOpt.isPresent()) {
+    //         return Optional.empty();
+    //     }
+    //
+    //     List<String> parts = partsOpt.get();
+    //
+    //     String stripped = String.format("%s::%s::%s", parts.get(0), parts.get(1), parts.get(2));
+    //
+    //     return Optional.of(stripped);
+    // }
 
     /**
      * Updates state and returns slot position for value
      * Non thread-safe.
      */
-    public int updateState(String value) {
-        ledger.add(value);
-        LOGGER.log(Level.INFO,
-                MessageFormat.format(
-                    "{0} - Current Ledger: {1}",
-                    config.getId(), String.join("|", ledger)));
+    public int updateState(StringCommand cmd) {
+        Optional<Integer> slotIdOpt = ledger.update(cmd);
+        
+        if (slotIdOpt.isPresent()) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Current Ledger: {1}",
+                        config.getId(), String.join("|", ledger.getState())));
 
-        return ledger.size();
+            return slotIdOpt.get();
+        }
+
+        
+        LOGGER.log(Level.SEVERE,
+                MessageFormat.format(
+                    "{0} - Tried to update state with invalid command - {1}",
+                    config.getId(), cmd));
+
+        // TODO: move to HDSLedgerException
+        throw new RuntimeException("tried to update state with invalid value");
     }
 
     @Override
@@ -414,19 +438,20 @@ public class NodeService implements UDPService {
             // Thread to take pending inputs from clients and input them into consensus
             Thread driver = new Thread(() -> {
                 try {
-                    DecisionBucket bucket = new DecisionBucket();
+                    DecisionBucket<StringCommand> bucket = new DecisionBucket<>();
 
 
                     // input values for which the observers where already notified
-                    Set<String> acketToObserver = new HashSet();
+                    Set<StringCommand> acketToObserver = new HashSet();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
                                 config.getId()));
+
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
-                    String input = this.inputs.take();
-                    String strippedInput = stripProof(input).get();
+                    StringCommand input = this.inputs.take();
+                    // String strippedInput = stripProof(input).get();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Got input {1}",
@@ -439,22 +464,21 @@ public class NodeService implements UDPService {
                         // TODO (dsa): probably no longer need this (because beta
                         // ensures that accept value was not already decided and is valid)
                         
-                        // Input contains the proof, which might differ from mine
-                        // so this should be checked with input without last part
-                        if (history.containsKey(strippedInput)) {
+                        // Check if input already in history (not considering proof)
+                        if (history.containsKey(input)) {
 
                             // if not notified observers, notify
                             // (it's possible for a value to be processed, but
                             // the clients not notified if the input came late)
-                            if (!acketToObserver.contains(strippedInput)) {
-                                Slot slot = history.get(strippedInput);
+                            if (!acketToObserver.contains(input)) {
+                                Slot slot = history.get(input);
                                 LOGGER.log(Level.INFO,
                                         MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
                                             config.getId(), input, slot.getSlotId()));
                                 for (Consumer<Slot> obs: this.observers) {
                                     obs.accept(slot);
                                 }
-                                acketToObserver.add(strippedInput);
+                                acketToObserver.add(input);
                             }
 
                             LOGGER.log(Level.INFO,
@@ -462,7 +486,7 @@ public class NodeService implements UDPService {
                                         config.getId()));
                             // take must be used instead of remove because it's blocking.
                             input = this.inputs.take(); // blocking
-                            strippedInput = stripProof(input).get();
+                            // strippedInput = stripProof(input).get();
 
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Got input {1}",
@@ -477,7 +501,7 @@ public class NodeService implements UDPService {
                         LOGGER.log(Level.INFO,
                                 MessageFormat.format("{0} Driver - Inputting into consensus {1} value {2}",
                                     config.getId(), currentLambda.get(), input));
-                        actuallyInput(currentLambda.get(), input);
+                        actuallyInput(currentLambda.get(), input.serialize());
 
                         LOGGER.log(Level.INFO,
                                 MessageFormat.format("{0} Driver - Inputted, now I wait for decision",
@@ -486,7 +510,7 @@ public class NodeService implements UDPService {
                         // check if this instance was already decided upon. if it
                         // was, then no need to wait, otherwise wait for more
                         // decisions
-                        Decision d;
+                        Decision<StringCommand> d;
                         while (!bucket.contains(currentLambda.get())) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Decision for instance {1} has not yet been reached",
@@ -514,35 +538,27 @@ public class NodeService implements UDPService {
 
                         // if this consensus output is duplicate, there's nothing
                         // to be done
-                        String value = d.getValue();
-                        String strippedValue = stripProof(value).get();
-                        if (history.containsKey(strippedValue)) {
+                        StringCommand cmd = d.getValue();
+                        // String strippedValue = stripProof(value).get();
+                        if (history.containsKey(cmd)) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - History already contained ({1}), skipping for this reason",
-                                        config.getId(), d.getValue()));
+                                        config.getId(), cmd));
 
                             continue;
                         }
 
-                        // if it's not duplicate, parse
-                        Optional<List<String>> parts = parseValue(value);
-                        if (parts.isPresent()) {
-                            int clientId = Integer.parseInt(parts.get().get(0));
-                            int seq = Integer.parseInt(parts.get().get(1));
-                            String cmd = parts.get().get(2);
-                            // TODO: save proofs (might be needed for compliance for example)
-                            String serializedProof = parts.get().get(3);
-                            
-                            // update state
-                            int slotId = updateState(cmd);
-                            Slot slot = new Slot(slotId, seq, clientId, cmd);
-                            history.put(strippedValue, slot);
-                        } else {
-                            // TODO (dsa): raise exception, because this should not happen
-                            LOGGER.log(Level.INFO,
-                                    MessageFormat.format("{0} Driver - Bad value format (should be nonce::cmd), discarding",
-                                        config.getId(), d.getValue()));
-                        }
+                        // if it's not duplicate, save
+                        int clientId = cmd.getClientId();
+                        int seq = cmd.getSeq();
+                        String value = cmd.getValue();
+                        // TODO: save proofs (might be needed for compliance for example)
+                        AppendMessage proof = cmd.getProof();
+                        
+                        // update state
+                        int slotId = updateState(cmd);
+                        Slot<StringCommand> slot = new Slot<>(slotId, cmd);
+                        history.put(cmd, slot);
                     }
 
 
@@ -592,11 +608,11 @@ public class NodeService implements UDPService {
     /**
      * Represents a consensus instance decision
      */
-    private static class Decision {
+    private static class Decision<C extends Command> {
         private int lambda;
-        private String value;
+        private C value;
 
-        Decision(int lambda, String value) {
+        Decision(int lambda, C value) {
             this.lambda = lambda;
             this.value = value;
         }
@@ -605,7 +621,7 @@ public class NodeService implements UDPService {
             return this.lambda;
         }
 
-        String getValue() {
+        C getValue() {
             return this.value;
         }
 
@@ -627,15 +643,15 @@ public class NodeService implements UDPService {
     /**
      * Bucket where decisions are stored (not thread-safe)
      */
-    private static class DecisionBucket {
-        private Map<Integer, Decision> bucket = new HashMap<>();
+    private static class DecisionBucket<C extends Command> {
+        private Map<Integer, Decision<C>> bucket = new HashMap<>();
 
         DecisionBucket() { }
 
         /**
          * Stores decision d in bucket
          */
-        void save(Decision d) {
+        void save(Decision<C> d) {
             bucket.put(d.getLambda(), d);
         }
 
@@ -649,7 +665,7 @@ public class NodeService implements UDPService {
         /**
          * Returns instance lambda's decision
          */
-        Decision get(int lambda) {
+        Decision<C> get(int lambda) {
             return bucket.get(lambda);
         }
     }

@@ -16,6 +16,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
+import pt.ulisboa.tecnico.hdsledger.consensus.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
@@ -84,12 +86,13 @@ public class HDSLedgerService implements UDPService {
      * Receive decided value from consensus service
      * Notify the client with the decided slot
     */
-    private void decided(Slot slot) {
+    private void decided(Slot<StringCommand> slot) {
 
         int slotId = slot.getSlotId();
-        int clientId = slot.getClientId();
-        int sequenceNumber = slot.getSeq();
-        String value = slot.getMessage();
+        StringCommand cmd = slot.getCmd();
+        int clientId = cmd.getClientId();
+        int sequenceNumber = cmd.getSeq();
+        String value = cmd.getValue();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
