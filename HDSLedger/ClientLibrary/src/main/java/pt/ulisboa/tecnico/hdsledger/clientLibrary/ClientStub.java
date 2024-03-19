@@ -25,7 +25,7 @@ public class ClientStub {
     private final Map<Integer, AppendRequest> responses = new HashMap<>(); // TODO - Change AppendRequest to appropriate type of Response
     
     // Current request ID
-    private AtomicInteger requestId = new AtomicInteger(0);
+    private int requestId = 0;
 
     private final int n;
 
@@ -54,7 +54,7 @@ public class ClientStub {
     }
 
     public int append(String value)  throws InterruptedException{
-        int currentRequestId = this.requestId.getAndIncrement(); // nonce
+        int currentRequestId = this.requestId++; // nonce
         String key = String.format("%s_%s", value, currentRequestId);
         int thisId = currentRequestId++;
         for (int i = 0; i < n; i++) {
@@ -83,40 +83,26 @@ public class ClientStub {
 
         return slotId.get();
     }
-
-    private LedgerMessage createTransferRequestMessage(int id, int sequenceNumber, String senderPublicKey, String receiverPublicKey, int amount, int tip) {
-        TransferRequest transferRequest = new TransferRequest(senderPublicKey, receiverPublicKey, amount, tip, sequenceNumber);
-
-        LedgerMessage message = new LedgerMessage(id, Message.Type.TRANSFER_REQUEST);
-
-        message.setMessage(new Gson().toJson(transferRequest));
-        message.signSelf(this.config.getPrivateKey());
-
-        return message;
-    }
-
-    private LedgerMessage createBalanceRequestMessage(int id, int sequenceNumber, String publicKey) {
-        BalanceRequest balanceRequest = new BalanceRequest(publicKey, sequenceNumber);
-
-        LedgerMessage message = new LedgerMessage(id, Message.Type.BALANCE_REQUEST);
-
-        message.setMessage(new Gson().toJson(balanceRequest));
-        message.signSelf(this.config.getPrivateKey());
-
-        return message;
+    
+    private LedgerMessage createLedgerMessage(int id, Message.Type type, String message) {
+        LedgerMessage ledgerMessage = new LedgerMessage(id, type);
+        ledgerMessage.setMessage(message);
+        ledgerMessage.signSelf(this.config.getPrivateKey());
+        return ledgerMessage;
     }
 
     public void transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
-        int currentRequestId = this.requestId.getAndIncrement(); // nonce
-
-        LedgerMessage request = createTransferRequestMessage(config.getId(), currentRequestId, sourcePublicKey, destinationPublicKey, amount, tip);
+        int currentRequestId = this.requestId++; // nonce
+        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, tip, currentRequestId);
+        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest));
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
     }
 
     public void checkBalance(String publicKey) {
-        int currentRequestId = this.requestId.getAndIncrement(); // nonce
-        LedgerMessage balanceMessage = createBalanceRequestMessage(config.getId(), currentRequestId, publicKey);
-        System.out.println("Sending balance request: " + new Gson().toJson(balanceMessage));
+        int currentRequestId = this.requestId++; // nonce
+        BalanceRequest balanceRequest = new BalanceRequest(publicKey, currentRequestId);
+        LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest));
+        System.out.println("Sending balance request: " + new Gson().toJson(request));
     }
 
     public void handleAppendReply(AppendMessage message) {
