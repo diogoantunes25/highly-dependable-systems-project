@@ -944,12 +944,25 @@ public class Istanbul {
 
 		// Get PREPARES for the highest prepared value and check there's
 		// a quorum 
-		long count = Qp.stream()
+		List<ConsensusMessage> preparesDuplicate = Qp.stream()
 			.filter(m -> m.getRound() == pr)
-			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv))
-			.count();
+			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv)).toList();
 
-		if (count < this.quorumSize) {
+		// deduplicate messages from same sender (unfortunately Java Stream API
+		// doesn't seem to provide this facility, so it's done manually)
+		// (there can't be any two messages for same sender otherwise
+		// protocol goes O(n3))
+
+		Set<Integer> sendersChecked = new HashSet<>();
+		List<ConsensusMessage> prepares = new ArrayList<>();
+		for (ConsensusMessage message: preparesDuplicate) {
+			if (!sendersChecked.contains(message.getSenderId())) {
+				sendersChecked.add(message.getSenderId());
+				prepares.add(message);
+			}
+		}
+
+		if (prepares.size() < this.quorumSize) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format("{0} - justification of pre-prepare was asked but not enough good prepares were provided",
 						config.getId()));
