@@ -2,23 +2,18 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 public class TransferRequest {
 
-    private int senderId;
-
     private String sourcePublicKey;
 
     private String destinationPublicKey;
 
     private int amount;
 
-    private int tip;
-
     private int sequenceNumber;
 
-    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount, int tip, int sequenceNumber) {
+    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount, int sequenceNumber) {
         this.sourcePublicKey = sourcePublicKey;
         this.destinationPublicKey = destinationPublicKey;
         this.amount = amount;
-        this.tip = tip;
         this.sequenceNumber = sequenceNumber;
     }
 
@@ -34,10 +29,6 @@ public class TransferRequest {
         return amount;
     }
 
-    public int getTip() {
-        return tip;
-    }
-
     public void setSourcePublicKey(String sourcePublicKey) {
         this.sourcePublicKey = sourcePublicKey;
     }
@@ -48,10 +39,6 @@ public class TransferRequest {
 
     public void setAmount(int amount) {
         this.amount = amount;
-    }
-
-    public void setTip(int tip) {
-        this.tip = tip;
     }
 
     public int getSequenceNumber() {

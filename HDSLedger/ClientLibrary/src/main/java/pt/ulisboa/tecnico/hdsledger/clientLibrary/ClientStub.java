@@ -95,9 +95,9 @@ public class ClientStub {
         return ledgerMessage;
     }
 
-    public int transfer(String sourcePublicKey, String destinationPublicKey, int amount, int tip) {
+    public int transfer(String sourcePublicKey, String destinationPublicKey, int amount) {
         int currentRequestId = this.requestId++; // nonce
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, tip, currentRequestId);
+        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount, currentRequestId);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest));
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
 

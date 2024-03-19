@@ -23,7 +23,7 @@ public class Client {
     private static void printUsage() {
         System.out.println("Available commands:");
         System.out.println("     help - Print this message.");
-        System.out.println("     transfer <sourcePublicKey> <destinationPublicKey> <amount> <tip> - Transfer <amount> from <sourcePublicKey> to <destinationPublicKey> with <tip>.");
+        System.out.println("     transfer <sourcePublicKey> <destinationPublicKey> <amount> - Transfer <amount> from <sourcePublicKey> to <destinationPublicKey> with.");
         System.out.println("     check_balance <publicKey> - Get the balance of <publicKey>.");
         System.out.println("     exit - Exit the application.");
     }
@@ -89,7 +89,7 @@ public class Client {
                     printUsage();
                     break;
                 case "transfer":
-                    if (tokens.length != 5) {
+                    if (tokens.length != 4) {
                         System.out.println("Invalid number of arguments.");
                         printUsage();
                         break;
@@ -97,11 +97,10 @@ public class Client {
                     String sourcePublicKey = tokens[1];
                     String destinationPublicKey = tokens[2];
                     int amount = Integer.parseInt(tokens[3]);
-                    int tip = Integer.parseInt(tokens[4]);
 
-                    LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2} and tip {3}",
-                            sourcePublicKey, destinationPublicKey, amount, tip));
-                    int slot = stub.transfer(sourcePublicKey, destinationPublicKey, amount, tip);
+                    LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
+                            sourcePublicKey, destinationPublicKey, amount));
+                    int slot = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
                     break;
                 case "balance":
                     if (tokens.length != 2) {
