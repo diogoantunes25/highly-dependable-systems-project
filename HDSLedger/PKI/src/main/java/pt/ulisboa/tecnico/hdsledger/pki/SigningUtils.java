@@ -73,6 +73,7 @@ public class SigningUtils {
 
         return Base64.getEncoder().encodeToString(digestBytes);
     }
+
     public static String sign(String data, String pathToPrivateKey)
             throws NoSuchAlgorithmException, InvalidKeyException, InvalidKeySpecException,
             NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, IOException {
@@ -80,6 +81,15 @@ public class SigningUtils {
         String digest = digest(data);
 
         return encrypt(digest.getBytes(), pathToPrivateKey);
+    }
+
+    public static String publicKeyHash(String publicKeyPath) {
+        try {
+            PublicKey publicKey = (PublicKey) RSAKeyGenerator.read(publicKeyPath, "pub");
+            return digest(new String(publicKey.getEncoded()));
+        } catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static boolean verifySignature(String data, String signature, String pathToPublicKey) {
@@ -101,4 +111,5 @@ public class SigningUtils {
             throw new RuntimeException(e);
         }
     }
+
 }
