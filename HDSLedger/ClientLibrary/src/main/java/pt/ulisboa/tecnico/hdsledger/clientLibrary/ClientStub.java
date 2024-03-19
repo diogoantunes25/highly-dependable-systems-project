@@ -77,7 +77,7 @@ public class ClientStub {
             }
         }
 
-        Optional<Integer> slotId = receivedMessages.getDecidedSlot();
+        Optional<Integer> slotId = receivedMessages.getDecidedValue();
         
         if (slotId.isPresent()) {
             System.out.println("Slot decided after f+1 confirmations");
@@ -102,28 +102,7 @@ public class ClientStub {
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
         System.out.println("Sending transfer request: " + new Gson().toJson(request));
 
-        IntStream.range(0, n).forEach(i -> this.link.send(i, request));
-
-        receivedMessages = new ReceivedMessages(n);
-
-        while (!receivedMessages.hasDecided()) {
-            try {
-                // TODO (dsa): bad
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        Optional<Integer> slotId = receivedMessages.getDecidedSlot();
-
-        if (slotId.isPresent()) {
-            System.out.println("Slot decided after f+1 confirmations");
-        } else {
-            throw new RuntimeException("Slot is not present where it should");
-        }
-
-        return slotId.get();
+        return sendRequest(request);
     }
 
     public int checkBalance(String publicKey) {
@@ -132,6 +111,10 @@ public class ClientStub {
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         System.out.println("Sending balance request: " + new Gson().toJson(request));
 
+        return sendRequest(request);
+    }
+
+    private int sendRequest(LedgerMessage request) {
         IntStream.range(0, n).forEach(i -> this.link.send(i, request));
 
         receivedMessages = new ReceivedMessages(n);
@@ -145,15 +128,15 @@ public class ClientStub {
             }
         }
 
-        Optional<Integer> balance = receivedMessages.getDecidedSlot();
+        Optional<Integer> value = receivedMessages.getDecidedValue();
 
-        if (balance.isPresent()) {
-            System.out.println("Balance decided after f+1 confirmations");
+        if (value.isPresent()) {
+            System.out.println("Value decided after f+1 confirmations");
         } else {
-            throw new RuntimeException("Balance is not present where it should");
+            throw new RuntimeException("Value is not present where it should");
         }
 
-        return balance.get();
+        return value.get();
     }
 
     public void handleAppendReply(AppendMessage message) {
@@ -273,7 +256,7 @@ public class ClientStub {
             return decision.isPresent();
         }
 
-        public synchronized Optional<Integer> getDecidedSlot() {
+        public synchronized Optional<Integer> getDecidedValue() {
             return decision;
         }
     }
