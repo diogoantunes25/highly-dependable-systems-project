@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedList;
-import java.util.Queue;
 import java.util.logging.Level;
 
 import com.google.gson.Gson;
@@ -31,9 +29,6 @@ public class HDSLedgerService implements UDPService {
 
     // Node service that allows start consensus instances
     private final NodeService nodeService;
-
-    // Confirmed queue
-    private Queue<String> confirmed = new LinkedList<>();
 
     public HDSLedgerService(ProcessConfig[] others, Link link, ProcessConfig config, NodeService nodeService) {
         this.others = others;

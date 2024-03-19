@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.pki;
 
-import java.nio.file.Path;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.Key;
@@ -9,12 +8,11 @@ import java.security.PublicKey;
 import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 public class SigningUtilsTest {
 
     @Test
-    public void generateAndCheckKeys() throws IOException {
+    public void generateAndCheckKeys() {
         String pubKeyPath = "/tmp/key.pub";
         String privKeyPath = "/tmp/key.priv";
 

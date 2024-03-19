@@ -63,17 +63,6 @@ public class IstanbulTest {
 			.build();
 	}
 
-	private ConsensusMessage createCommitMessage(int id, String value, int instance, int round, int receiver) {
-		CommitMessage commitMessage = new CommitMessage(value);
-
-		return new ConsensusMessageBuilder(id, Message.Type.COMMIT)
-			.setConsensusInstance(instance)
-			.setRound(round)
-			.setMessage(commitMessage.toJson())
-			.setReceiver(receiver)
-			.build();
-	}
-
 	private ConsensusMessage createRoundChangeMessage(int id, int instance, int round, int receiver, Optional<String> pvi, Optional<Integer> pri, Optional<List<ConsensusMessage>> justification) {
 		RoundChangeMessage roundChangeMessage = new RoundChangeMessage(pvi, pri, justification);
 

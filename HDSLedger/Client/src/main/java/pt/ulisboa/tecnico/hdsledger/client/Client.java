@@ -7,7 +7,6 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import java.text.MessageFormat;
 import java.util.Scanner;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import javafx.util.Pair;
@@ -64,7 +63,7 @@ public class Client {
         printUsage();
         final Scanner scanner = new Scanner(System.in);
 
-        String line = "";
+        String line;
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
 
         ClientStub stub = new ClientStub(n, config, configs);
@@ -94,6 +93,7 @@ public class Client {
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
                             sourcePublicKey, destinationPublicKey, amount));
                     int slot = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
+                    System.out.println(MessageFormat.format("Transfer request sent. Slot: {0}", slot));
                     break;
                 case "balance":
                     if (tokens.length != 2) {

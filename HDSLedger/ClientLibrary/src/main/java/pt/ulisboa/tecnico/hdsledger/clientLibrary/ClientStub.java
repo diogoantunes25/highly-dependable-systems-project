@@ -24,9 +24,6 @@ public class ClientStub {
 
     // Link to communicate with nodes
     private final Link link;
-
-    // Map of responses from nodes
-    private final Map<Integer, AppendRequest> responses = new HashMap<>(); // TODO - Change AppendRequest to appropriate type of Response
     
     // Current request ID
     private int requestId = 0;
@@ -182,10 +179,7 @@ public class ClientStub {
                                 LedgerMessage reply = (LedgerMessage) message;
                                 handleBalanceReply(reply);
                             }
-                            case ACK, IGNORE -> {
-                                LOGGER.log(Level.INFO, "Received ACK or IGNORE message. Ignoring.");
-                                continue;
-                            }
+                            case ACK, IGNORE -> LOGGER.log(Level.INFO, "Received ACK or IGNORE message. Ignoring.");
                             default -> {
                                 System.out.println(message.getType());
                                 throw new HDSSException(ErrorMessage.CannotParseMessage);
@@ -245,7 +239,7 @@ public class ClientStub {
 
             // TODO: change prints to proper logger
             if (opt.isPresent()) {
-                decision = Optional.of(opt.get());
+                decision = opt;
             } else {
                 System.out.println("No decision yet");
             }

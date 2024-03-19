@@ -4,7 +4,6 @@ import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Link interface.

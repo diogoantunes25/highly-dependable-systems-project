@@ -84,31 +84,6 @@ public class HDSLedgerServiceTest {
 			)
 		).collect(Collectors.toList());
 	}
-
-	private List<Link> defaultLinks(int n, List<ProcessConfig> configs) {
-		ProcessConfig[] configsArray = new ProcessConfig[n];
-		configs.toArray(configsArray);	
-		return configs
-				.stream()
-				.map(config -> 
-					new PerfectLink(config,
-						config.getPort(),
-						configsArray,
-						ConsensusMessage.class))
-				.collect(Collectors.toList());
-	}
-
-	private List<Link> defaultLinksClient(int n, List<ProcessConfig> clientConfigs, List<ProcessConfig> nodesConfigs) {
-		return clientConfigs
-				.stream()
-				.map(config -> 
-					new PerfectLink(config,
-						config.getPort(),
-						nodesConfigs.toArray(new ProcessConfig[n]),
-						AppendMessage.class))
-				.collect(Collectors.toList());
-	}
-
 	private List<Link> linksFromConfigs(List<ProcessConfig> configs, Class<? extends Message> messageClass) {
 		int n = configs.size();
 		return configs
