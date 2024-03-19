@@ -32,21 +32,22 @@ public class IstanbulTest {
 
 	// n is set to 10 by default
 	@BeforeAll
-	private static void genKeys() {
+    public static void genKeys() throws GeneralSecurityException, IOException {
 		int n = 12;
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.pub", i))
 			.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
+			.mapToObj(i -> String.format("/tmp/node%d.priv", i))
 			.collect(Collectors.toList());
 
 		for (int i = 0 ; i < n; i++) {
 			try {
-				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+				RSAKeyGenerator.read(privateKeys.get(i), "priv");
+				RSAKeyGenerator.read(publicKeys.get(i), "pub");
 			} catch (GeneralSecurityException | IOException e) {
-				throw new RuntimeException(e);
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
 			}
 		}
 	}
@@ -107,7 +108,7 @@ public class IstanbulTest {
 	}
 
 	/*
-	 * Create set of instances that doen't use external predicate.
+	 * Create set of instances that doesn't use external predicate.
 	 */
 	private List<Istanbul> defaultInstances(int n, Map<Integer, List<String>> confirmed, int lambda, Deque<ConsensusMessage> messages) {
 		return defaultInstancesWithPredicate(n, confirmed, lambda, messages, value -> true);
@@ -135,7 +136,7 @@ public class IstanbulTest {
 		for (int i = 0; i < n; i++) {
 			Istanbul instance = instances.get(i);
 
-			// Create a callaback that handles timeout and stores messages
+			// Create a callback that handles timeout and stores messages
 			Consumer<Integer> callback = timerId -> {
 				List<ConsensusMessage> output = instance.handleTimeout(timerId);
 				for (ConsensusMessage m: output) {
@@ -727,7 +728,7 @@ public class IstanbulTest {
 
 	/**
 	 * Runs an instance of consensus with 4 nodes where one node that is
-	 * the commit don't go through and round changes are stripped temporarly of justifications
+	 * the commit don't go through and round changes are stripped temporarily of justifications
 	 */
 	@Test
 	public void roundChangesWithoutJustificationsN4() {

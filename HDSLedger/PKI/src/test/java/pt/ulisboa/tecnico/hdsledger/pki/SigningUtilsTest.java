@@ -14,39 +14,39 @@ import org.junit.jupiter.api.io.TempDir;
 public class SigningUtilsTest {
 
     @Test
-    public void generateAndCheckKeys(@TempDir Path tempDir) throws IOException {
-        String pubKeyPath = tempDir.resolve("pub.key").toString();
-        String privKeyPath = tempDir.resolve("priv.key").toString();
-
-        System.out.printf("pub.key = %s\n", pubKeyPath);
-        System.out.printf("priv.key = %s\n", privKeyPath);
+    public void generateAndCheckKeys() throws IOException {
+        String pubKeyPath = "/tmp/key.pub";
+        String privKeyPath = "/tmp/key.priv";
 
         try {
-
             RSAKeyGenerator.write(privKeyPath, pubKeyPath);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        try {
             PrivateKey privKey = (PrivateKey) RSAKeyGenerator.read(privKeyPath, "priv");
             PublicKey pubKey = (PublicKey) RSAKeyGenerator.read(pubKeyPath, "pub");
-
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     @Test
-    public void verifyGoodSignature(@TempDir Path tempDir) throws IOException {
+    public void verifyGoodSignature() throws IOException, GeneralSecurityException {
         String data = "data";
 
-        String pubKeyPath = tempDir.resolve("pub.key").toString();
-        String privKeyPath = tempDir.resolve("priv.key").toString();
-
-        System.out.printf("pub.key = %s\n", pubKeyPath);
-        System.out.printf("priv.key = %s\n", privKeyPath);
+        String pubKeyPath = "/tmp/key.pub";
+        String privKeyPath = "/tmp/key.priv";
 
         try {
-
-            // Generate key pair
+            RSAKeyGenerator.read(pubKeyPath, "pub");
+            RSAKeyGenerator.read(privKeyPath, "priv");
+        } catch (Exception e) {
             RSAKeyGenerator.write(privKeyPath, pubKeyPath);
+        }
 
+        try {
             // Try to sign
             String signature = SigningUtils.sign(data, privKeyPath);
 
@@ -61,24 +61,23 @@ public class SigningUtilsTest {
     }
 
     @Test
-    public void verifyBadSignature(@TempDir Path tempDir) throws IOException {
+    public void verifyBadSignature() throws IOException, GeneralSecurityException {
         String data = "data";
         String otherData = "date";
 
-        String pubKeyPath = tempDir.resolve("pub.key").toString();
-        String privKeyPath = tempDir.resolve("priv.key").toString();
-
-        System.out.printf("pub.key = %s\n", pubKeyPath);
-        System.out.printf("priv.key = %s\n", privKeyPath);
+        String pubKeyPath = "/tmp/key.pub";
+        String privKeyPath = "/tmp/key.priv";
 
         try {
-
-            // Generate key pair
+            RSAKeyGenerator.read(pubKeyPath, "pub");
+            RSAKeyGenerator.read(privKeyPath, "priv");
+        } catch (Exception e) {
             RSAKeyGenerator.write(privKeyPath, pubKeyPath);
+        }
 
+        try {
             // Try to sign
             String signature = SigningUtils.sign(data, privKeyPath);
-
             // Check signature is bad
             if (SigningUtils.verifySignature(otherData, signature, pubKeyPath)) {
                 throw new RuntimeException("Bad signature where good one was expected");
@@ -90,28 +89,30 @@ public class SigningUtilsTest {
     }
 
     @Test
-    public void verifyWrongSignature(@TempDir Path tempDir) throws IOException {
+    public void verifyWrongSignature() throws IOException, GeneralSecurityException {
         String data = "data";
 
-        String pubKeyPath1 = tempDir.resolve("pub1.key").toString();
-        String privKeyPath1 = tempDir.resolve("priv1.key").toString();
-
-        String pubKeyPath2 = tempDir.resolve("pub2.key").toString();
-        String privKeyPath2 = tempDir.resolve("priv2.key").toString();
-
-        System.out.printf("pub1.key = %s\n", pubKeyPath1);
-        System.out.printf("priv1.key = %s\n", privKeyPath1);
-
-        System.out.printf("pub2.key = %s\n", pubKeyPath2);
-        System.out.printf("priv2.key = %s\n", privKeyPath2);
+        String pubKeyPath1 = "/tmp/key1.pub";
+        String privKeyPath1 = "/tmp/key1.priv";
 
         try {
-
-            // Generate key pair
+            RSAKeyGenerator.read(pubKeyPath1, "pub");
+            RSAKeyGenerator.read(privKeyPath1, "priv");
+        } catch (Exception e) {
             RSAKeyGenerator.write(privKeyPath1, pubKeyPath1);
+        }
 
+        String pubKeyPath2 = "/tmp/key2.pub";
+        String privKeyPath2 = "/tmp/key2.priv";
+
+        try {
+            RSAKeyGenerator.read(pubKeyPath2, "pub");
+            RSAKeyGenerator.read(privKeyPath2, "priv");
+        } catch (Exception e) {
             RSAKeyGenerator.write(privKeyPath2, pubKeyPath2);
+        }
 
+        try {
             // Try to sign
             String signature = SigningUtils.sign(data, privKeyPath1);
 
@@ -126,14 +127,9 @@ public class SigningUtilsTest {
     }
 
     @Test
-    public void testHMAC(@TempDir Path tempDir) throws IOException, GeneralSecurityException {
+    public void testHMAC() {
         String data = "data";
         String otherData = "date";
-
-        String keyPath = tempDir.resolve("key.key").toString();
-
-        System.out.printf("key.key = %s\n", keyPath);
-
         try {
             Key key = AESKeyGenerator.generateSimKey();
             byte[] mac = SigningUtils.generateHMAC(data.getBytes(), key);

@@ -1,29 +1,35 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.consensus.message.Message;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.text.MessageFormat;
 
 public class HMACLinkTest {
     @Test
-    public void testHMACLink(@TempDir Path tempDir) {
+    public void testHMACLink() throws GeneralSecurityException, IOException {
         // generate nodes private and public keys
-        String privKeyPath1 = tempDir.resolve("pub1.key").toString();
-        String pubKeyPath1 = tempDir.resolve("priv1.key").toString();
-        String privKeyPath2 = tempDir.resolve("pub2.key").toString();
-        String pubKeyPath2 = tempDir.resolve("priv2.key").toString();
+        String privKeyPath1 = "/tmp/priv1.key";
+        String pubKeyPath1 = "/tmp/pub1.key";
+        String privKeyPath2 = "/tmp/priv2.key";
+        String pubKeyPath2 = "/tmp/pub2.key";
         try {
-            RSAKeyGenerator.write(privKeyPath1, pubKeyPath1);
-            RSAKeyGenerator.write(privKeyPath2, pubKeyPath2);
+            RSAKeyGenerator.read(privKeyPath1, "priv");
+            RSAKeyGenerator.read(pubKeyPath1, "pub");
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            RSAKeyGenerator.write(privKeyPath1, pubKeyPath1);
+        }
+
+        try {
+            RSAKeyGenerator.read(privKeyPath2, "priv");
+            RSAKeyGenerator.read(pubKeyPath2, "pub");
+        } catch (Exception e) {
+            RSAKeyGenerator.write(privKeyPath2, pubKeyPath2);
         }
 
         // create a process configuration

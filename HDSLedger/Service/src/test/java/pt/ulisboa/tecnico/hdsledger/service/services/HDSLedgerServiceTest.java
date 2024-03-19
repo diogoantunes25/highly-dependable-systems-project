@@ -42,27 +42,26 @@ public class HDSLedgerServiceTest {
 
 	// n is set to 10 by default
 	@BeforeAll
-    public static void genKeys() {
-		// Gen keys for servers
+	public static void genKeys() throws GeneralSecurityException, IOException {
 		int n = 10;
 		List<String> publicKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/pub_%d.key", i))
-			.collect(Collectors.toList());
+				.mapToObj(i -> String.format("/tmp/node%d.pub", i))
+				.collect(Collectors.toList());
 
 		List<String> privateKeys = IntStream.range(0, n)
-			.mapToObj(i -> String.format("/tmp/priv_%d.key", i))
-			.collect(Collectors.toList());
+				.mapToObj(i -> String.format("/tmp/node%d.priv", i))
+				.collect(Collectors.toList());
 
 		for (int i = 0 ; i < n; i++) {
 			try {
-				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+				RSAKeyGenerator.read(privateKeys.get(i), "priv");
+				RSAKeyGenerator.read(publicKeys.get(i), "pub");
 			} catch (GeneralSecurityException | IOException e) {
-				throw new RuntimeException(e);
+				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
 			}
 		}
 	}
-
-
+	
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
 		List<String> publicKeys = IntStream.range(0, n)
