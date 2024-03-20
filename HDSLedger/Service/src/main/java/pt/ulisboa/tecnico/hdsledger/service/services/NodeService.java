@@ -34,8 +34,13 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.State;
 import pt.ulisboa.tecnico.hdsledger.service.StringState;
+import pt.ulisboa.tecnico.hdsledger.service.BankState;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
+import pt.ulisboa.tecnico.hdsledger.service.BankCommand;
 import pt.ulisboa.tecnico.hdsledger.service.Command;
+import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import com.google.gson.Gson;
 
@@ -54,7 +59,7 @@ public class NodeService implements UDPService {
 
     // Ledger (for now, just a list of strings)
     // TODO (dsa): factor out to a state class
-    private StringState ledger = new StringState();
+    private BankState ledger = new BankState();
 
     // We'll allow multiple instances to run in parallel if needed, so this
     // map needs to be thread-safe
@@ -63,10 +68,10 @@ public class NodeService implements UDPService {
 
     // Callback to call when a new input is finalized by consensus (only if
     // the input was provided by this replica)
-    private Queue<Consumer<Slot>> observers = new ConcurrentLinkedQueue<>();
+    private Queue<ObserverAck> observers = new ConcurrentLinkedQueue<>();
 
     // Blocking queue of pending inputs (thread-safe)
-    private BlockingQueue<StringCommand> inputs = new LinkedBlockingQueue<>();
+    private BlockingQueue<BankCommand> inputs = new LinkedBlockingQueue<>();
 
     // Blocking queue of decisions (thread-safe)
     private BlockingQueue<Decision> decisions = new LinkedBlockingQueue<>(); 
@@ -93,7 +98,7 @@ public class NodeService implements UDPService {
 
     // maps values to the slot they were finalized to (after
     // coming out from consensus)
-    Map<StringCommand, Slot<StringCommand>> history = new ConcurrentHashMap<>();
+    Map<BankCommand, Slot<BankCommand>> history = new ConcurrentHashMap<>();
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig, List<String> clientPks) {
@@ -101,14 +106,23 @@ public class NodeService implements UDPService {
         this.config = config;
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
+        
+        genesis();
     }
 
     public ProcessConfig getConfig() {
         return this.config;
     }
 
-    public List<String> getLedger() {
+    public Map<String, Integer> getLedger() {
         return this.ledger.getState();
+    }
+
+    /**
+     * Loads genesis file to initialize state.
+     */
+    private void genesis() {
+        // TODO (dsa)
     }
 
     /**
@@ -219,12 +233,21 @@ public class NodeService implements UDPService {
      * just queues input to be eventually added to state.
      * Thread-safe.
      *
-     * @param cmd value to append to state
-     * @param proof message proving that client did submit the transaction to be appended
+     * @param clientId client that requested the command
+     * @param seq Sequence number sent by client that uniquely identifies transaction
+     * (for that client)
+     * @param sourcePublicKey path to source public key
+     * @param destinationPublicKey path to destination public key
+     * @param amount amount of funds to transfer
+     * @param proof message proving that transfer was requested by the source
      */
-    public synchronized void startConsensus(int clientId, int seq, String cmd, AppendMessage proof) {
+    public synchronized void startConsensus(int clientId, int seq, String sourcePublicKey, String destinationPublicKey, int amount, LedgerMessage proof) {
+
+        String sourceId = SigningUtils.publicKeyHash(sourcePublicKey);
+        String destinationId = SigningUtils.publicKeyHash(destinationPublicKey);
+
         // note: add must be used instead of put as it's non-blocking
-        inputs.add(new StringCommand(clientId, seq, cmd, proof));
+        inputs.add(new BankCommand(clientId, seq, sourceId, destinationId, amount, proof));
     }
 
     /**
@@ -255,7 +278,7 @@ public class NodeService implements UDPService {
                         "{0} - Decided on Consensus Instance {1} with value {2}",
                         config.getId(), lambda, value));
 
-        Optional<StringCommand> cmdOpt = StringCommand.deserialize(value);
+        Optional<BankCommand> cmdOpt = BankCommand.deserialize(value);
         if (!cmdOpt.isPresent()) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
@@ -264,7 +287,7 @@ public class NodeService implements UDPService {
             return;
         }
 
-        Decision<StringCommand> d = new Decision<>(lambda, cmdOpt.get());
+        Decision<BankCommand> d = new Decision<>(lambda, cmdOpt.get());
         decisions.add(d);
     }
 
@@ -273,73 +296,31 @@ public class NodeService implements UDPService {
      * @param observer Callback function
      * Thread-safe.
      */
-    public void registerObserver(Consumer<Slot> observer) {
+    public void registerObserver(ObserverAck observer) {
         this.observers.add(observer);
     }
-
-    /*
-     * Takes string of form nonce::command and returns and Option with [nonce; command]
-     * if it's in valid format, otherwise returns empty option.
-     * */
-    // public static Optional<List<String>> parseValue(String value) {
-    //     // Value is always of the form nonce::m if is proposed by correct process
-    //     // if not, then it's considered invalid by all valid nodes and discarded
-    //     
-    //     String[] parts = value.split("::");
-    //     if (parts.length != 4) {
-    //         return Optional.empty();
-    //     }
-    //
-    //     return Optional.of(Arrays.asList(parts));
-    // }
-
-    /*
-     * Takes string of form nonce::command and returns and Option with [nonce; command]
-     * if it's in valid format, otherwise returns empty option.
-     * */
-    // public static Optional<List<String>> parseSrippedValue(String value) {
-    //     // Value is always of the form nonce::m if is proposed by correct process
-    //     // if not, then it's considered invalid by all valid nodes and discarded
-    //     
-    //     String[] parts = value.split("::");
-    //     if (parts.length != 3) {
-    //         return Optional.empty();
-    //     }
-    //
-    //     return Optional.of(Arrays.asList(parts));
-    // }
-
-    // public static Optional<String> stripProof(String value) {
-    //     Optional<List<String>> partsOpt = parseValue(value);
-    //
-    //     if (!partsOpt.isPresent()) {
-    //         return Optional.empty();
-    //     }
-    //
-    //     List<String> parts = partsOpt.get();
-    //
-    //     String stripped = String.format("%s::%s::%s", parts.get(0), parts.get(1), parts.get(2));
-    //
-    //     return Optional.of(stripped);
-    // }
 
     /**
      * Updates state and returns slot position for value
      * Non thread-safe.
      */
-    public int updateState(StringCommand cmd) {
+    public int updateState(BankCommand cmd) {
         Optional<Integer> slotIdOpt = ledger.update(cmd);
         
         if (slotIdOpt.isPresent()) {
+            StringBuilder stringBuilder = new StringBuilder();
+            for (Map.Entry<String, Integer> entry : ledger.getState().entrySet()) {
+                stringBuilder.append("\t").append(entry.getKey()).append(": ").append(entry.getValue()).append(", ");
+            }
+
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Current Ledger: {1}",
-                        config.getId(), String.join("|", ledger.getState())));
+                        config.getId(), stringBuilder.toString()));
 
             return slotIdOpt.get();
         }
 
-        
         LOGGER.log(Level.SEVERE,
                 MessageFormat.format(
                     "{0} - Tried to update state with invalid command - {1}",
@@ -438,11 +419,11 @@ public class NodeService implements UDPService {
             // Thread to take pending inputs from clients and input them into consensus
             Thread driver = new Thread(() -> {
                 try {
-                    DecisionBucket<StringCommand> bucket = new DecisionBucket<>();
+                    DecisionBucket<BankCommand> bucket = new DecisionBucket<>();
 
 
                     // input values for which the observers where already notified
-                    Set<StringCommand> acketToObserver = new HashSet();
+                    Set<BankCommand> acketToObserver = new HashSet();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
@@ -450,7 +431,7 @@ public class NodeService implements UDPService {
 
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
-                    StringCommand input = this.inputs.take();
+                    BankCommand input = this.inputs.take();
                     // String strippedInput = stripProof(input).get();
 
                     LOGGER.log(Level.INFO,
@@ -471,12 +452,13 @@ public class NodeService implements UDPService {
                             // (it's possible for a value to be processed, but
                             // the clients not notified if the input came late)
                             if (!acketToObserver.contains(input)) {
-                                Slot slot = history.get(input);
+                                Slot<BankCommand> slot = history.get(input);
                                 LOGGER.log(Level.INFO,
                                         MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
                                             config.getId(), input, slot.getSlotId()));
-                                for (Consumer<Slot> obs: this.observers) {
-                                    obs.accept(slot);
+                                BankCommand cmd = slot.getCmd();
+                                for (ObserverAck obs: this.observers) {
+                                    obs.ack(cmd.getClientId(), cmd.getSeq(), slot.getSlotId());
                                 }
                                 acketToObserver.add(input);
                             }
@@ -510,7 +492,7 @@ public class NodeService implements UDPService {
                         // check if this instance was already decided upon. if it
                         // was, then no need to wait, otherwise wait for more
                         // decisions
-                        Decision<StringCommand> d;
+                        Decision<BankCommand> d;
                         while (!bucket.contains(currentLambda.get())) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Decision for instance {1} has not yet been reached",
@@ -538,8 +520,7 @@ public class NodeService implements UDPService {
 
                         // if this consensus output is duplicate, there's nothing
                         // to be done
-                        StringCommand cmd = d.getValue();
-                        // String strippedValue = stripProof(value).get();
+                        BankCommand cmd = d.getValue();
                         if (history.containsKey(cmd)) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - History already contained ({1}), skipping for this reason",
@@ -549,15 +530,10 @@ public class NodeService implements UDPService {
                         }
 
                         // if it's not duplicate, save
-                        int clientId = cmd.getClientId();
-                        int seq = cmd.getSeq();
-                        String value = cmd.getValue();
-                        // TODO: save proofs (might be needed for compliance for example)
-                        AppendMessage proof = cmd.getProof();
-                        
+                       
                         // update state
                         int slotId = updateState(cmd);
-                        Slot<StringCommand> slot = new Slot<>(slotId, cmd);
+                        Slot<BankCommand> slot = new Slot<>(slotId, cmd);
                         history.put(cmd, slot);
                     }
 
