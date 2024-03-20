@@ -86,6 +86,9 @@ public class BankState implements State<BankCommand> {
         this.forceUpdate(cmd);
         this.ops++;
 
+        LOGGER.log(Level.INFO, MessageFormat.format("Updated state - the op id is {0}",
+                    this.ops));
+
         return Optional.of(this.ops);
     }
 

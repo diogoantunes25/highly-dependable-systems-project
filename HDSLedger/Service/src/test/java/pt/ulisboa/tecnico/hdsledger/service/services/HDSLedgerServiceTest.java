@@ -6,13 +6,16 @@ import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
+import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
+import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Deque;
 import java.util.ArrayList;
 import java.util.stream.IntStream;
@@ -87,7 +90,7 @@ public class HDSLedgerServiceTest {
 				.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks) {
+	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks, Map<String, Integer> genesisBlock) {
 		int n = configs.size();
 		ProcessConfig[] configsArray = new ProcessConfig[n];
 		configs.toArray(configsArray);	
@@ -98,6 +101,8 @@ public class HDSLedgerServiceTest {
 			Link link = links.get(i);
 			services.add(new NodeService(link, config, configsArray, clientPks));
 		}
+
+		services.forEach(s -> s.genesis(genesisBlock));
 
 		return services;
 	}
@@ -116,8 +121,8 @@ public class HDSLedgerServiceTest {
 		return services;
 	}
 
-	private static Map<Integer, Deque<Slot>> genSlotMap(int n) {
-		Map<Integer, Deque<Slot>> confirmedSlots = new ConcurrentHashMap<>();
+	private static Map<Integer, Deque<Confirmation>> genSlotMap(int n) {
+		Map<Integer, Deque<Confirmation>> confirmedSlots = new ConcurrentHashMap<>();
 		for (int i = 0; i < n; i++) {
 			confirmedSlots.put(i, new LinkedBlockingDeque());
 		}
@@ -125,9 +130,9 @@ public class HDSLedgerServiceTest {
 		return confirmedSlots;
 	}
 
-	private static void printSlotMap(Map<Integer, Deque<Slot>> confirmedSlots) {
+	private static void printSlotMap(Map<Integer, Deque<Confirmation>> confirmedSlots) {
 		for (int i = 0; i < confirmedSlots.size(); i++) {
-			for (Slot s: confirmedSlots.get(i)) {
+			for (Confirmation s: confirmedSlots.get(i)) {
 				System.out.printf("%d: %s\n", i, s);
 			}
 		}
@@ -139,27 +144,42 @@ public class HDSLedgerServiceTest {
 			.collect(Collectors.toList());
 	}
 
+	// Returns hash of public key with id i
+	private static String numberToId(int i) {
+		return SigningUtils.publicKeyHash(String.format("/tmp/pub_%d.key", i));
+	}
+
 	@Test
 	void HDSLedgerStartsConsensusTest() {
 		int n_Nodes = 4;
 		int basePortNode = 20000;
-		int n_Clients = n_Nodes;
+		int n_Clients = 2;
 		int basePortClient = 30000;
 		int basePortHDS = 40000;
 		int clientId = n_Nodes; // must be greater than n-1
+		int clientId2 = n_Nodes+1; // must be greater than n-1
+		String clientHashPk = numberToId(clientId);
+		String clientHashPk2 = numberToId(clientId2);
 		int seq = 0;
-		String value = "a";
-		Map<Integer, Deque<Slot>> confirmedSlots = genSlotMap(n_Nodes);
+		int amount = 10;
+		int initial1 = 15;
+		int initial2 = 15;
+
+		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n_Nodes);
+
+		Map<String, Integer> genesisBlock = new HashMap<>();
+		genesisBlock.put(clientHashPk, initial1);
+		genesisBlock.put(clientHashPk2, initial2);
 
 		// Setup node service
 		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
 		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
 		List<String> clientPks = defaultClientKeys(n_Nodes, n_Clients);
-		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisBlock);
 
 		// Setup ledger service and client links
 		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);
-		List<Link> ledgerLinks = linksFromConfigs(ledgerConfigs, AppendMessage.class);
+		List<Link> ledgerLinks = linksFromConfigs(ledgerConfigs, LedgerMessage.class);
 		List<HDSLedgerService> HDSLedgerServices = setupHDSLedgerServices(n_Nodes, ledgerConfigs, ledgerLinks, nodeServices);
 
 		Link clientLink = ledgerLinks.get(clientId);
@@ -168,12 +188,13 @@ public class HDSLedgerServiceTest {
 		HDSLedgerServices.forEach(service -> service.listen());
 		nodeServices.forEach(service -> {
 			final int id = service.getId();
-			Consumer<Slot> observer = s -> confirmedSlots.get(id).add(s);
+			ObserverAck observer = (cid, seqN, slotId) ->
+				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId));
 			service.registerObserver(observer);
 		});
 
 		for (int i = 0; i < n_Nodes; i++) {
-			AppendMessage request = MessageCreator.createAppendRequestMessage(clientId, i, value, seq);
+			LedgerMessage request = MessageCreator.createTransferRequest(seq, clientId, clientId2, amount);
 			clientLink.send(i, request);
 		}
 
@@ -190,21 +211,39 @@ public class HDSLedgerServiceTest {
 		// Check output to clients is what was expected
 		for (int i = 0; i < n_Nodes; i++) {
 			assertEquals(1, confirmedSlots.get(i).size());
-			Slot<StringCommand> s = confirmedSlots.get(i).removeFirst();
-			StringCommand cmd = s.getCmd();
+			Confirmation s = confirmedSlots.get(i).removeFirst();
 
-			assertEquals(s.getSlotId(), 1);
-			assertEquals(cmd.getClientId(), clientId);
-			assertEquals(cmd.getSeq(), seq);
-			assertEquals(cmd.getValue(), value);
+			assertEquals(s.slotId, 1);
+			assertEquals(s.clientId, clientId);
+			assertEquals(s.seq, seq);
 		}
 		
 		// Check state is what was expected
 		for (NodeService service: nodeServices) {
-			List<String> ledger = service.getLedger();
-			assertEquals(ledger.size(), 1);
-			assertEquals(ledger.get(0), value);
+			Map<String, Integer> ledger = service.getLedger();
+			assertEquals(ledger.get(clientHashPk), initial1 - amount);
+			assertEquals(ledger.get(clientHashPk2), initial2 + amount);
 		}
 	}
 
+	private class Confirmation {
+		int clientId;
+		int seq;
+		int slotId;
+
+		Confirmation(int clientId, int seq, int slotId) {
+			this.clientId = clientId;
+			this.seq = seq;
+			this.slotId = slotId;
+		}
+
+	@Override
+	public String toString() {
+        return "Confirmation{" +
+                "clientId=" + clientId +
+                ", seq=" + seq +
+                ", slotId=" + slotId +
+                '}';
+    }
+	}
 }

@@ -68,7 +68,7 @@ public class BankStateTest {
 		System.out.println(state);
 
 		LedgerMessage request = MessageCreator.createTransferRequest(seq, source, destination, amount);
-		BankCommand cmd = new BankCommand(seq, sourceId, destinationId, amount, request); 
+		BankCommand cmd = new BankCommand(source, seq, sourceId, destinationId, amount, request); 
 
 		assertEquals(Optional.of(1), state.update(cmd));
 
@@ -98,13 +98,13 @@ public class BankStateTest {
 		System.out.println(state);
 
 		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
-		BankCommand cmd1 = new BankCommand(1, AId, BId, 5, request1); 
+		BankCommand cmd1 = new BankCommand(A, 1, AId, BId, 5, request1); 
 
 		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 4);
-		BankCommand cmd2 = new BankCommand(2, AId, BId, 4, request2); 
+		BankCommand cmd2 = new BankCommand(A, 2, AId, BId, 4, request2); 
 
 		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
-		BankCommand cmd3 = new BankCommand(1, BId, AId, 3, request3); 
+		BankCommand cmd3 = new BankCommand(A, 1, BId, AId, 3, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
 		System.out.println(state);
@@ -138,13 +138,13 @@ public class BankStateTest {
 		System.out.println(state);
 
 		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
-		BankCommand cmd1 = new BankCommand(1, AId, BId, 5, request1); 
+		BankCommand cmd1 = new BankCommand(A, 1, AId, BId, 5, request1); 
 
 		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 6);
-		BankCommand cmd2 = new BankCommand(2, AId, BId, 6, request2); 
+		BankCommand cmd2 = new BankCommand(A, 2, AId, BId, 6, request2); 
 
 		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
-		BankCommand cmd3 = new BankCommand(1, BId, AId, 3, request3); 
+		BankCommand cmd3 = new BankCommand(B, 1, BId, AId, 3, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
 		System.out.println(state);
@@ -179,13 +179,13 @@ public class BankStateTest {
 		System.out.println(state);
 
 		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
-		BankCommand cmd1 = new BankCommand(1, AId, BId, 5, request1); 
+		BankCommand cmd1 = new BankCommand(A, 1, AId, BId, 5, request1); 
 
 		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 4);
-		BankCommand cmd2 = new BankCommand(2, AId, BId, 4, request2); 
+		BankCommand cmd2 = new BankCommand(A, 2, AId, BId, 4, request2); 
 
 		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
-		BankCommand cmd3 = new BankCommand(1, BId, AId, 3, request3); 
+		BankCommand cmd3 = new BankCommand(B, 1, BId, AId, 3, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
 		System.out.println(state);

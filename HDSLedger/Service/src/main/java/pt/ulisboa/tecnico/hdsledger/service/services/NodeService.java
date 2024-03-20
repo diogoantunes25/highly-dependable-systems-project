@@ -107,7 +107,7 @@ public class NodeService implements UDPService {
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
         
-        genesis();
+        // genesis();
     }
 
     public ProcessConfig getConfig() {
@@ -119,10 +119,12 @@ public class NodeService implements UDPService {
     }
 
     /**
-     * Loads genesis file to initialize state.
+     * Initializes state.
      */
-    private void genesis() {
-        // TODO (dsa)
+    void genesis(Map<String, Integer> initialBalances) {
+        for (Map.Entry<String,Integer> entry: initialBalances.entrySet()) {
+            this.ledger.spawnMoney(entry.getKey(), entry.getValue());
+        }
     }
 
     /**
@@ -396,16 +398,16 @@ public class NodeService implements UDPService {
                             }
 
                             case ACK ->
-                                LOGGER.log(Level.INFO, MessageFormat.format("{0} Message listener - Received ACK message from {1}",
+                                LOGGER.log(Level.FINE, MessageFormat.format("{0} Message listener - Received ACK message from {1}",
                                         config.getId(), message.getSenderId()));
 
                             case IGNORE ->
-                                LOGGER.log(Level.INFO,
+                                LOGGER.log(Level.FINE,
                                         MessageFormat.format("{0} Message listener - Received IGNORE message from {1}",
                                                 config.getId(), message.getSenderId()));
 
                             default ->
-                                LOGGER.log(Level.INFO,
+                                LOGGER.log(Level.FINE,
                                         MessageFormat.format("{0} (NodeService) Message listener - Received unknown message from {1}",
                                                 config.getId(), message.getSenderId()));
                         }
@@ -516,7 +518,6 @@ public class NodeService implements UDPService {
 
                         // at this point, we have decision for instance currentLambda,
                         // we just need to process it
-
 
                         // if this consensus output is duplicate, there's nothing
                         // to be done
