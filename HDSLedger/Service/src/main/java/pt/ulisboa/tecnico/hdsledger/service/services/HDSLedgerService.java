@@ -44,7 +44,7 @@ public class HDSLedgerService implements UDPService {
         this.link = link;   
         this.config = config;
         this.nodeService = nodeService;
-        nodeService.registerObserver(s -> decided(s));
+        nodeService.registerObserver(this::decided);
     }
 
     private AppendMessage createAppendReplyMessage(int id, int receiver, String value, int sequenceNumber, int slot) {
@@ -80,17 +80,28 @@ public class HDSLedgerService implements UDPService {
                         config.getId(), clientId));
             return;
         }
+
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                     "{0} - Append request from client {1} (signature check passed)",
                     config.getId(), clientId));
 
         String value = request.getValue();
-        nodeService.startConsensus(clientId, sequenceNumber, value, message);
+        // nodeService.startConsensus(clientId, sequenceNumber, value, message);
     }
 
     public void transfer(LedgerMessage message) {
-        TransferRequest transferRequest = message.deserializeTransferRequest();
+        TransferRequest request = message.deserializeTransferRequest();
+
+        // check if the source public key is valid and corresponds to the client id
+        // (entity can only transfer its own funds)
+        if (!request.getSourcePublicKey().equals(others[message.getSenderId()].getPublicKey())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Source public key does not match client id {1}",
+                        config.getId(), message.getSenderId()));
+            return;
+        }
 
         // check if the signature is consistent
         if (!message.checkConsistentSig(others[message.getSenderId()].getPublicKey())) {
@@ -101,27 +112,23 @@ public class HDSLedgerService implements UDPService {
             return;
         }
 
-        // check if the source public key is valid and corresponds to the client id
-        if (!transferRequest.getSourcePublicKey().equals(others[message.getSenderId()].getPublicKey())) {
-            // TODO (dgm): think about this verification
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                        "{0} - Source public key does not match client id {1}",
-                        config.getId(), message.getSenderId()));
-            return;
-        }
-
         int clientId = message.getSenderId();
+        int sequenceNumber = message.getSequenceNumber();
 
-        TransferReply transferReply = new TransferReply(true, 1, 1);
+        nodeService.startConsensus(clientId, sequenceNumber, request.getSourcePublicKey(), request.getDestinationPublicKey(), request.getAmount(), message);
+
+        // TransferReply transferReply = new TransferReply(true, 1, 1);
+
         // Send the decided value to the client
-        LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REPLY, new Gson().toJson(transferReply));
-        link.send(clientId, reply);
+        // LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REPLY, new Gson().toJson(transferReply));
+        // link.send(clientId, reply);
     }
 
     public void checkBalance(LedgerMessage message) {
         BalanceRequest balanceRequest = message.deserializeBalanceRequest();
 
+        // TODO (dsa): update
+        
         // check if the signature is consistent
         if (!message.checkConsistentSig(others[message.getSenderId()].getPublicKey())) {
             LOGGER.log(Level.INFO,
@@ -153,22 +160,23 @@ public class HDSLedgerService implements UDPService {
      * Receive decided value from consensus service
      * Notify the client with the decided slot
     */
-    private void decided(Slot<StringCommand> slot) {
+    private void decided(int senderId, int seq, int slotId) {
+        // TODO
 
-        int slotId = slot.getSlotId();
-        StringCommand cmd = slot.getCmd();
-        int clientId = cmd.getClientId();
-        int sequenceNumber = cmd.getSeq();
-        String value = cmd.getValue();
-
-        LOGGER.log(Level.INFO,
-                MessageFormat.format(
-                        "{0} - Decided on slot {1} value {2}, clientId {3} and sequence number {4}",
-                        config.getId(), slotId, value, clientId, sequenceNumber));
-
-        // Send the decided value to the client
-        AppendMessage reply = createAppendReplyMessage(config.getId(), clientId, value, sequenceNumber, slotId);
-        link.send(clientId, reply);
+        // int slotId = slot.getSlotId();
+        // StringCommand cmd = slot.getCmd();
+        // int clientId = cmd.getClientId();
+        // int sequenceNumber = cmd.getSeq();
+        // String value = cmd.getValue();
+        //
+        // LOGGER.log(Level.INFO,
+        //         MessageFormat.format(
+        //                 "{0} - Decided on slot {1} value {2}, clientId {3} and sequence number {4}",
+        //                 config.getId(), slotId, value, clientId, sequenceNumber));
+        //
+        // // Send the decided value to the client
+        // AppendMessage reply = createAppendReplyMessage(config.getId(), clientId, value, sequenceNumber, slotId);
+        // link.send(clientId, reply);
     }
 
     @Override
