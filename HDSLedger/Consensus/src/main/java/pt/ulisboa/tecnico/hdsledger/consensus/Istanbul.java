@@ -1071,6 +1071,22 @@ public class Istanbul {
 				.mapToObj(receiver -> 
 					createRoundChangeMessage(this.lambda, this.ri, receiver, this.pvi, this.pri, this.preparationJustification))
 				.collect(Collectors.toList()));
+
+			if (!stashedPrePrepare.isEmpty()) {
+				List<ConsensusMessage> prePrepareMessages = stashedPrePrepare.get(this.ri);
+				for (ConsensusMessage prePrepareMessage : prePrepareMessages) {
+					this.handleMessage(prePrepareMessage);
+				}
+				stashedPrePrepare.remove(this.ri);
+			}
+				
+			if (!stashedPrepare.isEmpty()) {
+				List<ConsensusMessage> prepareMessages = stashedPrepare.get(this.ri);
+				for (ConsensusMessage prepareMessage : prepareMessages) {
+					this.handleMessage(prepareMessage);
+				}
+				stashedPrepare.remove(this.ri);
+			}	
 		}
 
 		// no point in collecting quorum, if I'm not the leader for the next round
