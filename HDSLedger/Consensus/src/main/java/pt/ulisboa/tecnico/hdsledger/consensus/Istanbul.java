@@ -113,6 +113,8 @@ public class Istanbul {
 	// Round for which have Pre Prepared
 	private Set<Integer> havePrePrepared = new HashSet<>();
 
+	private MessageHandler messageHandler;
+
 	// Timer ids for each round
 	// The semantics are:
 	//	- if there's no entry for r, timer not stopped
@@ -146,8 +148,14 @@ public class Istanbul {
 		this.commitMessages = new MessageBucket(n);
 		this.roundChangeMessages = new MessageBucket(n);
 
+		this.messageHandler = (m -> this.normalHandleMessage(m));
+
 		LOGGER.log(Level.INFO, MessageFormat.format("{0} - Public key at {1} and private key at {2}",
 					config.getId(), config.getPublicKey(), config.getPrivateKey()));
+	}
+
+	public void setMessageHandler(MessageHandler messageHandler) {
+		this.messageHandler = messageHandler;
 	}
 
 	/**
@@ -1208,10 +1216,13 @@ public class Istanbul {
 		return this.signAll(this._handleTimeout(round));
 	}
 
+	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+		return this.messageHandler.handle(message);
+	}
 	/**
 	 * Handles protocol messages and returns messages to be sent over the network
 	 */
-	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+	public List<ConsensusMessage> normalHandleMessage(ConsensusMessage message) {
         if (!Istanbul.checkSignature(message, this.others, this.beta)) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
@@ -1221,6 +1232,14 @@ public class Istanbul {
         }
 
 		return this.signAll(this._handleMessage(message));
+	}
+
+	public List<ConsensusMessage> badHandleMessage(ConsensusMessage message) {
+		if (!Istanbul.checkSignature(message, this.others, this.beta)) {
+			return new ArrayList<>();
+		}
+
+		return this._handleMessage(message);
 	}
 	private synchronized List<ConsensusMessage> _handleTimeout(int round) {
 

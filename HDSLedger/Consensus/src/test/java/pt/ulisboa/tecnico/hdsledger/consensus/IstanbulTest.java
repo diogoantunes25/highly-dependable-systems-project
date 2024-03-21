@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsledger.consensus;
 
 import com.google.gson.Gson;
 import javafx.util.Pair;
+import org.hamcrest.core.Is;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
@@ -13,10 +14,12 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -143,6 +146,20 @@ public class IstanbulTest {
 		}
 
 		return outputs.iterator().next();
+	}
+
+	private boolean checkNoOneConfirmed(Map<Integer, List<String>> confirmed) {
+		for (Map.Entry<Integer, List<String>> entry: confirmed.entrySet()) {
+			List<String> delivered = entry.getValue();
+			System.out.printf("[test] Delivered by %d: %s\n",
+					entry.getKey(),
+					String.join(", ", delivered));
+
+			if (delivered.size() != 0) {
+				throw new RuntimeException("A replica delivered onceor multiple times");
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -982,5 +999,92 @@ public class IstanbulTest {
 
 		// Check that everyone delivered the same and once only
 		checkConfirmed(confirmed); // ignore output value for simplicity
+	}
+
+	@Test
+	public void badHandlerTest() {
+		int n = 4;
+		int lambda = 0;
+		String value = "a";
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		// make one instances byzantine
+		instances.get(0).setMessageHandler(m -> instances.get(0).badHandleMessage(m));
+
+		// Start every replica
+		instances.forEach(instance -> {
+			List<ConsensusMessage> output = instance.start(value);
+
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Process all messages without any incidents
+		while (messages.size() > 0) {
+			ConsensusMessage message = messages.pollFirst();
+			if (message == null) {
+				throw new RuntimeException("ERROR: null message found");
+			}
+
+			int receiver = message.getReceiver();
+			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+			output.forEach(m -> messages.addLast(m));
+		}
+
+		// Check that no everyone delivered the same and once only
+		if (!checkConfirmed(confirmed).equals(value)) {
+			throw new RuntimeException("ERROR: agreed to wrong value");
+		}
+	}
+
+	@Test
+	public void twoBadHandlerTest() {
+		int n = 4;
+		int lambda = 0;
+		String value = "a";
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		// make two instances byzantine
+		instances.get(0).setMessageHandler(m -> instances.get(0).badHandleMessage(m));
+		instances.get(1).setMessageHandler(m -> instances.get(1).badHandleMessage(m));
+
+		// Start every replica
+		instances.forEach(instance -> {
+			List<ConsensusMessage> output = instance.start(value);
+
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Process all messages without any incidents
+		while (messages.size() > 0) {
+			ConsensusMessage message = messages.pollFirst();
+			if (message == null) {
+				throw new RuntimeException("ERROR: null message found");
+			}
+
+			int receiver = message.getReceiver();
+			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+			output.forEach(m -> messages.addLast(m));
+		}
+
+		// Check that no everyone delivered the same and once only
+		if (!checkNoOneConfirmed(confirmed)) {
+			throw new RuntimeException("ERROR: agreed to wrong value");
+		}
 	}
 }
