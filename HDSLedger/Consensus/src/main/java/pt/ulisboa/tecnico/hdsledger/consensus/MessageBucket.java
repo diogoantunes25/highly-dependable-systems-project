@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import java.util.List;
 import java.util.ArrayList;
 
+import javafx.util.Pair;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.CommitMessage;
@@ -140,13 +141,13 @@ public class MessageBucket {
     /**
      * Checks the exists a quorum of COMMIT messages
      */
-    public Optional<String> hasValidCommitQuorum(int round) {
+    public Optional<Pair<String, List<ConsensusMessage>>> hasValidCommitQuorum(int round) {
         Optional<List<ConsensusMessage>> messages = this.hasValidQuorum(round, Message.Type.COMMIT);
 
         if (messages.isPresent()) {
             ConsensusMessage message = messages.get().get(0);
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            return Optional.of(commitMessage.getValue());
+            return Optional.of(new Pair<>(commitMessage.getValue(), messages.get()));
         }
 
         return Optional.empty();

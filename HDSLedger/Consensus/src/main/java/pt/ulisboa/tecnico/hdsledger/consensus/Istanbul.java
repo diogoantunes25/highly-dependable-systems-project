@@ -402,6 +402,9 @@ public class Istanbul {
 			}
 
 			case COMMIT -> {
+				// Since commit messages need to be signed due to the possibility of
+				// sending them upon receiving a round change message for an already decided instance,
+				// they're signature needs to be checked
 				int senderId = message.getSenderId();
 				if (!message.checkConsistentSig(others.get(senderId).getPublicKey())) {
 					LOGGER.log(Level.WARNING,
@@ -518,6 +521,9 @@ public class Istanbul {
 			}
 
 			case COMMIT -> {
+				// Commit messages need to be signed since they may be required to send if
+				// replica receives a round-change message for an instance already decided and needs
+				// to send the commit quorum that lead to the decision
 				message.signSelf(myPrivateKeyPath);
 				yield message;
 			}
@@ -761,9 +767,9 @@ public class Istanbul {
 
 		commitMessages.addMessage(message);
 
-		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(round);
+		Optional<Pair<String, List<ConsensusMessage>>> commitPair = commitMessages.hasValidCommitQuorum(round);
 
-		if (commitValue.isPresent()) {
+		if (commitPair.isPresent()) {
 			if (this.decision.isPresent()) {
 				LOGGER.log(Level.INFO,
 						MessageFormat.format(
@@ -772,7 +778,7 @@ public class Istanbul {
 				return new ArrayList<>();
 			}
 
-			String value = commitValue.get();
+			String value = commitPair.get().getKey();
 
 			// Note that round might differ from this.ri
 			stopTimer(round);
@@ -786,7 +792,7 @@ public class Istanbul {
 
 			// Store quorum of commit messages in case replica receives
 			// a round change message for this instance
-			commitQuorums = Optional.of(commitMessages.getMessages(round).values().stream().collect(Collectors.toList()));
+			commitQuorums = Optional.of(commitPair.get().getValue());
 
 			return new ArrayList<>();
 		}

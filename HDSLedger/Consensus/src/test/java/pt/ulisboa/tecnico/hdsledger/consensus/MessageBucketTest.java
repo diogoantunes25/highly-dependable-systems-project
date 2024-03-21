@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
+import javafx.util.Pair;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -137,9 +138,9 @@ public class MessageBucketTest {
 							MessageCreator.createCommitMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
 	
-		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
-		assert(optValue.isPresent());
-		assertEquals(optValue.get(), value);
+		Optional<Pair<String, List<ConsensusMessage>>> commitQuorum = bucket.hasValidCommitQuorum(round);
+		assert(commitQuorum.isPresent());
+		assertEquals(commitQuorum.get().getKey(), value);
 	}
 
 	/**
@@ -159,10 +160,10 @@ public class MessageBucketTest {
 					.mapToObj(i ->
 							MessageCreator.createCommitMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
-	
-		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
-		assert(optValue.isPresent());
-		assertEquals(optValue.get(), value);
+
+		Optional<Pair<String, List<ConsensusMessage>>> commitQuorum = bucket.hasValidCommitQuorum(round);
+		assert(commitQuorum.isPresent());
+		assertEquals(commitQuorum.get().getKey(), value);
 	}
 
 	/**
@@ -182,9 +183,9 @@ public class MessageBucketTest {
 					.mapToObj(i ->
 							MessageCreator.createCommitMessage(i, value, instance, round, receiver))
 					.forEach(m -> bucket.addMessage(m));
-	
-		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
-		assert(!optValue.isPresent());
+
+		Optional<Pair<String, List<ConsensusMessage>>> commitQuorum = bucket.hasValidCommitQuorum(round);
+		assert(!commitQuorum.isPresent());
 	}
 
 	/**
@@ -198,8 +199,8 @@ public class MessageBucketTest {
 		int round = 0;
 		int receiver = 0; // irrelevant
 		MessageBucket bucket = new MessageBucket(n);
-		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
-		assert(!optValue.isPresent());
+		Optional<Pair<String, List<ConsensusMessage>>> commitQuorum = bucket.hasValidCommitQuorum(round);
+		assert(!commitQuorum.isPresent());
 	}
 
 	/**
@@ -223,10 +224,10 @@ public class MessageBucketTest {
 						return MessageCreator.createCommitMessage(i, value, instance, round, receiver);
 					})
 					.forEach(m -> bucket.addMessage(m));
-	
-		Optional<String> optValue = bucket.hasValidCommitQuorum(round);	
-		assert(optValue.isPresent());
-		assertEquals(optValue.get(), good);
+
+		Optional<Pair<String, List<ConsensusMessage>>> commitQuorum = bucket.hasValidCommitQuorum(round);
+		assert(commitQuorum.isPresent());
+		assertEquals(commitQuorum.get().getKey(), good);
 	}
 
 	/**
