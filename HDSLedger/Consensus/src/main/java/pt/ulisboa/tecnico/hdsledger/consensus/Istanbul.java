@@ -312,7 +312,7 @@ public class Istanbul {
 	/**
 	 * Checks signatures in message
 	 */
-	public static boolean checkSignature(ConsensusMessage message, List<ProcessConfig> others, Predicate<String> beta) {
+	public static boolean checkSignature(ConsensusMessage message, List<ProcessConfig> others, Predicate<String> beta, int quorumSize) {
 		return switch (message.getType()) {
 			case PRE_PREPARE -> {
 				PrePrepareMessage prePrepareMessage = message.deserializePrePrepareMessage();
@@ -428,6 +428,10 @@ public class Istanbul {
 								int prepareSenderId = m.getSenderId();
 								return m.checkConsistentSig(others.get(prepareSenderId).getPublicKey());
 							})) {
+						yield false;
+					}
+
+					if (roundChangeMessage.getJustification().get().size() < quorumSize){
 						yield false;
 					}
 				}
@@ -1076,7 +1080,7 @@ public class Istanbul {
 
 			LOGGER.log(Level.INFO,
 				MessageFormat.format("{0} - Upon f+1 round changes, moved to round {2} in instance {1}",
-					config.getId(), this.lambda, this.ri));
+					config.getId(), this.ri, this.lambda));
 
 
 			// No need to check whether I already broadcast a ROUND-CHANGE (because
@@ -1185,7 +1189,7 @@ public class Istanbul {
 	 * Handles protocol messages and returns messages to be sent over the network
 	 */
 	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
-        if (!Istanbul.checkSignature(message, this.others, this.beta)) {
+        if (!Istanbul.checkSignature(message, this.others, this.beta, this.quorumSize)) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Detected message with bad signature from {1} in {2} message, ignoring",
