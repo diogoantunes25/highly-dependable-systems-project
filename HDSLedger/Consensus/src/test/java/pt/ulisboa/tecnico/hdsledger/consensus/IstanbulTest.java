@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
+import com.google.gson.Gson;
 import javafx.util.Pair;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -860,5 +861,126 @@ public class IstanbulTest {
 		assert(optPair.isPresent());
 		assertEquals(optPair.get().getKey(), String.format("value_%d", n-1));
 		assertEquals(optPair.get().getValue(), n-1);
+	}
+
+	@Test
+	public void sendCommitQuorumIfRoundChangeReceivedButAlreadyDecided() {
+		// objective: if a replica received a round change message for an instance that is already decided, it should
+		// send the commit quorum messages that lead to the decision
+
+		int n = 4;
+		int lambda = 0;
+
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+
+		// Backlog of messages (after partition)
+		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
+
+		// Backlog of messages late replica
+		Deque<ConsensusMessage> messages3 = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+
+		// Start every replica
+		instances.forEach(instance -> {
+			if (instance.getId() != 0) {
+				String value = String.format("a%d", instance.getId());
+				List<ConsensusMessage> output = instance.start(value);
+				// Store all messages to be processed
+				output.forEach(m -> messages.addLast(m));
+			}
+		});
+
+		// Run for at most 2 seconds
+		long startTime = System.currentTimeMillis();
+		long duration = 0;
+		while (duration < 7000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();
+				System.out.printf("[test] message: %s\n", new Gson().toJson(message));
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+
+				if (message.getType() == Message.Type.COMMIT || (message.getType() == Message.Type.ROUND_CHANGE && message.getSenderId() == 3)) {
+					messages2.addLast(message);
+					continue;
+				}
+
+				Istanbul instance = instances.get(receiver);
+				if (instance == null) System.out.println("[test] instance is null");
+				if (message == null) System.out.println("[test] message is null");
+				List<ConsensusMessage> output = instance.handleMessage(message);
+				output.forEach(m -> messages.addLast(m));
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		// nothing is delivered
+		Set<String> outputs = new HashSet();
+		for (Map.Entry<Integer, List<String>> entry: confirmed.entrySet()) {
+			List<String> delivered = entry.getValue();
+			System.out.printf("[test] Delivered by %d: %s\n",
+					entry.getKey(),
+					String.join(", ", delivered));
+
+			if (delivered.size() != 0) {
+				throw new RuntimeException("A replica didn't deliver once (0 or multiple times)");
+			}
+		}
+
+		messages2.forEach(m -> {
+			int receiver = m.getReceiver();
+			if (receiver == 3) {
+				messages2.remove(m);
+			}
+		});  // make sure that replica 3 doesn't have COMMIT messages to process -> forcing it to be late
+
+		while (messages2.size() > 0) {
+			ConsensusMessage message = messages2.pollFirst();
+			if (message == null) {
+				throw new RuntimeException("ERROR: null message found");
+			}
+
+			int receiver = message.getReceiver();
+
+			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+			if (message.getType() == Message.Type.ROUND_CHANGE) {
+				output.forEach(m -> messages3.addLast(m));
+			} else {
+				output.forEach(m -> messages2.addLast(m));
+			}
+		}
+
+		// check that only 3 hasn't decided yet
+		for (int i = 0; i < n; i++) {
+			if (i == 3) {
+				assertEquals(confirmed.get(i).size(), 0);
+			} else {
+				assertEquals(confirmed.get(i).size(), 1);
+			}
+		}
+
+		// now replica 3 is going to process the received messages
+		while (messages3.size() > 0) {
+			ConsensusMessage message = messages3.pollFirst();
+			if (message == null) {
+				throw new RuntimeException("ERROR: null message found");
+			}
+
+			List<ConsensusMessage> output = instances.get(3).handleMessage(message);
+			output.forEach(m -> messages3.addLast(m));
+		}
+
+		// Check that everyone delivered the same and once only
+		checkConfirmed(confirmed); // ignore output value for simplicity
 	}
 }
