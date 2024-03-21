@@ -12,6 +12,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 import java.text.MessageFormat;
 import java.util.Optional;
+import java.util.stream.Stream;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
@@ -1029,6 +1030,24 @@ public class Istanbul {
 	}
 
 	/*
+	 * Updates rounds and returns result of handling all messages
+	 **/
+	private List<ConsensusMessage> updateRound(int newRound) {
+		this.ri = newRound;
+
+		List<ConsensusMessage> messages = Stream.concat(
+				stashedPrePrepare.getOrDefault(this.ri, new ArrayList<>()).stream(),
+				stashedPrepare.getOrDefault(this.ri, new ArrayList<>()).stream())
+			.flatMap(m -> this.handleMessage(m).stream())
+			.collect(Collectors.toList());
+
+		stashedPrePrepare.remove(this.ri);
+		stashedPrepare.remove(this.ri);
+
+		return messages;
+	}
+
+	/*
 	 * Handle round change messages
 	 *
 	 * @param message to be handled
@@ -1053,7 +1072,7 @@ public class Istanbul {
 					config.getId(), message.getSenderId(), this.lambda, this.ri));
 
 			// update round (ri <- rmin)
-			this.ri = optNextRound.get();
+			messages.addAll(this.updateRound(optNextRound.get()));
 
 			LOGGER.log(Level.INFO,
 				MessageFormat.format("{0} - Upon f+1 round changes, moved to round {2} in instance {1}",
@@ -1186,7 +1205,7 @@ public class Istanbul {
 			return new ArrayList<>();
 		}
 
-		this.ri += 1;
+		List<ConsensusMessage> messages = this.updateRound(this.ri+1);
 
 		startTimer(getTimeout(this.ri));
 
@@ -1197,9 +1216,11 @@ public class Istanbul {
 
 
 		// Broadcast RoundChange (lambda, round, pvi, pri)
-		return IntStream.range(0, this.config.getN())
+		messages.addAll(IntStream.range(0, this.config.getN())
 			.mapToObj(receiver -> this.createRoundChangeMessage(this.lambda, this.ri, receiver, this.pvi, this.pri, this.preparationJustification))
-			.collect(Collectors.toList());
+			.collect(Collectors.toList()));
+
+		return messages;
 	}
 
 	private synchronized List<ConsensusMessage> _handleMessage(ConsensusMessage message) {
