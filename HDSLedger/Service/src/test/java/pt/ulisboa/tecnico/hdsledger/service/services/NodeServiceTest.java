@@ -356,10 +356,11 @@ public class NodeServiceTest {
 			Confirmation s2 = confirmedSlots.get(i).removeFirst();
 
 			assertEquals(s1.clientId, clientId);
-
 			assertEquals(s2.clientId, clientId);
-			assert((s1.slotId == 1 && s2.slotId == 2) || (s1.slotId == 2 && s2.slotId == 1));
 
+			// Since two clients submited in parallel, confirmations can come
+			// in any order
+			assert((s1.slotId == 1 && s2.slotId == 2) || (s1.slotId == 2 && s2.slotId == 1));
 			assert((s1.seq == seq1 && s2.seq == seq2) || (s1.seq == seq2 && s2.seq == seq1));
 		}
 		
@@ -441,23 +442,27 @@ public class NodeServiceTest {
 
 		printSlotMap(confirmedSlots);
 
-		// FIXME: acks don't have to be received in order
 
 		// First replica output does not have guaranteed order
 		assertEquals(2, confirmedSlots.get(0).size());
+		Confirmation s1_0 = confirmedSlots.get(0).removeFirst();
+		Confirmation s2_0 = confirmedSlots.get(0).removeFirst();
+		assert((s1_0.slotId == 1 && s2_0.slotId == 2) ||
+				(s1_0.slotId == 2 && s2_0.slotId == 1));
 
 		// Check output to clients is what was expected
-		for (int i = 0; i < n; i++) {
+		for (int i = 1; i < n; i++) {
 			assertEquals(2, confirmedSlots.get(i).size());
 			Confirmation s1 = confirmedSlots.get(i).removeFirst();
 			Confirmation s2 = confirmedSlots.get(i).removeFirst();
 
 			assertEquals(s1.clientId, clientId);
 			assertEquals(s1.seq, seq1);
+			assertEquals(1, s1.slotId);
 
 			assertEquals(s2.clientId, clientId);
 			assertEquals(s2.seq, seq2);
-			assert((s1.slotId == 1 && s2.slotId == 2) || (s1.slotId == 2 && s2.slotId == 1));
+			assertEquals(2, s2.slotId);
 		}
 		
 		// Check state is what was expected
