@@ -13,6 +13,9 @@ import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.security.GeneralSecurityException;
 import java.text.MessageFormat;
 import java.util.*;
@@ -26,8 +29,6 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class IstanbulTest {
-
-
 
 	// n is set to 10 by default
 	@BeforeAll
@@ -1016,7 +1017,7 @@ public class IstanbulTest {
 		// Consensus instances
 		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 		// make one instances byzantine
-		instances.get(0).setMessageHandler(m -> instances.get(0).badHandleMessage(m));
+		instances.get(0).setMessageHandler(m -> badHandler(instances.get(0), m));
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -1059,8 +1060,8 @@ public class IstanbulTest {
 		// Consensus instances
 		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
 		// make two instances byzantine
-		instances.get(0).setMessageHandler(m -> instances.get(0).badHandleMessage(m));
-		instances.get(1).setMessageHandler(m -> instances.get(1).badHandleMessage(m));
+		instances.get(0).setMessageHandler(m -> badHandler(instances.get(0), m));
+		instances.get(1).setMessageHandler(m -> badHandler(instances.get(0), m));
 
 		// Start every replica
 		instances.forEach(instance -> {
@@ -1085,6 +1086,41 @@ public class IstanbulTest {
 		// Check that no everyone delivered the same and once only
 		if (!checkNoOneConfirmed(confirmed)) {
 			throw new RuntimeException("ERROR: agreed to wrong value");
+		}
+	}
+
+	private List<ConsensusMessage> badHandler(Istanbul instance, ConsensusMessage message) {
+		try {
+			Field othersField = Istanbul.class.getDeclaredField("others");
+			Field betaField = Istanbul.class.getDeclaredField("beta");
+
+			// Make the fields accessible
+			othersField.setAccessible(true);
+			betaField.setAccessible(true);
+
+			List<ProcessConfig> othersValue = (List<ProcessConfig>) othersField.get(instance);
+			Predicate<String> betaValue = (Predicate<String>) betaField.get(instance);
+
+			// do nasty things to messages here
+			if (!Istanbul.checkSignature(message, othersValue, betaValue)) {
+				return new ArrayList<>();
+			}
+			return callRealHandler(instance, message);
+		} catch (Exception e) {
+			// TODO
+			throw new RuntimeException(e);
+		}
+    }
+
+	private List<ConsensusMessage> callRealHandler(Istanbul instance, ConsensusMessage message) {
+		try {
+			// Get the method _handleMessage
+			Method method = Istanbul.class.getDeclaredMethod("_handleMessage", ConsensusMessage.class);
+			// Make the method accessible
+			method.setAccessible(true);
+			return (List<ConsensusMessage>) method.invoke(instance, message);
+		} catch (Exception e) {
+			return new ArrayList<>();
 		}
 	}
 }

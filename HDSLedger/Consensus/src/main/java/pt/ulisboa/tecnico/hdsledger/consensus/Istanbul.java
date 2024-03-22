@@ -1233,14 +1233,7 @@ public class Istanbul {
 
 		return this.signAll(this._handleMessage(message));
 	}
-
-	public List<ConsensusMessage> badHandleMessage(ConsensusMessage message) {
-		if (!Istanbul.checkSignature(message, this.others, this.beta)) {
-			return new ArrayList<>();
-		}
-
-		return this._handleMessage(message);
-	}
+	
 	private synchronized List<ConsensusMessage> _handleTimeout(int round) {
 
 		if (round != this.ri) {
