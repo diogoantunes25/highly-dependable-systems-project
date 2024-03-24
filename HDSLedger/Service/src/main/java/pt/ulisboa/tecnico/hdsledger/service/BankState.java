@@ -92,6 +92,11 @@ public class BankState implements State<BankCommand> {
         return Optional.of(this.ops);
     }
 
+    // returns balance for given id
+    public int getBalance(String id) {
+        return this.balances.get(id);
+    }
+
     // returns copy of current state
     public Map<String, Integer> getState() {
         return (HashMap<String, Integer>) this.balances.clone();

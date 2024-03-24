@@ -80,7 +80,7 @@ public class ClientStub {
 
     public Optional<Integer> checkBalance(String publicKey) {
         int currentRequestId = this.requestId++; // nonce
-        BalanceRequest balanceRequest = new BalanceRequest(publicKey);
+        BalanceRequest balanceRequest = new BalanceRequest(currentRequestId, publicKey);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         LOGGER.log(Level.INFO, "Sending balance request: " + new Gson().toJson(request));
 
@@ -132,8 +132,8 @@ public class ClientStub {
 
     public void handleBalanceReply(LedgerMessage message) {
         LOGGER.log(Level.INFO, "Received Balance reply");
-        // BalanceReply balanceReply = message.deserializeBalanceReply();
-        // receivedMessages.addSlot(balanceReply.getValue(), message.getSenderId());
+        BalanceReply balanceReply = message.deserializeBalanceReply();
+        receivedMessages.addSlot(balanceReply.getValue(), message.getSenderId());
         LOGGER.log(Level.INFO, "Response registered");
     }
 

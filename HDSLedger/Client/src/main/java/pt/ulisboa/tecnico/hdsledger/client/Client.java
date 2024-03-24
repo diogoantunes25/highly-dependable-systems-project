@@ -23,7 +23,7 @@ public class Client {
         System.out.println("Available commands:");
         System.out.println("     help - Print this message.");
         System.out.println("     transfer <sourcePublicKey> <destinationPublicKey> <amount> - Transfer <amount> from <sourcePublicKey> to <destinationPublicKey> with.");
-        System.out.println("     check_balance <publicKey> - Get the balance of <publicKey>.");
+        System.out.println("     balance <publicKey> - Get the balance of <publicKey>.");
         System.out.println("     exit - Exit the application.");
     }
 
@@ -107,9 +107,10 @@ public class Client {
                         printUsage();
                         break;
                     }
-                    String publicKey = tokens[1];
+                    int client = Integer.parseInt(tokens[1]);
+                    String publicKey = configs[client].getPublicKey();
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending check balance request for {0}",
-                                publicKey));
+                                client));
                     Optional<Integer> balanceOpt = stub.checkBalance(publicKey);
                     if (balanceOpt.isPresent()) {
                         System.out.println(MessageFormat.format("Balance for {0} is {1}", publicKey, balanceOpt.get()));
