@@ -4,20 +4,19 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.logging.Level;
 
 import com.google.gson.Gson;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendReply;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceReply;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferReply;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -47,47 +46,12 @@ public class HDSLedgerService implements UDPService {
         nodeService.registerObserver(this::decided);
     }
 
-    private AppendMessage createAppendReplyMessage(int id, int receiver, String value, int sequenceNumber, int slot) {
-        AppendReply appendReply = new AppendReply(value, sequenceNumber, slot);
-
-        AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REPLY, receiver);
-
-        message.setMessage(new Gson().toJson(appendReply));
-
-        return message;
-    }
-
     private LedgerMessage createLedgerMessage(int id, Message.Type type, String serializedMessage) {
        LedgerMessage message = new LedgerMessage(id, type);
 
        message.setMessage(serializedMessage);
 
        return message;
-    }
-
-    public void append(AppendMessage message) {
-        AppendRequest request = message.deserializeAppendRequest();
-
-
-        // Send the value to the consensus service
-        int sequenceNumber = request.getSequenceNumber();
-        int clientId = message.getSenderId();
-
-        if (!message.checkConsistentSig(others[clientId].getPublicKey())) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                        "{0} - Bad signature from client {1}",
-                        config.getId(), clientId));
-            return;
-        }
-
-        LOGGER.log(Level.INFO,
-                MessageFormat.format(
-                    "{0} - Append request from client {1} (signature check passed)",
-                    config.getId(), clientId));
-
-        String value = request.getValue();
-        // nodeService.startConsensus(clientId, sequenceNumber, value, message);
     }
 
     public void transfer(LedgerMessage message) {
@@ -116,12 +80,6 @@ public class HDSLedgerService implements UDPService {
         int sequenceNumber = message.getSequenceNumber();
 
         nodeService.startConsensus(clientId, sequenceNumber, request.getSourcePublicKey(), request.getDestinationPublicKey(), request.getAmount(), message);
-
-        // TransferReply transferReply = new TransferReply(true, 1, 1);
-
-        // Send the decided value to the client
-        // LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REPLY, new Gson().toJson(transferReply));
-        // link.send(clientId, reply);
     }
 
     public void checkBalance(LedgerMessage message) {
@@ -160,23 +118,22 @@ public class HDSLedgerService implements UDPService {
      * Receive decided value from consensus service
      * Notify the client with the decided slot
     */
-    private void decided(int senderId, int seq, int slotId) {
-        // TODO
+    private void decided(int senderId, int seq, Optional<Integer> slotIdOpt) {
+        if (slotIdOpt.isPresent()) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Decided on slot {1} with clientId {2} and sequence number {3}",
+                            config.getId(), slotIdOpt.get(), senderId, seq));
+        } else {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Error found for request from {1} with sequence number {2}",
+                            config.getId(), senderId, seq));
+        }
 
-        // int slotId = slot.getSlotId();
-        // StringCommand cmd = slot.getCmd();
-        // int clientId = cmd.getClientId();
-        // int sequenceNumber = cmd.getSeq();
-        // String value = cmd.getValue();
-        //
-        // LOGGER.log(Level.INFO,
-        //         MessageFormat.format(
-        //                 "{0} - Decided on slot {1} value {2}, clientId {3} and sequence number {4}",
-        //                 config.getId(), slotId, value, clientId, sequenceNumber));
-        //
-        // // Send the decided value to the client
-        // AppendMessage reply = createAppendReplyMessage(config.getId(), clientId, value, sequenceNumber, slotId);
-        // link.send(clientId, reply);
+        // Send the decided value to the client
+        LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), seq, slotIdOpt);
+        link.send(senderId, reply);
     }
 
     @Override
@@ -191,13 +148,6 @@ public class HDSLedgerService implements UDPService {
                         // Separate thread to handle each message
                         new Thread(() -> {
                             switch (message.getType()) {
-
-                                case APPEND_REQUEST -> {
-                                    LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} (HDSLedgerService) - Received append request from {1}",
-                                            config.getId(), message.getSenderId()));
-                                    append((AppendMessage) message);
-                                }
                                 case TRANSFER_REQUEST -> {
                                     LOGGER.log(Level.INFO,
                                         MessageFormat.format("{0} (HDSLedgerService) - Received transfer request from {1}",

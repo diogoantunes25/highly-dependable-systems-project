@@ -10,6 +10,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferReply;
 
 import java.util.List;
 import java.util.Optional;
@@ -49,20 +50,27 @@ public class MessageCreator {
                 .build();
     }
 
-    public static LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequenceNumber) {
-        LedgerMessage ledgerMessage = new LedgerMessage(id, type);
-        ledgerMessage.setMessage(message);
-        ledgerMessage.setSequenceNumber(sequenceNumber);
-        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", id));
-        return ledgerMessage;
-    }
-
     public static LedgerMessage createTransferRequest(int requestId, int source, int destination, int amount) {
+        // TODO: make this consistent with the way this was done before
         String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
         String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
         TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
-        return createLedgerMessage(source, Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), requestId);
+
+        LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.TRANSFER_REQUEST);
+        ledgerMessage.setMessage(new Gson().toJson(transferRequest));
+        ledgerMessage.setSequenceNumber(requestId);
+        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", source));
+
+        return ledgerMessage;
     }
+
+    public static LedgerMessage createTransferReply(int source ,int seq, Optional<Integer> slotId) {
+        TransferReply transferReply = new TransferReply(seq, slotId);
+        LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.TRANSFER_REPLY);
+        ledgerMessage.setMessage(new Gson().toJson(transferReply));
+        return ledgerMessage;
+    }
+
 
     public static AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
         AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
