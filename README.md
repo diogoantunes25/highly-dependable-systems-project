@@ -38,7 +38,7 @@ cd HDSLedger
 
 # Configuration Files
 
-### Node configuration
+## Node configuration
 
 By default both nodes and replicas look for the config file inside the `resources/` folder
 of the `Service` module. A config is an array of objects, each one describing
@@ -60,6 +60,22 @@ to interact with the clients and `port2` being used by the replicas for the cons
 
 > Note: For simplicity, the first `N-1` ids are reserved for the replicas and the remaining 
 > for the clients.
+
+## Genesis file
+
+The genesis file defines the initial balances in the system when it boots. The
+syntax is as follows:
+
+
+```json
+
+[
+    { "id": 0, "balance": 10},
+    { "id": 1, "balance": 15},
+    ...
+    { "id": 10, "balance": 1},
+]
+```
 
 ## Dependencies
 
