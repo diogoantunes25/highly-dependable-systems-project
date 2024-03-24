@@ -1080,7 +1080,7 @@ public class Istanbul {
 
 			LOGGER.log(Level.INFO,
 				MessageFormat.format("{0} - Upon f+1 round changes, moved to round {2} in instance {1}",
-					config.getId(), this.ri, this.lambda));
+					config.getId(), this.lambda, this.ri));
 
 
 			// No need to check whether I already broadcast a ROUND-CHANGE (because
