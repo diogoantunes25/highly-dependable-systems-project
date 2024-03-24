@@ -107,10 +107,10 @@ public class PerfectLink implements Link {
             try {
                 ProcessConfig node = nodes.get(nodeId);
                 if (node == null) {
-                    LOGGER.log(Level.WARNING,
-                            MessageFormat.format("{0} - No node {1}. Failed while sending",
-                                    config.getId(), nodeId));
-
+                    // LOGGER.log(Level.WARNING,
+                    //         MessageFormat.format("{0} - No node {1}. Failed while sending",
+                    //                 config.getId(), nodeId));
+                    //
                     throw new HDSSException(ErrorMessage.NoSuchNode);
                 }
 
@@ -127,17 +127,17 @@ public class PerfectLink implements Link {
                 if (nodeId == this.config.getId()) {
                     this.localhostQueue.add(data);
 
-                    LOGGER.log(Level.INFO,
-                            MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} (id={4}) successfully",
-                                    config.getId(), data.getType(), destAddress, destPort, nodeId));
+                    // LOGGER.log(Level.INFO,
+                    //         MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} (id={4}) successfully",
+                    //                 config.getId(), data.getType(), destAddress, destPort, nodeId));
 
                     return;
                 }
 
                 for (;;) {
-                    LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Sending {1} message to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
-                            data.getType(), destAddress, destPort, messageId, count++, nodeId));
+                    // LOGGER.log(Level.INFO, MessageFormat.format(
+                    //         "{0} - Sending {1} message to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
+                    //         data.getType(), destAddress, destPort, messageId, count++, nodeId));
 
                     unreliableSend(destAddress, destPort, data);
 
@@ -148,15 +148,15 @@ public class PerfectLink implements Link {
                     if (receivedAcks.contains(messageId))
                         break;
 
-                    LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Didnt reply to message from {1} to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
-                            data.getType(), destAddress, destPort, messageId, count++, nodeId));
+                    // LOGGER.log(Level.INFO, MessageFormat.format(
+                    //         "{0} - Didnt reply to message from {1} to {2}:{3} with message ID {4} (id={6}) - Attempt #{5}", config.getId(),
+                    //         data.getType(), destAddress, destPort, messageId, count++, nodeId));
 
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} (id={4}) successfully",
-                        config.getId(), data.getType(), destAddress, destPort, nodeId));
+                // LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} (id={4}) successfully",
+                //         config.getId(), data.getType(), destAddress, destPort, nodeId));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -276,7 +276,7 @@ public class PerfectLink implements Link {
             }
 
             case HMAC -> {
-                LOGGER.log(Level.INFO, "Received HMAC");
+                // LOGGER.log(Level.INFO, "Received HMAC");
                 HMACMessage hmacMessage = new Gson().fromJson(serialized, HMACMessage.class);
                 if (hmacMessage.getReplyTo() == config.getId())
                     receivedAcks.add(hmacMessage.getReplyToMessageId());

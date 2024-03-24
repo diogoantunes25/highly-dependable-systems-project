@@ -126,7 +126,7 @@ public class NodeServiceTest {
 	private static Map<Integer, Deque<Confirmation>> genSlotMap(int n) {
 		Map<Integer, Deque<Confirmation>> confirmedSlots = new ConcurrentHashMap<>();
 		for (int i = 0; i < n; i++) {
-			confirmedSlots.put(i, new LinkedBlockingDeque());
+			confirmedSlots.put(i, new LinkedBlockingDeque<>());
 		}
 
 		return confirmedSlots;
@@ -176,7 +176,7 @@ public class NodeServiceTest {
 		services.forEach(service -> {
 			final int id = service.getId();
 			ObserverAck observer = (cid, seqN, slotId) ->
-				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId));
+				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId.get()));
 			service.registerObserver(observer);
 		});
 
@@ -246,7 +246,7 @@ public class NodeServiceTest {
 		services.forEach(service -> {
 			final int id = service.getId();
 			ObserverAck observer = (cid, seqN, slotId) ->
-				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId));
+				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId.get()));
 			service.registerObserver(observer);
 		});
 
@@ -323,7 +323,7 @@ public class NodeServiceTest {
 		services.forEach(service -> {
 			final int id = service.getId();
 			ObserverAck observer = (cid, seqN, slotId) ->
-				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId));
+				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId.get()));
 			service.registerObserver(observer);
 		});
 
@@ -407,7 +407,7 @@ public class NodeServiceTest {
 		services.forEach(service -> {
 			final int id = service.getId();
 			ObserverAck observer = (cid, seqN, slotId) ->
-				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId));
+				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId.get()));
 			service.registerObserver(observer);
 		});
 

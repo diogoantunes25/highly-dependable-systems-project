@@ -188,8 +188,8 @@ public class HDSLedgerServiceTest {
 		HDSLedgerServices.forEach(service -> service.listen());
 		nodeServices.forEach(service -> {
 			final int id = service.getId();
-			ObserverAck observer = (cid, seqN, slotId) ->
-				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId));
+			ObserverAck observer = (cidOpt, seqNOpt, slotIdOpt) ->
+				confirmedSlots.get(id).add(new Confirmation(cidOpt, seqNOpt, slotIdOpt.get()));
 			service.registerObserver(observer);
 		});
 

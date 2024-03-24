@@ -86,14 +86,20 @@ public class Client {
                         printUsage();
                         break;
                     }
-                    String sourcePublicKey = tokens[1];
-                    String destinationPublicKey = tokens[2];
+                    int source = Integer.parseInt(tokens[1]);
+                    int destination = Integer.parseInt(tokens[2]);
+                    String sourcePublicKey = configs[source].getPublicKey();
+                    String destinationPublicKey = configs[destination].getPublicKey();
                     int amount = Integer.parseInt(tokens[3]);
 
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
                             sourcePublicKey, destinationPublicKey, amount));
-                    int slot = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
-                    System.out.println(MessageFormat.format("Transfer request sent. Slot: {0}", slot));
+                    Optional<Integer> slotOpt = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
+                    if (slotOpt.isEmpty()) {
+                        System.out.println("Transfer failed.");
+                    } else {
+                        System.out.println(MessageFormat.format("Transfer request sent. Slot: {0}", slotOpt.get()));
+                    }
                     break;
                 case "balance":
                     if (tokens.length != 2) {
@@ -104,8 +110,12 @@ public class Client {
                     String publicKey = tokens[1];
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending check balance request for {0}",
                                 publicKey));
-                    int balance = stub.checkBalance(publicKey);
-                    System.out.println(MessageFormat.format("Balance for {0} is {1}", publicKey, balance));
+                    Optional<Integer> balanceOpt = stub.checkBalance(publicKey);
+                    if (balanceOpt.isPresent()) {
+                        System.out.println(MessageFormat.format("Balance for {0} is {1}", publicKey, balanceOpt.get()));
+                    } else {
+                        System.out.println("Balance check failed.");
+                    }
                     break;
                 case "exit":
                     System.out.println("Exiting...");

@@ -97,7 +97,7 @@ public class NodeService implements UDPService {
     private List<String> clientPks;
 
     // maps values to the slot they were finalized to (after
-    // coming out from consensus)
+    // coming out from consensus). slot is empty is the command failed
     Map<BankCommand, Slot<BankCommand>> history = new ConcurrentHashMap<>();
 
     public NodeService(Link link, ProcessConfig config,
@@ -153,10 +153,9 @@ public class NodeService implements UDPService {
                 config.getId(), value, clientId));
 
         // Check it wasn't proposed yet
-        boolean repeated = history.entrySet()
+        boolean repeated = history.keySet()
             .stream()
-            .map(e -> e.getValue())
-            .anyMatch(s -> s.getCmd().equals(cmd));
+            .anyMatch(c -> c.equals(cmd));
 
         if (repeated) {
             return false;
@@ -306,7 +305,7 @@ public class NodeService implements UDPService {
      * Updates state and returns slot position for value
      * Non thread-safe.
      */
-    public int updateState(BankCommand cmd) {
+    public Optional<Integer> updateState(BankCommand cmd) {
         Optional<Integer> slotIdOpt = ledger.update(cmd);
         
         if (slotIdOpt.isPresent()) {
@@ -320,7 +319,6 @@ public class NodeService implements UDPService {
                         "{0} - Current Ledger: {1}",
                         config.getId(), stringBuilder.toString()));
 
-            return slotIdOpt.get();
         }
 
         LOGGER.log(Level.SEVERE,
@@ -328,8 +326,7 @@ public class NodeService implements UDPService {
                     "{0} - Tried to update state with invalid command - {1}",
                     config.getId(), cmd));
 
-        // TODO: move to HDSLedgerException
-        throw new RuntimeException("tried to update state with invalid value");
+        return slotIdOpt;
     }
 
     @Override
@@ -423,9 +420,8 @@ public class NodeService implements UDPService {
                 try {
                     DecisionBucket<BankCommand> bucket = new DecisionBucket<>();
 
-
                     // input values for which the observers where already notified
-                    Set<BankCommand> acketToObserver = new HashSet();
+                    Set<BankCommand> acketToObserver = new HashSet<>();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
@@ -455,13 +451,22 @@ public class NodeService implements UDPService {
                             // the clients not notified if the input came late)
                             if (!acketToObserver.contains(input)) {
                                 Slot<BankCommand> slot = history.get(input);
-                                LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
-                                            config.getId(), input, slot.getSlotId()));
                                 BankCommand cmd = slot.getCmd();
+
+                                if (slot.getSlotId().isPresent()) {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
+                                                config.getId(), input, slot.getSlotId()));
+                                } else {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} Driver - Telling the client that {1} was not good to be executed",
+                                                config.getId(), input));
+                                }
+
                                 for (ObserverAck obs: this.observers) {
                                     obs.ack(cmd.getClientId(), cmd.getSeq(), slot.getSlotId());
                                 }
+                                
                                 acketToObserver.add(input);
                             }
 
@@ -470,7 +475,6 @@ public class NodeService implements UDPService {
                                         config.getId()));
                             // take must be used instead of remove because it's blocking.
                             input = this.inputs.take(); // blocking
-                            // strippedInput = stripProof(input).get();
 
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Got input {1}",
@@ -533,8 +537,8 @@ public class NodeService implements UDPService {
                         // if it's not duplicate, save
                        
                         // update state
-                        int slotId = updateState(cmd);
-                        Slot<BankCommand> slot = new Slot<>(slotId, cmd);
+                        Optional<Integer> slotIdOpt = updateState(cmd);
+                        Slot<BankCommand> slot = new Slot<>(slotIdOpt, cmd);
                         history.put(cmd, slot);
                     }
 

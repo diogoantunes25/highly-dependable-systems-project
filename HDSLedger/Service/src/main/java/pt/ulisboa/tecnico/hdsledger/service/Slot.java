@@ -1,19 +1,25 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
+import java.util.Optional;
+
 public class Slot<C extends Command> {
 
     // Slot position in ledger
-    private int slotId;
+    private Optional<Integer> slotId;
 
     private C cmd;
     
-    public Slot(int slotId, C cmd) {
+    public Slot(Optional<Integer> slotId, C cmd) {
         this.slotId = slotId;
         this.cmd = cmd;
     }
 
-    public int getSlotId() {
+    public Optional<Integer> getSlotId() {
         return slotId;
+    }
+
+    public boolean failed() {
+        return this.slotId.isEmpty();
     }
 
     public C getCmd() {

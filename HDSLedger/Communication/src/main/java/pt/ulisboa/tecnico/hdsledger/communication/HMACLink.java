@@ -93,9 +93,9 @@ public class HMACLink implements Link {
         if (nodeId == this.config.getId()) {
             this.localhostQueue.add(data);
 
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Message {1} (locally) sent (id={2}) successfully",
-                        config.getId(), data.getType(), nodeId));
+            // LOGGER.log(Level.INFO,
+            //         MessageFormat.format("{0} - Message {1} (locally) sent (id={2}) successfully",
+            //             config.getId(), data.getType(), nodeId));
 
             return;
         }
@@ -108,11 +108,11 @@ public class HMACLink implements Link {
                 int backoff = 10;
                 while (sharedKeys.get(nodeId) == null) {
                     try {
-                        LOGGER.log(Level.INFO, MessageFormat.format(
-                                "Failed to send message to {0}:{1} (replica={4}) with message ID {2} -" +
-                                        "shared key is not ready yet. Waiting {3}ms to retry.",
-                                nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(),
-                                data.getMessageId(), backoff, nodeId));
+                        // LOGGER.log(Level.INFO, MessageFormat.format(
+                        //         "Failed to send message to {0}:{1} (replica={4}) with message ID {2} -" +
+                        //                 "shared key is not ready yet. Waiting {3}ms to retry.",
+                        //         nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(),
+                        //         data.getMessageId(), backoff, nodeId));
                         // exponential backoff
                         Thread.sleep(backoff);
                         backoff *= 2;
@@ -123,10 +123,10 @@ public class HMACLink implements Link {
                 sendWhenKeyIsReady(nodeId, data);
             }).start();
         } else {
-            LOGGER.log(Level.INFO, MessageFormat.format(
-                    "Key is ready, sending message to {0}:{1} with message ID {2}",
-                    nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(), data.getMessageId()
-            ));
+            // LOGGER.log(Level.INFO, MessageFormat.format(
+            //         "Key is ready, sending message to {0}:{1} with message ID {2}",
+            //         nodes.get(nodeId).getHostname(), nodes.get(nodeId).getPort(), data.getMessageId()
+            // ));
             sendWhenKeyIsReady(nodeId, data);
         }
     }
@@ -141,12 +141,12 @@ public class HMACLink implements Link {
         Key sharedKey = sharedKeys.get(nodeId);
         byte[] hmac = SigningUtils.generateHMAC(dataString.getBytes(), sharedKey);
         HMACMessage hmacMessage = new HMACMessage(data.getSenderId(), Type.HMAC, hmac, dataString);
-        LOGGER.log(Level.INFO, MessageFormat.format(
-                    "Sending message of type {0} to {1}:{2} with message ID {3} -" +
-                    "with HMAC: {4}",
-                    hmacMessage.getType(), nodes.get(nodeId).getHostname(),
-                    nodes.get(nodeId).getPort(), hmacMessage.getMessageId(),
-                    hmacMessage.getHmac()));
+        // LOGGER.log(Level.INFO, MessageFormat.format(
+        //             "Sending message of type {0} to {1}:{2} with message ID {3} -" +
+        //             "with HMAC: {4}",
+        //             hmacMessage.getType(), nodes.get(nodeId).getHostname(),
+        //             nodes.get(nodeId).getPort(), hmacMessage.getMessageId(),
+        //             hmacMessage.getHmac()));
         hmacMessage.setReceiver(nodeId);
         hmacMessage.setMessageId(data.getMessageId());
         if (reliable) {
@@ -172,9 +172,9 @@ public class HMACLink implements Link {
 
             if (!this.localhostQueue.isEmpty()) {
                 message = this.localhostQueue.poll();
-                LOGGER.log(Level.INFO, MessageFormat.format(
-                        "Received message of type {0} from local queue",
-                            message.getType()));
+                // LOGGER.log(Level.INFO, MessageFormat.format(
+                //         "Received message of type {0} from local queue",
+                //             message.getType()));
                 break;
             }
 
@@ -187,17 +187,17 @@ public class HMACLink implements Link {
                     // when key proposal is received, we don't yet have a message to return
                     message = processKeyProposal(message);
                 } else {
-                    LOGGER.log(Level.INFO, MessageFormat.format(
-                            "Received message of type {0} - ignoring",
-                                message.getType()));
+                    // LOGGER.log(Level.INFO, MessageFormat.format(
+                    //         "Received message of type {0} - ignoring",
+                    //             message.getType()));
                     message.setType(Message.Type.IGNORE);
                 }
             }
 
             if (!message.getType().equals(Type.IGNORE) && !message.getType().equals(Type.ACK)) {
-                LOGGER.log(Level.INFO, MessageFormat.format(
-                        "Sending ACK to message of type {0} with message ID {1}",
-                            message.getType(), message.getMessageId()));
+                // LOGGER.log(Level.INFO, MessageFormat.format(
+                //         "Sending ACK to message of type {0} with message ID {1}",
+                //             message.getType(), message.getMessageId()));
 
                 // If we did not set the message to IGNORE, we send an ACK
                 // this is done because sometimes we might not have the necessary key to check the hmac,
@@ -243,19 +243,19 @@ public class HMACLink implements Link {
         if (!Arrays.equals(hmac, SigningUtils.generateHMAC(messageString.getBytes(), sharedKey))) {
             // if the hmac is invalid, we ignore the message as it is not valid
             innerMessage.setType(Message.Type.IGNORE);
-            LOGGER.log(Level.WARNING, MessageFormat.format(
-                    "WARNING: Invalid message HMAC received from {0}:{1}",
-                    InetAddress.getByName(nodes.get(innerMessage.getSenderId()).getHostname()),
-                    nodes.get(innerMessage.getSenderId()).getPort()));
+            // LOGGER.log(Level.WARNING, MessageFormat.format(
+            //         "WARNING: Invalid message HMAC received from {0}:{1}",
+            //         InetAddress.getByName(nodes.get(innerMessage.getSenderId()).getHostname()),
+            //         nodes.get(innerMessage.getSenderId()).getPort()));
             return innerMessage;
         }
-        LOGGER.log(Level.INFO, MessageFormat.format(
-                "Received message from {0}:{1} of type {2} with hmac {3}, and hmac is correct",
-                InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
-                nodes.get(innerMessage.getSenderId()).getPort(), innerMessage.getType(), hmac));
-        LOGGER.log(Level.INFO, MessageFormat.format(
-                "Message inside HMAC Message is of type {0} (idInner={1}, idOuter={2})",
-                innerMessage.getType(), innerMessage.getMessageId(), message.getMessageId()));
+        // LOGGER.log(Level.INFO, MessageFormat.format(
+        //         "Received message from {0}:{1} of type {2} with hmac {3}, and hmac is correct",
+        //         InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
+        //         nodes.get(innerMessage.getSenderId()).getPort(), innerMessage.getType(), hmac));
+        // LOGGER.log(Level.INFO, MessageFormat.format(
+        //         "Message inside HMAC Message is of type {0} (idInner={1}, idOuter={2})",
+                // innerMessage.getType(), innerMessage.getMessageId(), message.getMessageId()));
 
         return innerMessage;
     }
@@ -272,18 +272,18 @@ public class HMACLink implements Link {
                     this.nodes.get(message.getSenderId()).getPublicKey())) {
                 // if the signature is invalid, we ignore the message as it is not valid
                 message.setType(Message.Type.IGNORE);
-                LOGGER.log(Level.WARNING, MessageFormat.format(
-                        "WARNING: Invalid message signature received from {0}:{1}",
-                        InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
-                        nodes.get(message.getSenderId()).getPort()));
+                // LOGGER.log(Level.WARNING, MessageFormat.format(
+                //         "WARNING: Invalid message signature received from {0}:{1}",
+                //         InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
+                //         nodes.get(message.getSenderId()).getPort()));
                 return message;
             }
             sharedKeys.put(message.getSenderId(), aesKey);
-            LOGGER.log(Level.INFO, MessageFormat.format(
-                    "Received key proposal from {0}:{1} with key {2} and signature {3}. Signature is valid and " +
-                            "key is stored",
-                    InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
-                    nodes.get(message.getSenderId()).getPort(), aesKey, ((KeyProposal) message).getSignature()));
+            // LOGGER.log(Level.INFO, MessageFormat.format(
+            //         "Received key proposal from {0}:{1} with key {2} and signature {3}. Signature is valid and " +
+            //                 "key is stored",
+            //         InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
+            //         nodes.get(message.getSenderId()).getPort(), aesKey, ((KeyProposal) message).getSignature()));
 
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | IOException |
                  NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException |
@@ -295,10 +295,10 @@ public class HMACLink implements Link {
 
             // if it is a HMACMessage we cannot decrypt something that is not encrypted
             // so an exception is thrown, and we ignore the message as we do not have the key to check the hmac
-            LOGGER.log(Level.WARNING, MessageFormat.format(
-                    "WARNING: Error decrypting message received from {0}:{1}",
-                    InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
-                    nodes.get(message.getSenderId()).getPort()));
+            // LOGGER.log(Level.WARNING, MessageFormat.format(
+            //         "WARNING: Error decrypting message received from {0}:{1}",
+            //         InetAddress.getByName(nodes.get(message.getSenderId()).getHostname()),
+            //         nodes.get(message.getSenderId()).getPort()));
             message.setType(Message.Type.IGNORE);
             return message;
         }
@@ -313,8 +313,8 @@ public class HMACLink implements Link {
                 continue;
             }
 
-            LOGGER.log(Level.INFO, MessageFormat.format("Sending key proposal to {0}:{1}",
-                    dest.getHostname(), dest.getPort()));
+            // LOGGER.log(Level.INFO, MessageFormat.format("Sending key proposal to {0}:{1}",
+            //         dest.getHostname(), dest.getPort()));
 
             try {
                 Key aesKey = SigningUtils.generateSimKey();
@@ -335,9 +335,9 @@ public class HMACLink implements Link {
 
                 KeyProposal keyProposal = new KeyProposal(this.config.getId(), aesKey, signature.get(), dest.getPublicKey());
                 keyProposal.setReceiver(dest.getId());
-                LOGGER.log(Level.INFO, MessageFormat.format(
-                        "Sending key proposal to {0}:{1} with key: {2} and signature: {3}",
-                        dest.getHostname(), dest.getPort(), keyProposal.getKey(), keyProposal.getSignature()));
+                // LOGGER.log(Level.INFO, MessageFormat.format(
+                //         "Sending key proposal to {0}:{1} with key: {2} and signature: {3}",
+                //         dest.getHostname(), dest.getPort(), keyProposal.getKey(), keyProposal.getSignature()));
                 perfectLink.send(dest.getId(), keyProposal, messageCounter.getAndIncrement());
             } catch (RuntimeException e) {
                 e.printStackTrace();

@@ -1,26 +1,16 @@
 package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 
+import java.util.Optional;
+
 public class TransferReply {
-    // Value to append
+    private int sequenceNumber;
+    private int slot;
     private boolean success;
 
-    //nonce
-    private int sequenceNumber;
-
-    private int slot;
-
-    public TransferReply(boolean success, int sequenceNumber, int slot) {
-        this.success = success;
+    public TransferReply(int sequenceNumber, Optional<Integer> slot) {
         this.sequenceNumber = sequenceNumber;
-        this.slot = slot;
-    }
-
-    public boolean getSuccess() {
-        return success;
-    }
-
-    public void setSuccess(boolean success) {
-        this.success = success;
+        this.slot = slot.isPresent() ? slot.get() : 0;
+        this.success = slot.isPresent();
     }
 
     public int getSequenceNumber() {
@@ -31,7 +21,10 @@ public class TransferReply {
         this.sequenceNumber = sequenceNumber;
     }
 
-    public int getSlot() {
-        return slot;
+    public Optional<Integer> getSlot() {
+        if (this.success) {
+            return Optional.of(slot);
+        }
+        return Optional.empty();
     }
 }
