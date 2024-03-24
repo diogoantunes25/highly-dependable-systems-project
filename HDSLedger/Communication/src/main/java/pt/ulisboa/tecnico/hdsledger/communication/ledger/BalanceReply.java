@@ -1,14 +1,20 @@
 package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 
+import java.util.Optional;
+
 public class BalanceReply {
     // Value to append
     private int value;
 
-    // nonce
+    private boolean success;
+
+    // sequence number
     private int sequenceNumber;
-    public BalanceReply(int value, int sequenceNumber) {
-        this.value = value;
+
+    public BalanceReply(Optional<Integer> value, int sequenceNumber) {
         this.sequenceNumber = sequenceNumber;
+        this.success = value.isPresent();
+        this.value = value.isPresent() ? value.get() : 0;
     }
 
     public int getSequenceNumber() {
@@ -19,8 +25,9 @@ public class BalanceReply {
         this.sequenceNumber = sequenceNumber;
     }
 
-    public int getValue() {
-        return value;
+    public Optional<Integer> getValue() {
+        if (success) { return Optional.of(value); }
+        return Optional.empty();
     }
 
     public void setValue(int value) {

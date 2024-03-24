@@ -133,7 +133,6 @@ public class NodeService implements UDPService {
         ).collect(Collectors.toList());
     }
 
-
     public ProcessConfig getConfig() {
         return this.config;
     }
@@ -185,8 +184,6 @@ public class NodeService implements UDPService {
         StringCommand cmd = cmdOpt.get();
 
         int clientId = cmd.getClientId();
-        int seq = cmd.getSeq();
-        String cmdValue = cmd.getValue();
         AppendMessage proof = cmd.getProof();
 
         int n = this.others.size();
@@ -194,6 +191,9 @@ public class NodeService implements UDPService {
             LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for append was requested for client with ID smaller than n, which is wrong (value is {1})",
                     config.getId(), value));
         }
+
+        // TODO (dsa): use lambda (don't recall why I needed it)
+        // TODO (dsa): check that is valid transfer given current state
 
         LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {2}, message {1} starting",
                 config.getId(), value, clientId));
@@ -206,12 +206,6 @@ public class NodeService implements UDPService {
         if (repeated) {
             return false;
         }
-
-        // Check client signature is valid
-        // AppendMessage hmacMessage = new Gson().fromJson(serializedProof, AppendMessage.class);
-
-        LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {1} - getting key at position {2}",
-                config.getId(), clientId, clientId-n));
 
         return proof.checkConsistentSig(this.clientPks.get(clientId - n));
     }
@@ -288,13 +282,22 @@ public class NodeService implements UDPService {
      * @param amount amount of funds to transfer
      * @param proof message proving that transfer was requested by the source
      */
-    public synchronized void startConsensus(int clientId, int seq, String sourcePublicKey, String destinationPublicKey, int amount, LedgerMessage proof) {
+    public void startConsensus(int clientId, int seq, String sourcePublicKey, String destinationPublicKey, int amount, LedgerMessage proof) {
 
         String sourceId = SigningUtils.publicKeyHash(sourcePublicKey);
         String destinationId = SigningUtils.publicKeyHash(destinationPublicKey);
 
         // note: add must be used instead of put as it's non-blocking
         inputs.add(new BankCommand(clientId, seq, sourceId, destinationId, amount, proof));
+    }
+
+    /**
+     * Gets balance for client with provided id
+     * Assumes clearance was already verified
+     */
+    public synchronized int getBalance(int clientId) {
+        String hashValue = SigningUtils.publicKeyHash(this.allKeys.get(clientId));
+        return this.ledger.getBalance(hashValue);
     }
 
     /**
@@ -351,7 +354,7 @@ public class NodeService implements UDPService {
      * Updates state and returns slot position for value
      * Non thread-safe.
      */
-    public Optional<Integer> updateState(BankCommand cmd) {
+    public synchronized Optional<Integer> updateState(BankCommand cmd) {
         Optional<Integer> slotIdOpt = ledger.update(cmd);
         
         if (slotIdOpt.isPresent()) {

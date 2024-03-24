@@ -56,60 +56,59 @@ public class HDSLedgerService implements UDPService {
 
     public void transfer(LedgerMessage message) {
         TransferRequest request = message.deserializeTransferRequest();
+        int clientId = message.getSenderId();
+        int sequenceNumber = message.getSequenceNumber();
 
         // check if the source public key is valid and corresponds to the client id
         // (entity can only transfer its own funds)
-        if (!request.getSourcePublicKey().equals(others[message.getSenderId()].getPublicKey())) {
+        if (!request.getSourcePublicKey().equals(others[clientId].getPublicKey())) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Source public key does not match client id {1}",
                         config.getId(), message.getSenderId()));
-            return;
         }
-
         // check if the signature is consistent
-        if (!message.checkConsistentSig(others[message.getSenderId()].getPublicKey())) {
+        else if (!message.checkConsistentSig(others[clientId].getPublicKey())) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Bad signature from client {1}",
                         config.getId(), message.getSenderId()));
+        } else {
+            nodeService.startConsensus(clientId, sequenceNumber, request.getSourcePublicKey(), request.getDestinationPublicKey(), request.getAmount(), message);
             return;
         }
 
-        int clientId = message.getSenderId();
-        int sequenceNumber = message.getSequenceNumber();
-
-        nodeService.startConsensus(clientId, sequenceNumber, request.getSourcePublicKey(), request.getDestinationPublicKey(), request.getAmount(), message);
+        // If there was some failure, then reply to client saying that
+        LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), sequenceNumber, Optional.empty());
+        link.send(clientId, reply);
     }
 
     public void checkBalance(LedgerMessage message) {
         BalanceRequest balanceRequest = message.deserializeBalanceRequest();
+        Optional<Integer> balance;
+        int clientId = message.getSenderId();
 
-        // TODO (dsa): update
-        
         // check if the signature is consistent
-        if (!message.checkConsistentSig(others[message.getSenderId()].getPublicKey())) {
+        if (!message.checkConsistentSig(others[clientId].getPublicKey())) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Bad signature from client {1}",
                         config.getId(), message.getSenderId()));
-            return;
+            balance = Optional.empty();
         }
-
         // check if the public key is valid and corresponds to the client id
-        if (!balanceRequest.getSourcePublicKey().equals(others[message.getSenderId()].getPublicKey())) {
+        else if (!balanceRequest.getSourcePublicKey().equals(others[clientId].getPublicKey())) {
             // TODO (dgm): think about this verification
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Public key does not match client id {1}",
                         config.getId(), message.getSenderId()));
-            return;
+            balance = Optional.empty();
+        } else {
+            balance = Optional.of(nodeService.getBalance(clientId));
         }
 
-        int clientId = message.getSenderId();
-
-        BalanceReply balanceReply = new BalanceReply(345, 1);
-        // Send the decided value to the client
+        BalanceReply balanceReply = new BalanceReply(balance, balanceRequest.getSeq());
         LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.BALANCE_REPLY, new Gson().toJson(balanceReply));
         link.send(clientId, reply);
     }
