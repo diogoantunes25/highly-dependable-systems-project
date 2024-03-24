@@ -153,7 +153,7 @@ public class IstanbulTest {
 					String.join(", ", delivered));
 
 			if (delivered.size() != 0) {
-				throw new RuntimeException("A replica delivered onceor multiple times");
+				throw new RuntimeException("A replica delivered once or multiple times");
 			}
 		}
 		return true;
@@ -882,6 +882,13 @@ public class IstanbulTest {
 		// objective: if a replica received a round change message for an instance that is already decided, it should
 		// send the commit quorum messages that lead to the decision
 
+
+		/* The objective with this test is to simulate a partition in the network where a replica will not have
+		* commit message to process and will request a round change. Upon receiving the round changes messages,
+		* the other replicas will reply with the commit quorum that lead to the decision updating the late replica,
+		* that will process the received commit messages.
+		* */
+
 		int n = 4;
 		int lambda = 0;
 
@@ -923,6 +930,7 @@ public class IstanbulTest {
 
 				int receiver = message.getReceiver();
 
+				// store commit messages and round changes from replica 3
 				if (message.getType() == Message.Type.COMMIT || (message.getType() == Message.Type.ROUND_CHANGE && message.getSenderId() == 3)) {
 					messages2.addLast(message);
 					continue;
@@ -968,6 +976,10 @@ public class IstanbulTest {
 
 			List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
 			if (message.getType() == Message.Type.ROUND_CHANGE) {
+				// output from round change message will contain the quorum of commit messages that lead to the decision
+				// since all replicas but one have already decided when they receive round messages from 3
+				// the output is then stored on messages3 to make the assertion that at some point all but 3 decided
+				// and then replica 3 will process the received commit messages
 				output.forEach(m -> messages3.addLast(m));
 			} else {
 				output.forEach(m -> messages2.addLast(m));
@@ -978,6 +990,7 @@ public class IstanbulTest {
 		for (int i = 0; i < n; i++) {
 			if (i == 3) {
 				assertEquals(confirmed.get(i).size(), 0);
+				System.out.println("[test] replica 3 confirmed size: " + confirmed.get(i).size());
 			} else {
 				assertEquals(confirmed.get(i).size(), 1);
 			}
@@ -990,6 +1003,8 @@ public class IstanbulTest {
 				throw new RuntimeException("ERROR: null message found");
 			}
 
+			// messages 3 will only contain the commit quorum messages
+			// sent from the other replicas upon receiving replica 3's round change message
 			List<ConsensusMessage> output = instances.get(3).handleMessage(message);
 			output.forEach(m -> messages3.addLast(m));
 		}
