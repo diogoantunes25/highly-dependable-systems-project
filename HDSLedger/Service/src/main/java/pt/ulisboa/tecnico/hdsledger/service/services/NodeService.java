@@ -21,6 +21,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.Istanbul;
@@ -43,10 +48,16 @@ import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
 
 public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
+
+    // TODO (dsa): resource file or argument or env var
+    private static final String GENESIS_FILE = "/tmp/genesis.json";
 
     // Nodes configurations
     private final List<ProcessConfig> others;
@@ -93,6 +104,9 @@ public class NodeService implements UDPService {
     // thread safety, which is not provided by this thread's property)
     private Optional<List<Thread>> threads = Optional.empty();
 
+    // List of paths to all public keys
+    private List<String> allKeys;
+
     // List of paths to client public keys
     private List<String> clientPks;
 
@@ -106,9 +120,19 @@ public class NodeService implements UDPService {
         this.config = config;
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
+        this.allKeys = getAllKeys(nodesConfig, clientPks);
         
-        // genesis();
+        Map<String, Integer> initalBalances = loadGenesisFromFile(GENESIS_FILE, this.allKeys);
+        genesis(initalBalances);
     }
+
+    public List<String> getAllKeys(ProcessConfig[] nodesConfig, List<String> clientPks) {
+        return Stream.concat(
+            Arrays.stream(nodesConfig).map(config -> config.getPublicKey()),
+            clientPks.stream()
+        ).collect(Collectors.toList());
+    }
+
 
     public ProcessConfig getConfig() {
         return this.config;
@@ -118,11 +142,33 @@ public class NodeService implements UDPService {
         return this.ledger.getState();
     }
 
+    private Map<String, Integer> loadGenesisFromFile(String filename, List<String> pks) {
+        try (InputStreamReader reader = new FileReader(filename)) {
+            Gson gson = new Gson();
+            JsonArray array = gson.fromJson(reader, JsonArray.class);
+
+            Map<String, Integer> initialBalances = new HashMap<>();
+            for (JsonElement element: array) {
+                JsonObject obj = element.getAsJsonObject();
+                int clientId = obj.get("id").getAsInt();
+                String clientHash = SigningUtils.publicKeyHash(pks.get(clientId));
+                int balance = obj.get("balance").getAsInt();
+                initialBalances.put(clientHash, balance);
+            }
+
+            return initialBalances;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /**
      * Initializes state.
      */
     void genesis(Map<String, Integer> initialBalances) {
         for (Map.Entry<String,Integer> entry: initialBalances.entrySet()) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Spawning money: {1} added to {2}",
+                config.getId(), entry.getValue(), entry.getKey()));
             this.ledger.spawnMoney(entry.getKey(), entry.getValue());
         }
     }
