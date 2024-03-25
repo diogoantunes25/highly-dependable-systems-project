@@ -332,39 +332,81 @@ public class Istanbul {
 				Optional<List<ConsensusMessage>> optQp = prePrepareMessage.getJustificationPrepares();
 				Optional<List<ConsensusMessage>> optQrc = prePrepareMessage.getJustificationRoundChanges();
 
-				if (optQrc.isPresent()) {
-					List<ConsensusMessage> Qrc = optQrc.get();
-
-					LOGGER.log(Level.WARNING,
-							MessageFormat.format(
-								"PRE-PREPARE message from {0} check - there are {1} ROUND-CHANGEs", message.getSenderId(), Qrc.size()));
-
-					boolean allMatch = Qrc.stream()
-						.allMatch(m -> {
-							int senderId = m.getSenderId();
-							return m.checkConsistentSig(others.get(senderId).getPublicKey());
-						});
-
-					if (!allMatch) {
-						LOGGER.log(Level.WARNING,
-								MessageFormat.format(
-									"PRE-PREPARE message from {0} rejected because a ROUND-CHANGE was poorly signed - BAD SIGNATURE", message.getSenderId()));
-						yield false;
-					} else {
-						LOGGER.log(Level.WARNING,
-								MessageFormat.format(
-									"PRE-PREPARE message from {0} is being checked ROUND-CHANGE seem to be all correctly signed", message.getSenderId()));
-					}
+				if (!optQrc.isPresent()) {
+					// The ROUND-CHANGE messages are only required if it's not
+					// the first round
+					yield message.getRound() == FIRST_ROUND;
 				}
 
-				if (optQp.isPresent()) {
+				List<ConsensusMessage> Qrc = optQrc.get();
+				boolean isBottom = highestPrepared(Qrc).isEmpty();
+
+				LOGGER.log(Level.WARNING,
+						MessageFormat.format(
+							"PRE-PREPARE message from {0} check - there are {1} ROUND-CHANGEs (the value is bottom ? {2})", message.getSenderId(), Qrc.size(), isBottom));
+
+				// Any correct replica sends a quorum with proper size
+				if (Qrc.size() < quorumSize) {
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+								"PRE-PREPARE message from {0} check - there aren't enough round change message ({1} required, {2} found)", message.getSenderId(), quorumSize, Qrc.size()));
+					yield false;
+				}
+
+				boolean allMatch = Qrc.stream()
+					.allMatch(m -> {
+						int senderId = m.getSenderId();
+						return m.checkConsistentSig(others.get(senderId).getPublicKey());
+					});
+
+				if (!allMatch) {
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+								"PRE-PREPARE message from {0} rejected because a ROUND-CHANGE was poorly signed - BAD SIGNATURE", message.getSenderId()));
+					yield false;
+				} else {
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+								"PRE-PREPARE message from {0} is being checked ROUND-CHANGE seem to be all correctly signed", message.getSenderId()));
+				}
+
+				// if the all values of all round-changes are bottom (i.e. the
+				// highest prepare is bottom), then no prepare messages should
+				// be sent (at least by a correct replica)
+				// if there's a non-bottom round-change message, then there must
+				// exist a quorum of prepares to justify the value (because
+				// for any replica to be prepared, then it must have received
+				// a quorum of PREPAREs). The paper is not concrete is this
+				// regard, but it's easy to see that whenever there's a claim
+				// that X is prepared for Y, X must be able to provide a quorum
+				// to justify that preparation.
+				//
+				// for this reason, if the value is bottom, the quorum is expected
+				// to be empty and if the value is not bottom, at least a quorum
+				// size of PREPARE messages should be presented
+				//
+				// this is true even though the message justification is done
+				// as a quorum
+				//
+				// this is not a bullet proof check, it just removes corner
+				// cases from later stages, by removing messages that are 
+				// trivially byzantine. it also ensures that byzantine can't
+				// make up arbitrary prepared rounds to make the check fail
+
+
+				if (isBottom) {
+					// if the value is bottom, either send empty list or nothing
+					yield (optQp.isEmpty() || (optQp.get().size() == 0));
+				} else {
+					if (optQp.isEmpty()) yield false;
+
 					List<ConsensusMessage> Qp = optQp.get();
 
 					LOGGER.log(Level.WARNING,
 							MessageFormat.format(
 								"PRE-PREPARE message from {0} check - there are {1} PREPAREs", message.getSenderId(), Qp.size()));
 
-					boolean allMatch = Qp.stream()
+					allMatch = Qp.stream()
 						.allMatch(m -> {
 							int senderId = m.getSenderId();
 							return m.checkConsistentSig(others.get(senderId).getPublicKey());
@@ -380,9 +422,11 @@ public class Istanbul {
 								MessageFormat.format(
 									"PRE-PREPARE message from {0} is being checked PREPARE seem to be all correctly signed", message.getSenderId()));
 					}
+
+					// any correct replica sends a quorum of quorumSize prepares
+					yield Qp.size() >= quorumSize;
 				}
 
-				yield true;
 			}
 
 			case PREPARE -> {
@@ -416,11 +460,20 @@ public class Istanbul {
 					yield false;
 						}
 
-				// Ony if there's a prepared value do we have to check
-				// justification signatures
-				if (roundChangeMessage.getPvi().isPresent()) {
-					// JUSTIFICATION SIGNATURE CHECKS
+				// JUSTIFICATION CHECK
 
+				// Check that if a justification exists then there's a justification
+				// and that it's actually a justification
+				//	1) PREPAREs are properly signed
+				//	2) there are quorumSize PREPAREs
+				//	3) PREPAREs refer to the value prepared for
+				if (roundChangeMessage.getPvi().isPresent()) {
+					// Check that there's a justification	
+					if (roundChangeMessage.getJustification().isEmpty()) {
+						yield false;
+					}
+
+					// Check things are properly signed
 					if (!roundChangeMessage.getJustification()
 							.get()
 							.stream()
@@ -431,7 +484,17 @@ public class Istanbul {
 						yield false;
 					}
 
+					// Check that there are quorumSize message
 					if (roundChangeMessage.getJustification().get().size() < quorumSize){
+						yield false;
+					}
+
+					// Check that all messages pertain to the value
+					String value = roundChangeMessage.getPvi().get();
+					if (!roundChangeMessage.getJustification()
+						.get()
+						.stream()
+						.allMatch(m -> m.deserializePrepareMessage().getValue().equals(value))) {
 						yield false;
 					}
 				}
@@ -448,11 +511,6 @@ public class Istanbul {
 				// detail)
 
 				Optional<List<ConsensusMessage>> justification = roundChangeMessage.getJustification();
-
-				// Note that ROUND-MESSAGE might not have any justification
-				// even though it has a value (because justification for round
-				// change messages is done as a set, what matters is that the
-				// set as a whole as the required PREPARE, and they are all valid)
 
 				roundChangeMessage.clearJustification();
 				message.setMessage(roundChangeMessage.toJson());
@@ -907,8 +965,6 @@ public class Istanbul {
 	 */
 	boolean justifyPrePrepare(int round, String value, Optional<List<ConsensusMessage>> optQp, Optional<List<ConsensusMessage>> optQrc) {
 
-		// TODO (dsa): if message is not bottom, it should have some justification
-
 		if (round == FIRST_ROUND) {
 			return true;
 		}
@@ -934,8 +990,9 @@ public class Istanbul {
 		}
 
 
-		// TODO (dsa): 
-		// Check 
+		// It's safe to use highestPrepared on the set of all round changes
+		// because any value in a round-change is supported by a quorum of
+		// prepares (checked at entry)
 		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
 
 		// If there's no preparation, it's justified for sure
@@ -980,8 +1037,9 @@ public class Istanbul {
 			return Optional.empty();
 		}
 
-		// TODO (dsa): if message is not bottom, it should have some justification
-
+		// Safe to use highestPrepared on the entire set of messages because
+		// any round change was checked for a quorum of valid messages to the 
+		// corresponding value
 		Optional<Pair<String, Integer>> optPair = highestPrepared(Qrc);
 
 		// satisfies J1
