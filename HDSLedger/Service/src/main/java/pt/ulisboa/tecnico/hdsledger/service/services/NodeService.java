@@ -310,7 +310,7 @@ public class NodeService implements UDPService {
         Istanbul instance = getInstance(lambda);
 
         // Input into state machine
-        List<ConsensusMessage> output = instance.handleMessage(message); 
+        List<ConsensusMessage> output = instance.handleMessage(message);
         
         // Dispatch messages
         output.stream().forEach(m -> link.send(m.getReceiver(), m));

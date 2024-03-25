@@ -93,6 +93,9 @@ public class Istanbul {
 	// Whether start was called already
 	private AtomicBoolean started = new AtomicBoolean(false);
 
+	// Commit message for this instance (if decided)
+	private Optional<List<ConsensusMessage>> commitQuorums = Optional.empty();
+
 	// FIXME (dsa): I'm not sure that this is needed
 	private Optional<CommitMessage> commitMessage;
 
@@ -110,6 +113,8 @@ public class Istanbul {
 
 	// Round for which have Pre Prepared
 	private Set<Integer> havePrePrepared = new HashSet<>();
+
+	private MessageHandler messageHandler;
 
 	// Timer ids for each round
 	// The semantics are:
@@ -144,8 +149,14 @@ public class Istanbul {
 		this.commitMessages = new MessageBucket(n);
 		this.roundChangeMessages = new MessageBucket(n);
 
+		this.messageHandler = (m -> this.normalHandleMessage(m));
+
 		LOGGER.log(Level.INFO, MessageFormat.format("{0} - Public key at {1} and private key at {2}",
 					config.getId(), config.getPublicKey(), config.getPrivateKey()));
+	}
+
+	public void setMessageHandler(MessageHandler messageHandler) {
+		this.messageHandler = messageHandler;
 	}
 
 	/**
@@ -444,7 +455,16 @@ public class Istanbul {
 			}
 
 			case COMMIT -> {
-				// Doesn't need to be signed, nor it has a justification
+				// Since commit messages need to be signed due to the possibility of
+				// sending them upon receiving a round change message for an already decided instance,
+				// they're signature needs to be checked
+				int senderId = message.getSenderId();
+				if (!message.checkConsistentSig(others.get(senderId).getPublicKey())) {
+					LOGGER.log(Level.WARNING,
+							MessageFormat.format(
+									"Received COMMIT message from {0} - BAD SIGNATURE", senderId));
+					yield false;
+				}
 				yield true;
 			}
 
@@ -572,7 +592,10 @@ public class Istanbul {
 			}
 
 			case COMMIT -> {
-				// Doesn't need to be signed, nor it has a justification
+				// Commit messages need to be signed since they may be required to send if
+				// replica receives a round-change message for an instance already decided and needs
+				// to send the commit quorum that lead to the decision
+				message.signSelf(myPrivateKeyPath);
 				yield message;
 			}
 
@@ -815,9 +838,9 @@ public class Istanbul {
 
 		commitMessages.addMessage(message);
 
-		Optional<String> commitValue = commitMessages.hasValidCommitQuorum(round);
+		Optional<Pair<String, List<ConsensusMessage>>> commitPair = commitMessages.hasValidCommitQuorum(round);
 
-		if (commitValue.isPresent()) {
+		if (commitPair.isPresent()) {
 			if (this.decision.isPresent()) {
 				LOGGER.log(Level.INFO,
 						MessageFormat.format(
@@ -826,7 +849,7 @@ public class Istanbul {
 				return new ArrayList<>();
 			}
 
-			String value = commitValue.get();
+			String value = commitPair.get().getKey();
 
 			// Note that round might differ from this.ri
 			stopTimer(round);
@@ -837,6 +860,10 @@ public class Istanbul {
 					MessageFormat.format(
 						"{0} - Decided on Consensus Instance {1}, Round {2}",
 						config.getId(), this.lambda, round));
+
+			// Store quorum of commit messages in case replica receives
+			// a round change message for this instance
+			commitQuorums = Optional.of(commitPair.get().getValue());
 
 			return new ArrayList<>();
 		}
@@ -981,7 +1008,17 @@ public class Istanbul {
 		List<ConsensusMessage> Qrc = optQrc.get();
 		List<ConsensusMessage> Qp = optQp.get();
 
-		if (Qrc.size() < this.quorumSize) {
+		// deduplicate Qrc
+		Set<Integer> sendersChecked = new HashSet<>();
+		List<ConsensusMessage> roundChanges = new ArrayList<>();
+		for (ConsensusMessage message: Qrc) {
+			if (!sendersChecked.contains(message.getSenderId())) {
+				sendersChecked.add(message.getSenderId());
+				roundChanges.add(message);
+			}
+		}
+
+		if (roundChanges.size() < this.quorumSize) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format("{0} - justification of pre-prepare was asked for a quorum with less than required size {1} < {2} (which is strange)",
 						config.getId(), Qrc.size(), this.quorumSize));
@@ -1006,12 +1043,20 @@ public class Istanbul {
 
 		// Get PREPARES for the highest prepared value and check there's
 		// a quorum 
-		long count = Qp.stream()
+		List<ConsensusMessage> preparesDuplicate = Qp.stream()
 			.filter(m -> m.getRound() == pr)
-			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv))
-			.count();
+			.filter(m -> m.deserializePrepareMessage().getValue().equals(pv)).toList();
 
-		if (count < this.quorumSize) {
+		sendersChecked = new HashSet<>();
+		List<ConsensusMessage> prepares = new ArrayList<>();
+		for (ConsensusMessage message: preparesDuplicate) {
+			if (!sendersChecked.contains(message.getSenderId())) {
+				sendersChecked.add(message.getSenderId());
+				prepares.add(message);
+			}
+		}
+
+		if (prepares.size() < this.quorumSize) {
 			LOGGER.log(Level.INFO,
 					MessageFormat.format("{0} - justification of pre-prepare was asked but not enough good prepares were provided",
 						config.getId()));
@@ -1076,6 +1121,7 @@ public class Istanbul {
 				sendersChecked.add(message.getSenderId());
 				prepares.add(message);
 			}
+
 		}
 
 		// Get ROUND-CHANGE messages without justifications
@@ -1115,6 +1161,15 @@ public class Istanbul {
 	 * @param message to be handled
 	 */
 	private List<ConsensusMessage> roundChange(ConsensusMessage message) {
+
+		if (!commitQuorums.isEmpty()) {
+			LOGGER.log(Level.INFO,
+					MessageFormat.format("{0} - Received ROUND-CHANGE message but already decided, sending quorum of commits that lead to decide",
+						config.getId()));
+
+			return commitQuorums.get();
+		}
+
 		List<ConsensusMessage> messages = new ArrayList<>();
 
 		int round = message.getRound();
@@ -1243,10 +1298,13 @@ public class Istanbul {
 		return this.signAll(this._handleTimeout(round));
 	}
 
+	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+		return this.messageHandler.handle(message);
+	}
 	/**
 	 * Handles protocol messages and returns messages to be sent over the network
 	 */
-	public List<ConsensusMessage> handleMessage(ConsensusMessage message) {
+	public List<ConsensusMessage> normalHandleMessage(ConsensusMessage message) {
         if (!Istanbul.checkSignature(message, this.others, this.beta, this.quorumSize)) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
@@ -1257,6 +1315,7 @@ public class Istanbul {
 
 		return this.signAll(this._handleMessage(message));
 	}
+	
 	private synchronized List<ConsensusMessage> _handleTimeout(int round) {
 
 		if (round != this.ri) {
