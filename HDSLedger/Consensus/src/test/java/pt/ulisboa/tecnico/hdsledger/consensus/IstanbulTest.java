@@ -861,4 +861,7 @@ public class IstanbulTest {
 		assertEquals(optPair.get().getKey(), String.format("value_%d", n-1));
 		assertEquals(optPair.get().getValue(), n-1);
 	}
+
+	// TODO: byzantine keeps sending messages with huge prepared rounds
+	// (e.g. PRE-PREPARE or ROUND-CHANGE)
 }
