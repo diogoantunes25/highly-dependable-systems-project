@@ -26,6 +26,7 @@ import java.io.InputStreamReader;
 import java.io.InputStream;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 
 import javafx.util.Pair;
 
@@ -61,6 +62,13 @@ public class NodeService implements UDPService {
 
     // TODO (dsa): resource file or argument or env var
     private static final String DEFAULT_GENESIS_FILE = "/tmp/genesis.json";
+
+    // TODO (dsa): resource file or argument or env var
+    private static final int BATCH_SIZE = 2;
+
+    // Time waited to form new batch (adjusted according to the cost of forming
+    // batches)
+    private static final int BATCH_TIMEOUT = 50; // milliseconds
 
     // TODO (dsa): find better fee policy
     private static final int DEFAULT_FEE = 1;
@@ -493,7 +501,9 @@ public class NodeService implements UDPService {
 
                     Pair<List<BankCommand>, List<BankCommand>> parsedInputs;
 
-                    List<BankCommand> valid;
+                    List<BankCommand> valid, proposed;
+
+                    valid = new ArrayList<>();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
@@ -557,22 +567,41 @@ public class NodeService implements UDPService {
 
                         parsedInputs = this.ledger.getValidFromBatch(notConfirmed);
                         valid = parsedInputs.getKey();
+                        pendingInputs = valid;
 
-                        // If there are not valid request left, then get more inputs
-                        if (valid.size() == 0) {
+                        // If there are not enough valid request, then get more inputs
+                        if (valid.size() < BATCH_SIZE) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Waiting for input",
                                         config.getId()));
 
-                            pendingInputs = new ArrayList<>();
-                            pendingInputs.add(this.inputs.take());
-                            this.inputs.drainTo(pendingInputs);
 
-                            LOGGER.log(Level.INFO,
-                                    MessageFormat.format("{0} Driver - Got {1} inputs ({2} valid)",
-                                        config.getId(), inputs.size(), valid.size()));
-
-                            continue;
+                            // If really there's nothing valid to propose, we
+                            // need to wait until a new input comes in. If there's
+                            // something, we'll wait for a timeout only to ensure
+                            // liveness
+                            if (valid.size() == 0) {
+                                pendingInputs.add(this.inputs.take());
+                                this.inputs.drainTo(pendingInputs);
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} Driver - Got {1} inputs after blocking",
+                                            config.getId(), inputs.size(), valid.size()));
+                                continue;
+                            } else {
+                                BankCommand newCmd = this.inputs.poll(BATCH_TIMEOUT, TimeUnit.MILLISECONDS);
+                                if (newCmd != null) {
+                                    pendingInputs.add(newCmd);
+                                    this.inputs.drainTo(pendingInputs);
+                                    continue;
+                                }
+                                else {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} Driver - Timed out waiting for inputs",
+                                                config.getId(), inputs.size(), valid.size()));
+                                    // doesn't continue (i.e. start loop from the top), because
+                                    // it's as if the batch was full
+                                }
+                            }
                         }
 
                         // start new instance (can't be after take, because 
@@ -582,7 +611,10 @@ public class NodeService implements UDPService {
                                 MessageFormat.format("{0} Driver - Inputting {2} values into consensus {1}",
                                     config.getId(), currentLambda.get(), valid.size()));
 
-                        CommandBatch input = new CommandBatch(valid);
+                        // Remove first BATCH_SIZE from valid list
+                        proposed = valid.subList(0, Math.min(valid.size(), BATCH_SIZE));
+
+                        CommandBatch input = new CommandBatch(proposed);
                         actuallyInput(currentLambda.get(), input.serialize());
 
                         LOGGER.log(Level.INFO,
