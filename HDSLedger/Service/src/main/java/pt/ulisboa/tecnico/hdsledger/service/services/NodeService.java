@@ -57,7 +57,7 @@ public class NodeService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
 
     // TODO (dsa): resource file or argument or env var
-    private static final String GENESIS_FILE = "/tmp/genesis.json";
+    private static final String DEFAULT_GENESIS_FILE = "/tmp/genesis.json";
 
     // Nodes configurations
     private final List<ProcessConfig> others;
@@ -115,15 +115,20 @@ public class NodeService implements UDPService {
     Map<BankCommand, Slot<BankCommand>> history = new ConcurrentHashMap<>();
 
     public NodeService(Link link, ProcessConfig config,
-            ProcessConfig[] nodesConfig, List<String> clientPks) {
+                       ProcessConfig[] nodesConfig, List<String> clientPks, String genesisFilePath) {
         this.link = link;
         this.config = config;
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
         this.allKeys = getAllKeys(nodesConfig, clientPks);
-        
-        Map<String, Integer> initalBalances = loadGenesisFromFile(GENESIS_FILE, this.allKeys);
+
+        Map<String, Integer> initalBalances = loadGenesisFromFile(genesisFilePath, this.allKeys);
         genesis(initalBalances);
+    }
+
+    public NodeService(Link link, ProcessConfig config,
+            ProcessConfig[] nodesConfig, List<String> clientPks) {
+        this(link, config, nodesConfig, clientPks, DEFAULT_GENESIS_FILE);
     }
 
     public List<String> getAllKeys(ProcessConfig[] nodesConfig, List<String> clientPks) {

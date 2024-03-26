@@ -1,16 +1,16 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import org.junit.jupiter.api.io.TempDir;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.GenesisFile;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
-import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
-import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
 import java.util.List;
@@ -20,7 +20,6 @@ import java.util.Deque;
 import java.util.ArrayList;
 import java.util.stream.IntStream;
 import java.util.stream.Collectors;
-import java.util.function.Consumer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -28,6 +27,7 @@ import java.security.*;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.gson.Gson;
@@ -52,6 +52,17 @@ public class HDSLedgerServiceTest {
 				RSAKeyGenerator.read(publicKeys.get(i), "pub");
 			} catch (GeneralSecurityException | IOException e) {
 				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+			}
+		}
+	}
+
+	private static void defaultGenesisFile(String path, int replicas, int clients) {
+		boolean exists = GenesisFile.read(path);
+		if (!exists) {
+			try {
+				GenesisFile.write(path, replicas, clients);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
 			}
 		}
 	}
@@ -90,7 +101,7 @@ public class HDSLedgerServiceTest {
 				.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks, Map<String, Integer> genesisBlock) {
+	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks, Map<String, Integer> genesisBlock, String genesisFilePath) {
 		int n = configs.size();
 		ProcessConfig[] configsArray = new ProcessConfig[n];
 		configs.toArray(configsArray);	
@@ -99,7 +110,7 @@ public class HDSLedgerServiceTest {
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
 			Link link = links.get(i);
-			services.add(new NodeService(link, config, configsArray, clientPks));
+			services.add(new NodeService(link, config, configsArray, clientPks, genesisFilePath));
 		}
 
 		services.forEach(s -> s.genesis(genesisBlock));
@@ -150,7 +161,7 @@ public class HDSLedgerServiceTest {
 	}
 
 	@Test
-	void HDSLedgerStartsConsensusTest() {
+	void HDSLedgerStartsConsensusTest(@TempDir Path tempDir) {
 		int n_Nodes = 4;
 		int basePortNode = 20000;
 		int n_Clients = 2;
@@ -165,6 +176,8 @@ public class HDSLedgerServiceTest {
 		int initial1 = 15;
 		int initial2 = 15;
 
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n_Nodes, n_Clients);
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n_Nodes);
 
 		Map<String, Integer> genesisBlock = new HashMap<>();
@@ -175,7 +188,7 @@ public class HDSLedgerServiceTest {
 		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
 		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
 		List<String> clientPks = defaultClientKeys(n_Nodes, n_Clients);
-		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisBlock);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisBlock, genesisFilePath);
 
 		// Setup ledger service and client links
 		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);

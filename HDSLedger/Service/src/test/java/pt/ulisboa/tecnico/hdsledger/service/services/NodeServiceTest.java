@@ -1,23 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import org.junit.jupiter.api.io.TempDir;
+import pt.ulisboa.tecnico.hdsledger.utilities.GenesisFile;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.Link;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendMessage;
-import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
-import pt.ulisboa.tecnico.hdsledger.service.Slot;
-import pt.ulisboa.tecnico.hdsledger.service.Command;
-import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
-import pt.ulisboa.tecnico.hdsledger.service.BankCommand;
-import pt.ulisboa.tecnico.hdsledger.service.BankState;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 
+import java.nio.file.Path;
 import java.security.*;
 import java.io.IOException;
 import java.util.List;
@@ -58,6 +53,17 @@ public class NodeServiceTest {
 				RSAKeyGenerator.read(publicKeys.get(i), "pub");
 			} catch (GeneralSecurityException | IOException e) {
 				RSAKeyGenerator.write(privateKeys.get(i), publicKeys.get(i));
+			}
+		}
+	}
+
+	private static void defaultGenesisFile(String path, int replicas, int clients) {
+		boolean exists = GenesisFile.read(path);
+		if (!exists) {
+			try {
+				GenesisFile.write(path, replicas, clients);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
 			}
 		}
 	}
@@ -104,7 +110,7 @@ public class NodeServiceTest {
 			.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupServices(int n, int basePort, int nClients, Map<String, Integer> genesisBlock) {
+	List<NodeService> setupServices(int n, int basePort, int nClients, Map<String, Integer> genesisBlock, String GenesisFilePath) {
 		List<ProcessConfig> configs = defaultConfigs(n, basePort);
 		List<String> clientPks = defaultClientKeys(n, nClients);
 		ProcessConfig[] configsArray = new ProcessConfig[n];
@@ -115,7 +121,7 @@ public class NodeServiceTest {
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
 			Link link = links.get(i);
-			services.add(new NodeService(link, config, configsArray, clientPks));
+			services.add(new NodeService(link, config, configsArray, clientPks, GenesisFilePath));
 		}
 
 		services.forEach(s -> s.genesis(genesisBlock));
@@ -146,7 +152,7 @@ public class NodeServiceTest {
 	}
 
 	@Test
-	void singleExecutionTest() {
+	void singleExecutionTest(@TempDir Path tempDir) {
 		int n = 4;
 		int nClients = 2;
 		int basePort = 9000;
@@ -163,6 +169,9 @@ public class NodeServiceTest {
 		int initial1 = 15;
 		int initial2 = 15;
 
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients);
+
 		Map<String, Integer> genesisBlock = new HashMap<>();
 		genesisBlock.put(clientHashPk, initial1);
 		genesisBlock.put(clientHashPk2, initial2);
@@ -171,7 +180,7 @@ public class NodeServiceTest {
 
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -212,7 +221,7 @@ public class NodeServiceTest {
 	}
 
 	@Test
-	void consecutiveExecutionTest() {
+	void consecutiveExecutionTest(@TempDir Path tempDir) {
 		int n = 4;
 		int nClients = 2;
 		int basePort = 8000;
@@ -223,6 +232,9 @@ public class NodeServiceTest {
 		String clientPk2 = String.format("/tmp/pub_%d.key", clientId2);
 		String clientHashPk = numberToId(clientId);
 		String clientHashPk2 = numberToId(clientId2);
+
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients);
 
 		int initial1 = 15;
 		int initial2 = 15;
@@ -241,7 +253,7 @@ public class NodeServiceTest {
 
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -289,7 +301,7 @@ public class NodeServiceTest {
 	}
 
 	@Test
-	void consecutiveExecutionDisagreementTest() {
+	void consecutiveExecutionDisagreementTest(@TempDir Path tempDir) {
 		int n = 4;
 		int nClients = 2;
 		int basePort = 10000;
@@ -300,6 +312,9 @@ public class NodeServiceTest {
 		String clientPk2 = String.format("/tmp/pub_%d.key", clientId2);
 		String clientHashPk = numberToId(clientId);
 		String clientHashPk2 = numberToId(clientId2);
+
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients);
 
 		int initial1 = 15;
 		int initial2 = 15;
@@ -318,7 +333,7 @@ public class NodeServiceTest {
 
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -373,7 +388,7 @@ public class NodeServiceTest {
 	}
 
 	@Test
-	void lateInputTest() {
+	void lateInputTest(@TempDir Path tempDir) {
 		int n = 4;
 		int nClients = 2;
 		int basePort = 7000;
@@ -384,6 +399,9 @@ public class NodeServiceTest {
 		String clientPk2 = String.format("/tmp/pub_%d.key", clientId2);
 		String clientHashPk = numberToId(clientId);
 		String clientHashPk2 = numberToId(clientId2);
+
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients);
 
 		int initial1 = 15;
 		int initial2 = 15;
@@ -402,7 +420,7 @@ public class NodeServiceTest {
 
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
