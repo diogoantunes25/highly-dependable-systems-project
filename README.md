@@ -24,17 +24,12 @@ The `PKI` module can be used to setup this infrastructure.
 To generate a single key pair:
 
 ```bash
-cd HDSLedger/PKI
-mvn clean install
-mvn exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
+$ cd HDSLedger/PKI
+$ mvn clean install
+$ mvn exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
 ```
 
-To setup the PKI for `n` nodes and `c` clients and store the config to `file`, run:
-
-```bash
-cd HDSLedger
-./key_setup.sh n c file
-```
+The setup of the PKI for `<n>` nodes and `<c>` clients is explained further below.
 
 # Configuration Files
 
@@ -63,9 +58,7 @@ to interact with the clients and `port2` being used by the replicas for the cons
 
 ## Genesis file
 
-The genesis file defines the initial balances in the system when it boots. The
-syntax is as follows:
-
+The genesis file defines the initial balances in the system when it boots. The syntax is as follows:
 
 ```json
 
@@ -73,8 +66,19 @@ syntax is as follows:
     { "id": 0, "balance": 10},
     { "id": 1, "balance": 15},
     ...
-    { "id": 10, "balance": 1},
+    { "id": 10, "balance": 1}
 ]
+```
+
+## HDS Configuration
+In order to ease the setup of the system, a script was created to generate the PKI for `<n>` nodes and `<c>` clients, the configuration file on `Service/src/main/regular_config.json>` and the genesis file on `</tmp/gensis.json>` with <initial-balance> for every participant.
+
+To run the script, execute the following command:
+
+```bash
+$ cd HDSLedger/
+$ chmod +x setup.sh
+$ ./setup.sh <n> <c> <path/to/config-file.json> <initial-balance>
 ```
 
 ## Dependencies
@@ -82,8 +86,8 @@ syntax is as follows:
 To install the necessary dependencies run the following commands:
 
 ```bash
-chmod +x install_deps.sh
-./install_deps.sh
+$ chmod +x install_deps.sh
+$ ./install_deps.sh
 ```
 
 This should install the following dependencies:
@@ -104,7 +108,7 @@ The script has arguments which can be modified:
 Run the script with the following command:
 
 ```bash
-python3 puppet-master.py
+$ python3 puppet-master.py
 ```
 Note: You may need to install **kitty** in your computer
 
@@ -117,16 +121,16 @@ It's also possible to run the project manually by using Maven.
 Compile and install all modules using:
 
 ```bash
-cd HDSLedger/
-mvn clean install -DskipTests
+$ cd HDSLedger/
+$ mvn clean install -DskipTests
 ```
 
 ### Execution
 The clients and the replicas can be manually started by running
 
 ```bash
-cd <module>/
-mvn exec:java -Dexec.args="<id>"
+$ cd <module>/
+$ mvn exec:java -Dexec.args="<id>"
 ```
 
 Where `<module>` is either `Service` or `Client`.
@@ -136,8 +140,8 @@ Where `<module>` is either `Service` or `Client`.
 To run unit tests, Maven can be used as follows:
 
 ```bash
-cd HDSLedger/
-mvn test
+$ cd HDSLedger/
+$ mvn test
 ```
 
 ---
