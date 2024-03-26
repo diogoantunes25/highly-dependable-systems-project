@@ -24,9 +24,9 @@ The `PKI` module can be used to setup this infrastructure.
 To generate a single key pair:
 
 ```bash
-$ cd HDSLedger/PKI
-$ mvn clean install
-$ mvn exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
+cd HDSLedger/PKI
+mvn clean install
+mvn exec:java -Dexec.args="w <path-to-private-key>.priv <path-to-public-key>.pub"
 ```
 
 The setup of the PKI for `<n>` nodes and `<c>` clients is explained further below.
@@ -76,9 +76,9 @@ In order to ease the setup of the system, a script was created to generate the P
 To run the script, execute the following command:
 
 ```bash
-$ cd HDSLedger/
-$ chmod +x setup.sh
-$ ./setup.sh <n> <c> <path/to/config-file.json> <initial-balance>
+cd HDSLedger/
+chmod +x setup.sh
+./setup.sh <n> <c> <path/to/config-file.json> <initial-balance>
 ```
 
 ## Dependencies
@@ -86,8 +86,8 @@ $ ./setup.sh <n> <c> <path/to/config-file.json> <initial-balance>
 To install the necessary dependencies run the following commands:
 
 ```bash
-$ chmod +x install_deps.sh
-$ ./install_deps.sh
+chmod +x install_deps.sh
+./install_deps.sh
 ```
 
 This should install the following dependencies:
@@ -108,7 +108,7 @@ The script has arguments which can be modified:
 Run the script with the following command:
 
 ```bash
-$ python3 puppet-master.py
+python3 puppet-master.py
 ```
 Note: You may need to install **kitty** in your computer
 
@@ -121,16 +121,16 @@ It's also possible to run the project manually by using Maven.
 Compile and install all modules using:
 
 ```bash
-$ cd HDSLedger/
-$ mvn clean install -DskipTests
+cd HDSLedger/
+mvn clean install -DskipTests
 ```
 
 ### Execution
 The clients and the replicas can be manually started by running
 
 ```bash
-$ cd <module>/
-$ mvn exec:java -Dexec.args="<id>"
+cd <module>/
+mvn exec:java -Dexec.args="<id>"
 ```
 
 Where `<module>` is either `Service` or `Client`.
@@ -140,8 +140,8 @@ Where `<module>` is either `Service` or `Client`.
 To run unit tests, Maven can be used as follows:
 
 ```bash
-$ cd HDSLedger/
-$ mvn test
+cd HDSLedger/
+mvn test
 ```
 
 ---
