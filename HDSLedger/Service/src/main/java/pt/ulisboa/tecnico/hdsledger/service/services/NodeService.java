@@ -64,7 +64,7 @@ public class NodeService implements UDPService {
     private static final String DEFAULT_GENESIS_FILE = "/tmp/genesis.json";
 
     // TODO (dsa): resource file or argument or env var
-    private static final int BATCH_SIZE = 2;
+    private static final int BATCH_SIZE = 5;
 
     // Time waited to form new batch (adjusted according to the cost of forming
     // batches)
