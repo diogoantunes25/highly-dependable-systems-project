@@ -71,7 +71,7 @@ public class NodeService implements UDPService {
     private static final int BATCH_TIMEOUT = 50; // milliseconds
 
     // TODO (dsa): find better fee policy
-    private static final int DEFAULT_FEE = 1;
+    public static final int DEFAULT_FEE = 1;
 
     // Nodes configurations
     private final List<ProcessConfig> others;

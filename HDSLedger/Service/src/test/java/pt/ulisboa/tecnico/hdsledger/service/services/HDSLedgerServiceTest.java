@@ -234,7 +234,7 @@ public class HDSLedgerServiceTest {
 		// Check state is what was expected
 		for (NodeService service: nodeServices) {
 			Map<String, Integer> ledger = service.getLedger();
-			assertEquals(ledger.get(clientHashPk), initial - amount);
+			assertEquals(ledger.get(clientHashPk), initial - amount - NodeService.DEFAULT_FEE);
 			assertEquals(ledger.get(clientHashPk2), initial + amount);
 		}
 	}
