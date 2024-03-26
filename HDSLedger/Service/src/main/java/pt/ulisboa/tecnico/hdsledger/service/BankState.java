@@ -53,13 +53,15 @@ public class BankState implements State<BankCommand> {
     // dangerous to use if not immediatly followed by an update ( because the
     // state might go invalid in between) -> FIXME: make this method private
     public boolean isValidCommand(BankCommand cmd) {
+        int realAmount = cmd.getAmount() + cmd.getFee();
         return !executed.getOrDefault(cmd.getSource(), new HashSet<>()).contains(cmd.getSeq()) &&
-                balances.getOrDefault(cmd.getSource(), 0) >= cmd.getAmount();
+                balances.getOrDefault(cmd.getSource(), 0) >= realAmount;
     }
 
     // Assumes command is valied
     private void forceUpdate(BankCommand cmd) {
-        if (balances.getOrDefault(cmd.getSource(), 0) - cmd.getAmount() < 0) {
+        int realAmount = cmd.getAmount() + cmd.getFee();
+        if (balances.getOrDefault(cmd.getSource(), 0) - realAmount < 0) {
             // TODO: replace with HDSLedgerException
             throw new RuntimeException("invalid update was attempted");
         }
@@ -72,8 +74,9 @@ public class BankState implements State<BankCommand> {
         LOGGER.log(Level.INFO, MessageFormat.format("Transfering {0} from {1} to {2}",
                     cmd.getAmount(), cmd.getSource(), cmd.getDestination()));
 
-        this.balances.put(cmd.getSource(), balances.getOrDefault(cmd.getSource(), 0) - cmd.getAmount());
+        this.balances.put(cmd.getSource(), balances.getOrDefault(cmd.getSource(), 0) - realAmount);
         this.balances.put(cmd.getDestination(), balances.getOrDefault(cmd.getDestination(), 0) + cmd.getAmount());
+        this.balances.put(cmd.getMiner(), balances.getOrDefault(cmd.getMiner(), 0) + cmd.getFee());
         this.history.add(cmd);
     }
 
