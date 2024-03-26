@@ -13,7 +13,7 @@ import javafx.util.Pair;
 
 public class Client {
 
-    private static String configPath = "../Service/src/main/resources/";
+    private static String configPath = "../Service/src/main/resources/regular_config.json";
     // FIXME (dsa)
     //private static String configPath = "/tmp/";
 
@@ -30,8 +30,6 @@ public class Client {
     public static void main(String[] args) {
 
         final int clientId = Integer.parseInt(args[0]);
-
-        configPath += "regular_config.json";
 
         LOGGER.log(Level.INFO, MessageFormat.format("Using clientId = {0}",
                     clientId));

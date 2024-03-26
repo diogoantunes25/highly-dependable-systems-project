@@ -2,13 +2,13 @@
 
 # Check if correct number of arguments are provided
 if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <n_replicas> <n_clients> <config_path>"
+    echo "Usage: $0 <n_replicas> <n_clients> <initial_balance_for_all>"
     exit 1
 fi
 
 n_replicas=$1
 n_clients=$2
-config_path=$3
+initial_balance=$3
 
 # Function to generate JSON objects for replicas
 generate_replica_config() {
@@ -63,6 +63,20 @@ config+="]"
 
 cd ../
 # Write the config to the specified path
-echo "$config" > "$config_path"
+echo "$config" > Service/src/main/resources/regular_config.json
 
-echo "Configuration generated and saved to $config_path"
+# Change directory to /tmp
+cd /tmp || exit
+
+# Generate genesis.json
+echo "[" > genesis.json
+for ((i=0; i<n_replicas+n_clients; i++)); do
+    echo -n "{ \"id\": $i, \"balance\": $initial_balance }" >> genesis.json
+    if [ $i -ne $((n_replicas + n_clients - 1)) ]; then
+        echo "," >> genesis.json
+    fi
+done
+echo >> genesis.json
+echo "]" >> genesis.json
+
+echo "Configuration generated and saved to $config_path" and genesis.json to /tmp/genesis.json
