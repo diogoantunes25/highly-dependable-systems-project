@@ -57,16 +57,24 @@ public class NodeServiceTest {
 		}
 	}
 
-	private static void defaultGenesisFile(String path, int replicas, int clients) {
+	private static void defaultGenesisFile(String path, int replicas, int clients, int initialBalance) {
 		boolean exists = GenesisFile.read(path);
 		if (!exists) {
 			try {
-				GenesisFile.write(path, replicas, clients);
+
+				Map<Integer, Integer> balances = new HashMap<>();
+
+				for (int i = 0; i < replicas + clients; i++) {
+					balances.put(i, initialBalance);
+				}
+
+				GenesisFile.write(path, balances);
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
 		}
 	}
+
 
 	// FIXME (dsa): don't like this basePort here
 	private List<ProcessConfig> defaultConfigs(int n, int basePort) {
@@ -110,7 +118,7 @@ public class NodeServiceTest {
 			.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupServices(int n, int basePort, int nClients, Map<String, Integer> genesisBlock, String GenesisFilePath) {
+	List<NodeService> setupServices(int n, int basePort, int nClients, String genesisFilePath) {
 		List<ProcessConfig> configs = defaultConfigs(n, basePort);
 		List<String> clientPks = defaultClientKeys(n, nClients);
 		ProcessConfig[] configsArray = new ProcessConfig[n];
@@ -121,10 +129,8 @@ public class NodeServiceTest {
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
 			Link link = links.get(i);
-			services.add(new NodeService(link, config, configsArray, clientPks, GenesisFilePath));
+			services.add(new NodeService(link, config, configsArray, clientPks, genesisFilePath));
 		}
-
-		services.forEach(s -> s.genesis(genesisBlock));
 
 		return services;
 	}
@@ -166,21 +172,16 @@ public class NodeServiceTest {
 
 		int seq = 134;
 		int amount = 10;
-		int initial1 = 15;
-		int initial2 = 15;
+		int initial = 15;
 
 		String genesisFilePath = tempDir.resolve("genesis.json").toString();
-		defaultGenesisFile(genesisFilePath, n, nClients);
-
-		Map<String, Integer> genesisBlock = new HashMap<>();
-		genesisBlock.put(clientHashPk, initial1);
-		genesisBlock.put(clientHashPk2, initial2);
+		defaultGenesisFile(genesisFilePath, n, nClients, initial);
 
 		LedgerMessage proof = MessageCreator.createTransferRequest(seq, clientId, clientId2, amount);
 
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -215,8 +216,8 @@ public class NodeServiceTest {
 		// Check state is what was expected
 		for (NodeService service: services) {
 			Map<String, Integer> ledger = service.getLedger();
-			assertEquals(ledger.get(clientHashPk), initial1 - amount);
-			assertEquals(ledger.get(clientHashPk2), initial2 + amount);
+			assertEquals(ledger.get(clientHashPk), initial - amount);
+			assertEquals(ledger.get(clientHashPk2), initial + amount);
 		}
 	}
 
@@ -233,11 +234,10 @@ public class NodeServiceTest {
 		String clientHashPk = numberToId(clientId);
 		String clientHashPk2 = numberToId(clientId2);
 
-		String genesisFilePath = tempDir.resolve("genesis.json").toString();
-		defaultGenesisFile(genesisFilePath, n, nClients);
+		int initial = 10;
 
-		int initial1 = 15;
-		int initial2 = 15;
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients, initial);
 
 		int seq1 = 134;
 		int amount1 = 2;
@@ -247,13 +247,9 @@ public class NodeServiceTest {
 		int amount2 = 5;
 		LedgerMessage proof2 = MessageCreator.createTransferRequest(seq2, clientId, clientId2, amount2);
 
-		Map<String, Integer> genesisBlock = new HashMap<>();
-		genesisBlock.put(clientHashPk, initial1);
-		genesisBlock.put(clientHashPk2, initial2);
-
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -295,8 +291,8 @@ public class NodeServiceTest {
 		// Check state is what was expected
 		for (NodeService service: services) {
 			Map<String, Integer> ledger = service.getLedger();
-			assertEquals(ledger.get(clientHashPk), initial1 - amount1 - amount2);
-			assertEquals(ledger.get(clientHashPk2), initial2 + amount1 + amount2);
+			assertEquals(ledger.get(clientHashPk), initial - amount1 - amount2);
+			assertEquals(ledger.get(clientHashPk2), initial + amount1 + amount2);
 		}
 	}
 
@@ -313,11 +309,10 @@ public class NodeServiceTest {
 		String clientHashPk = numberToId(clientId);
 		String clientHashPk2 = numberToId(clientId2);
 
-		String genesisFilePath = tempDir.resolve("genesis.json").toString();
-		defaultGenesisFile(genesisFilePath, n, nClients);
+		int initial = 15;
 
-		int initial1 = 15;
-		int initial2 = 15;
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients, initial);
 
 		int seq1 = 134;
 		int amount1 = 2;
@@ -327,13 +322,9 @@ public class NodeServiceTest {
 		int amount2 = 5;
 		LedgerMessage proof2 = MessageCreator.createTransferRequest(seq2, clientId, clientId2, amount2);
 
-		Map<String, Integer> genesisBlock = new HashMap<>();
-		genesisBlock.put(clientHashPk, initial1);
-		genesisBlock.put(clientHashPk2, initial2);
-
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -382,8 +373,8 @@ public class NodeServiceTest {
 		// Check state is what was expected
 		for (NodeService service: services) {
 			Map<String, Integer> ledger = service.getLedger();
-			assertEquals(ledger.get(clientHashPk), initial1 - amount1 - amount2);
-			assertEquals(ledger.get(clientHashPk2), initial2 + amount1 + amount2);
+			assertEquals(ledger.get(clientHashPk), initial - amount1 - amount2);
+			assertEquals(ledger.get(clientHashPk2), initial + amount1 + amount2);
 		}
 	}
 
@@ -400,11 +391,10 @@ public class NodeServiceTest {
 		String clientHashPk = numberToId(clientId);
 		String clientHashPk2 = numberToId(clientId2);
 
-		String genesisFilePath = tempDir.resolve("genesis.json").toString();
-		defaultGenesisFile(genesisFilePath, n, nClients);
+		int initial = 15;
 
-		int initial1 = 15;
-		int initial2 = 15;
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients, initial);
 
 		int seq1 = 134;
 		int amount1 = 2;
@@ -414,13 +404,9 @@ public class NodeServiceTest {
 		int amount2 = 5;
 		LedgerMessage proof2 = MessageCreator.createTransferRequest(seq2, clientId, clientId2, amount2);
 
-		Map<String, Integer> genesisBlock = new HashMap<>();
-		genesisBlock.put(clientHashPk, initial1);
-		genesisBlock.put(clientHashPk2, initial2);
-
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
 
-		List<NodeService> services = setupServices(n, basePort, nClients, genesisBlock, genesisFilePath);
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisFilePath);
 		services.forEach(service -> service.listen());
 		services.forEach(service -> {
 			final int id = service.getId();
@@ -486,8 +472,8 @@ public class NodeServiceTest {
 		// Check state is what was expected
 		for (NodeService service: services) {
 			Map<String, Integer> ledger = service.getLedger();
-			assertEquals(ledger.get(clientHashPk), initial1 - amount1 - amount2);
-			assertEquals(ledger.get(clientHashPk2), initial2 + amount1 + amount2);
+			assertEquals(ledger.get(clientHashPk), initial - amount1 - amount2);
+			assertEquals(ledger.get(clientHashPk2), initial + amount1 + amount2);
 		}
 
 	}

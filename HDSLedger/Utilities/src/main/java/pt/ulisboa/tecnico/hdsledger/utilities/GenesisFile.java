@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 
 import org.json.JSONObject;
@@ -22,22 +23,13 @@ public class GenesisFile {
         return file.exists();
     }
 
-    public static void write(String path, int n, int c) throws IOException {
+    public static void write(String path, Map<Integer, Integer> balances) throws IOException {
         JSONArray jsonArray = new JSONArray();
 
-        // Generate entries for n replicas with initial balance 10
-        for (int i = 0; i < n; i++) {
+        for (Map.Entry<Integer, Integer> entry: balances.entrySet()) {
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("balance", 10);
-            jsonObject.put("id", i);
-            jsonArray.put(jsonObject);
-        }
-
-        // Generate entries for c clients with initial balance 0
-        for (int i = n; i < n + c; i++) {
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("id", i);
-            jsonObject.put("balance", 0);
+            jsonObject.put("id", entry.getKey());
+            jsonObject.put("balance", entry.getValue());
             jsonArray.put(jsonObject);
         }
 
