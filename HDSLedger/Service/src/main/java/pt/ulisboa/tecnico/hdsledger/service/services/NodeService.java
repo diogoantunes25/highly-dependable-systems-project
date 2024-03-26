@@ -252,6 +252,10 @@ public class NodeService implements UDPService {
                 decided(l, s);
             };
     
+		    timer.registeTimeoutCallback(round -> {
+                List<ConsensusMessage> output = instance.handleTimeout(round);
+                output.stream().forEach(m -> link.send(m.getReceiver(), m));
+            });
             instance.registerObserver(observer);
             instance.setTimer(timer);
             return instance;

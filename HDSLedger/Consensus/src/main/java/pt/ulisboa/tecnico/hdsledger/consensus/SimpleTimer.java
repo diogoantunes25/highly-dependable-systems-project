@@ -1,5 +1,9 @@
 package pt.ulisboa.tecnico.hdsledger.consensus;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+
+import java.text.MessageFormat;
+import java.util.logging.Level;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Queue;
 import java.util.Set;
@@ -12,6 +16,8 @@ import java.util.function.Consumer;
  * Thread-safe.
  */
 public class SimpleTimer implements Timer {
+
+	private static final CustomLogger LOGGER = new CustomLogger(SimpleTimer.class.getName());
 
 	private AtomicInteger id = new AtomicInteger(0);
 
@@ -33,6 +39,7 @@ public class SimpleTimer implements Timer {
 			Thread t = new Thread(() -> {
 				try {
 					Thread.sleep(timeout);
+					LOGGER.log(Level.INFO, MessageFormat.format("Timer fired after {0} millis", timeout));
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}

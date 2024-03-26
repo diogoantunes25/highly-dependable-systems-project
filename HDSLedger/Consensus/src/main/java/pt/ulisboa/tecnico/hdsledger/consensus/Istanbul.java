@@ -46,7 +46,7 @@ public class Istanbul {
 	private final int quorumSize;
 
 	// Milliseconds
-	private static final int INITIAL_TIMEOUT = 1000;
+	private static final int INITIAL_TIMEOUT = 500;
 
 	// Process configuration (includes its id)
 	private final ProcessConfig config;
@@ -1142,6 +1142,10 @@ public class Istanbul {
 	 **/
 	private List<ConsensusMessage> updateRound(int newRound) {
 		this.ri = newRound;
+
+		LOGGER.log(Level.INFO,
+				MessageFormat.format("{0} - Updating to round {1} (instance = {2})",
+					config.getId(), newRound, this.lambda));
 
 		List<ConsensusMessage> messages = Stream.concat(
 				stashedPrePrepare.getOrDefault(this.ri, new ArrayList<>()).stream(),
