@@ -27,6 +27,8 @@ import java.io.InputStream;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
+import javafx.util.Pair;
+
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.consensus.Istanbul;
 import pt.ulisboa.tecnico.hdsledger.consensus.Timer;
@@ -42,6 +44,7 @@ import pt.ulisboa.tecnico.hdsledger.service.StringState;
 import pt.ulisboa.tecnico.hdsledger.service.BankState;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.service.BankCommand;
+import pt.ulisboa.tecnico.hdsledger.service.CommandBatch;
 import pt.ulisboa.tecnico.hdsledger.service.Command;
 import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
@@ -91,7 +94,7 @@ public class NodeService implements UDPService {
     private BlockingQueue<BankCommand> inputs = new LinkedBlockingQueue<>();
 
     // Blocking queue of decisions (thread-safe)
-    private BlockingQueue<Decision> decisions = new LinkedBlockingQueue<>(); 
+    private BlockingQueue<Decision<CommandBatch>> decisions = new LinkedBlockingQueue<>(); 
 
     // Whether service is running
     private AtomicBoolean running = new AtomicBoolean(false);
@@ -188,38 +191,30 @@ public class NodeService implements UDPService {
      * Check that value is valid
      */
     private boolean checkIsValidValue(int lambda, String value) {
-        Optional<StringCommand> cmdOpt = StringCommand.deserialize(value);
+        Optional<CommandBatch> cmdOpt = CommandBatch.deserialize(value);
         if (!cmdOpt.isPresent()) {
             return false;
         }
 
-        StringCommand cmd = cmdOpt.get();
+        CommandBatch cmd = cmdOpt.get();
 
-        int clientId = cmd.getClientId();
-        AppendMessage proof = cmd.getProof();
+        if (lambda != this.currentLambda.get()) {
+            LOGGER.log(Level.WARNING, MessageFormat.format("{0} - asking to determine validity of transaction in the past/future. can't to that, so saying it's invalid",
+                    config.getId()));
 
-        int n = this.others.size();
-        if (clientId < n) {
-            LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for append was requested for client with ID smaller than n, which is wrong (value is {1})",
-                    config.getId(), value));
-        }
-
-        // TODO (dsa): use lambda (don't recall why I needed it)
-        // TODO (dsa): check that is valid transfer given current state
-
-        LOGGER.log(Level.WARNING, MessageFormat.format("{0} - signature check for client {2}, message {1} starting",
-                config.getId(), value, clientId));
-
-        // Check it wasn't proposed yet
-        boolean repeated = history.keySet()
-            .stream()
-            .anyMatch(c -> c.equals(cmd));
-
-        if (repeated) {
             return false;
         }
 
-        return proof.checkConsistentSig(this.clientPks.get(clientId - n));
+        // Check that it can be applied on the current state
+        if (!this.ledger.allTransactionsValid(cmd)) {
+            LOGGER.log(Level.WARNING, MessageFormat.format("{0} - some transaction in the batch is invalid, rejecting",
+                    config.getId()));
+
+            return false;
+        }
+
+        // Check that everything in command is properly signed
+        return cmd.check(this.allKeys, DEFAULT_FEE);
     }
 
     /**
@@ -234,6 +229,15 @@ public class NodeService implements UDPService {
         // one and that the signature is correct
  
         return instances.computeIfAbsent(lambda, l -> {
+
+            if (lambda > this.currentLambda.get()) {
+                throw new RuntimeException("Trying to get instance for future instance. Can't determine the beta predicate");
+            }
+
+            if (lambda < this.currentLambda.get()) {
+                throw new RuntimeException("Trying to create new instance for past instance. This should not happen. Probably shouldn't have moved to current instance");
+            }
+
             Istanbul instance = new Istanbul(this.others, this.config, l, value -> this.checkIsValidValue(l, value));
             Timer timer = new SimpleTimer();
             Consumer<String> observer = s -> {
@@ -340,7 +344,7 @@ public class NodeService implements UDPService {
                         "{0} - Decided on Consensus Instance {1} with value {2}",
                         config.getId(), lambda, value));
 
-        Optional<BankCommand> cmdOpt = BankCommand.deserialize(value);
+        Optional<CommandBatch> cmdOpt = CommandBatch.deserialize(value);
         if (!cmdOpt.isPresent()) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
@@ -349,7 +353,7 @@ public class NodeService implements UDPService {
             return;
         }
 
-        Decision<BankCommand> d = new Decision<>(lambda, cmdOpt.get());
+        Decision<CommandBatch> d = new Decision<>(lambda, cmdOpt.get());
         decisions.add(d);
     }
 
@@ -366,8 +370,8 @@ public class NodeService implements UDPService {
      * Updates state and returns slot position for value
      * Non thread-safe.
      */
-    public synchronized Optional<Integer> updateState(BankCommand cmd) {
-        Optional<Integer> slotIdOpt = ledger.update(cmd);
+    public synchronized Optional<Integer> updateState(CommandBatch cmds) {
+        Optional<Integer> slotIdOpt = ledger.update(cmds);
         
         if (slotIdOpt.isPresent()) {
             StringBuilder stringBuilder = new StringBuilder();
@@ -377,15 +381,14 @@ public class NodeService implements UDPService {
 
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
-                        "{0} - Current Ledger: {1}",
-                        config.getId(), stringBuilder.toString()));
-
+                        "{0} - Current Ledger (after slot with id {2}): {1}",
+                        config.getId(), stringBuilder.toString(), slotIdOpt.get()));
+        } else {
+            LOGGER.log(Level.SEVERE,
+                    MessageFormat.format(
+                        "{0} - Tried to update state with invalid command - {1}",
+                        config.getId(), cmds));
         }
-
-        LOGGER.log(Level.SEVERE,
-                MessageFormat.format(
-                    "{0} - Tried to update state with invalid command - {1}",
-                    config.getId(), cmd));
 
         return slotIdOpt;
     }
@@ -479,12 +482,18 @@ public class NodeService implements UDPService {
             // Thread to take pending inputs from clients and input them into consensus
             Thread driver = new Thread(() -> {
                 try {
-                    DecisionBucket<BankCommand> bucket = new DecisionBucket<>();
+                    DecisionBucket<CommandBatch> bucket = new DecisionBucket<>();
 
                     // input values for which the observers where already notified
                     Set<BankCommand> acketToObserver = new HashSet<>();
 
                     List<BankCommand> pendingInputs = new ArrayList<>();
+
+                    List<BankCommand> notConfirmed;
+
+                    Pair<List<BankCommand>, List<BankCommand>> parsedInputs;
+
+                    List<BankCommand> valid;
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
@@ -492,11 +501,18 @@ public class NodeService implements UDPService {
 
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
-                    BankCommand input = this.inputs.take();
+                    pendingInputs.add(this.inputs.take());
+                    this.inputs.drainTo(pendingInputs);
+
+                    // Invalid requests are ignored (replying that is wrong would
+                    // might raise some problems - if another replica sees it as
+                    // valid, maybe because it has another transaction that makes
+                    // it valid, the consensus layer might output the transaction
+                    // and I already said it was invalid
 
                     LOGGER.log(Level.INFO,
-                            MessageFormat.format("{0} Driver - Got {1} inputs",
-                                config.getId(), input));
+                            MessageFormat.format("{0} Driver - Got {1} inputs ",
+                                config.getId(), pendingInputs.size()));
 
                     while (this.running.get()) {
                         // if input was already processed after agreement, there's
@@ -504,44 +520,57 @@ public class NodeService implements UDPService {
                         // TODO (dsa): probably no longer need this (because beta
                         // ensures that accept value was not already decided and is valid)
                         
-                        // TODO (dsa): for each input in inputs
-                        
-                        // Check if input already in history (not considering proof)
-                        if (history.containsKey(input)) {
+                        // List of commands that are not in the history
+                        notConfirmed = new ArrayList<>();
 
-                            // if not notified observers, notify
-                            // (it's possible for a value to be processed, but
-                            // the clients not notified if the input came late)
-                            if (!acketToObserver.contains(input)) {
-                                Slot<BankCommand> slot = history.get(input);
-                                BankCommand cmd = slot.getCmd();
+                        for (BankCommand input: pendingInputs) {
+                            // Check if input already in history (not considering proof)
+                            if (history.containsKey(input)) {
 
-                                if (slot.getSlotId().isPresent()) {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
-                                                config.getId(), input, slot.getSlotId()));
-                                } else {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} Driver - Telling the client that {1} was not good to be executed",
-                                                config.getId(), input));
+                                // if not notified observers, notify
+                                // (it's possible for a value to be processed, but
+                                // the clients not notified if the input came late)
+                                if (!acketToObserver.contains(input)) {
+                                    Slot<BankCommand> slot = history.get(input);
+                                    BankCommand cmd = slot.getCmd();
+
+                                    if (slot.getSlotId().isPresent()) {
+                                        LOGGER.log(Level.INFO,
+                                                MessageFormat.format("{0} Driver - Confirming {1} to client for slot in position {2}",
+                                                    config.getId(), input, slot.getSlotId()));
+                                    } else {
+                                        LOGGER.log(Level.INFO,
+                                                MessageFormat.format("{0} Driver - Telling the client that {1} was not good to be executed",
+                                                    config.getId(), input));
+                                    }
+
+                                    for (ObserverAck obs: this.observers) {
+                                        obs.ack(cmd.getClientId(), cmd.getSeq(), slot.getSlotId());
+                                    }
+                                    
+                                    acketToObserver.add(input);
                                 }
-
-                                for (ObserverAck obs: this.observers) {
-                                    obs.ack(cmd.getClientId(), cmd.getSeq(), slot.getSlotId());
-                                }
-                                
-                                acketToObserver.add(input);
+                            } else {
+                                notConfirmed.add(input);
                             }
+                        }
 
+                        parsedInputs = this.ledger.getValidFromBatch(notConfirmed);
+                        valid = parsedInputs.getKey();
+
+                        // If there are not valid request left, then get more inputs
+                        if (valid.size() == 0) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Waiting for input",
                                         config.getId()));
-                            // take must be used instead of remove because it's blocking.
-                            input = this.inputs.take(); // blocking
+
+                            pendingInputs = new ArrayList<>();
+                            pendingInputs.add(this.inputs.take());
+                            this.inputs.drainTo(pendingInputs);
 
                             LOGGER.log(Level.INFO,
-                                    MessageFormat.format("{0} Driver - Got input {1}",
-                                        config.getId(), input));
+                                    MessageFormat.format("{0} Driver - Got {1} inputs ({2} valid)",
+                                        config.getId(), inputs.size(), valid.size()));
 
                             continue;
                         }
@@ -550,8 +579,10 @@ public class NodeService implements UDPService {
                         // take's value might already be finalized as well)
                         currentLambda.incrementAndGet();
                         LOGGER.log(Level.INFO,
-                                MessageFormat.format("{0} Driver - Inputting into consensus {1} value {2}",
-                                    config.getId(), currentLambda.get(), input));
+                                MessageFormat.format("{0} Driver - Inputting {2} values into consensus {1}",
+                                    config.getId(), currentLambda.get(), valid.size()));
+
+                        CommandBatch input = new CommandBatch(valid);
                         actuallyInput(currentLambda.get(), input.serialize());
 
                         LOGGER.log(Level.INFO,
@@ -561,7 +592,7 @@ public class NodeService implements UDPService {
                         // check if this instance was already decided upon. if it
                         // was, then no need to wait, otherwise wait for more
                         // decisions
-                        Decision<BankCommand> d;
+                        Decision<CommandBatch> d;
                         while (!bucket.contains(currentLambda.get())) {
                             LOGGER.log(Level.INFO,
                                     MessageFormat.format("{0} Driver - Decision for instance {1} has not yet been reached",
@@ -586,23 +617,17 @@ public class NodeService implements UDPService {
                         // at this point, we have decision for instance currentLambda,
                         // we just need to process it
 
-                        // if this consensus output is duplicate, there's nothing
-                        // to be done
-                        BankCommand cmd = d.getValue();
-                        if (history.containsKey(cmd)) {
-                            LOGGER.log(Level.INFO,
-                                    MessageFormat.format("{0} Driver - History already contained ({1}), skipping for this reason",
-                                        config.getId(), cmd));
+                        CommandBatch cmds = d.getValue();
 
-                            continue;
+                        LOGGER.log(Level.INFO,
+                                MessageFormat.format("{0} Driver - Updating state",
+                                    config.getId(), currentLambda.get()));
+
+                        Optional<Integer> slotIdOpt = updateState(cmds);
+
+                        for (BankCommand cmd: cmds.getCommands()) {
+                            history.put(cmd, new Slot<>(slotIdOpt, cmd));
                         }
-
-                        // if it's not duplicate, save
-                       
-                        // update state
-                        Optional<Integer> slotIdOpt = updateState(cmd);
-                        Slot<BankCommand> slot = new Slot<>(slotIdOpt, cmd);
-                        history.put(cmd, slot);
                     }
 
 

@@ -59,7 +59,7 @@ public class LedgerMessage extends Message {
     }
 
     private LedgerMessage.Signable getToSign() {
-        return new LedgerMessage.Signable(this.message);
+        return new LedgerMessage.Signable(this.message, sequenceNumber);
     }
 
     public int getReplyTo() {
@@ -135,9 +135,11 @@ public class LedgerMessage extends Message {
     // Class that encapsulates what is important to be signed
     private class Signable {
         private String message;
+        private int seq;
 
-        Signable(String message) {
+        Signable(String message, int seq) {
             this.message = message;
+            this.seq = seq;
         }
     }
 }
