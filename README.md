@@ -144,4 +144,12 @@ cd HDSLedger/
 mvn test
 ```
 
+## Load tests
+
+To run a client loader, the following steps can be followed:
+```bash
+cd HDSLedger/Client/
+mvn exec:java -DmainClass=pt.ulisboa.tecnico.hdsledger.client.loader.LoaderClient -Dexec.args="<clientId>"
+```
+
 ---
