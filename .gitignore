@@ -21,6 +21,7 @@ HDSLedger/report/*.pdf
 HDSLedger/report/*.log
 HDSLedger/report/*.aux
 HDSLedger/report/*.out
+HDSLedger/Service/src/main/resources/regular_config.json
 
 # ASDF config folder
 .tool-versions
