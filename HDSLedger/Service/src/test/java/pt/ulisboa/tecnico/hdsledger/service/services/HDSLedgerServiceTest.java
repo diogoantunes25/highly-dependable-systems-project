@@ -56,11 +56,18 @@ public class HDSLedgerServiceTest {
 		}
 	}
 
-	private static void defaultGenesisFile(String path, int replicas, int clients) {
+	private static void defaultGenesisFile(String path, int replicas, int clients, int initialBalance) {
 		boolean exists = GenesisFile.read(path);
 		if (!exists) {
 			try {
-				GenesisFile.write(path, replicas, clients);
+
+				Map<Integer, Integer> balances = new HashMap<>();
+
+				for (int i = 0; i < replicas + clients; i++) {
+					balances.put(i, initialBalance);
+				}
+
+				GenesisFile.write(path, balances);
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -101,7 +108,7 @@ public class HDSLedgerServiceTest {
 				.collect(Collectors.toList());
 	}
 
-	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks, Map<String, Integer> genesisBlock, String genesisFilePath) {
+	List<NodeService> setupNodeServices(List<ProcessConfig> configs, List<Link> links, List<String> clientPks, String genesisFilePath) {
 		int n = configs.size();
 		ProcessConfig[] configsArray = new ProcessConfig[n];
 		configs.toArray(configsArray);	
@@ -112,8 +119,6 @@ public class HDSLedgerServiceTest {
 			Link link = links.get(i);
 			services.add(new NodeService(link, config, configsArray, clientPks, genesisFilePath));
 		}
-
-		services.forEach(s -> s.genesis(genesisBlock));
 
 		return services;
 	}
@@ -173,22 +178,17 @@ public class HDSLedgerServiceTest {
 		String clientHashPk2 = numberToId(clientId2);
 		int seq = 0;
 		int amount = 10;
-		int initial1 = 15;
-		int initial2 = 15;
+		int initial = 15;
 
 		String genesisFilePath = tempDir.resolve("genesis.json").toString();
-		defaultGenesisFile(genesisFilePath, n_Nodes, n_Clients);
+		defaultGenesisFile(genesisFilePath, n_Nodes, n_Clients, initial);
 		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n_Nodes);
-
-		Map<String, Integer> genesisBlock = new HashMap<>();
-		genesisBlock.put(clientHashPk, initial1);
-		genesisBlock.put(clientHashPk2, initial2);
 
 		// Setup node service
 		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
 		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
 		List<String> clientPks = defaultClientKeys(n_Nodes, n_Clients);
-		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisBlock, genesisFilePath);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisFilePath);
 
 		// Setup ledger service and client links
 		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);
@@ -234,8 +234,8 @@ public class HDSLedgerServiceTest {
 		// Check state is what was expected
 		for (NodeService service: nodeServices) {
 			Map<String, Integer> ledger = service.getLedger();
-			assertEquals(ledger.get(clientHashPk), initial1 - amount);
-			assertEquals(ledger.get(clientHashPk2), initial2 + amount);
+			assertEquals(ledger.get(clientHashPk), initial - amount);
+			assertEquals(ledger.get(clientHashPk2), initial + amount);
 		}
 	}
 
