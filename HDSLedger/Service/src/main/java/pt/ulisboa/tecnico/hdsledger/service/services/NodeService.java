@@ -59,11 +59,17 @@ public class NodeService implements UDPService {
     // TODO (dsa): resource file or argument or env var
     private static final String DEFAULT_GENESIS_FILE = "/tmp/genesis.json";
 
+    // TODO (dsa): find better fee policy
+    private static final int DEFAULT_FEE = 1;
+
     // Nodes configurations
     private final List<ProcessConfig> others;
 
     // My configuration
     private final ProcessConfig config;
+
+    // Hash of my public key
+    private final String myHash;
     
     // Link to communicate with nodes
     private final Link link;
@@ -121,6 +127,7 @@ public class NodeService implements UDPService {
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
         this.allKeys = getAllKeys(nodesConfig, clientPks);
+        this.myHash = SigningUtils.publicKeyHash(this.allKeys.get(this.config.getId()));
 
         Map<String, Integer> initalBalances = loadGenesisFromFile(genesisFilePath, this.allKeys);
         genesis(initalBalances);
@@ -293,7 +300,7 @@ public class NodeService implements UDPService {
         String destinationId = SigningUtils.publicKeyHash(destinationPublicKey);
 
         // note: add must be used instead of put as it's non-blocking
-        inputs.add(new BankCommand(clientId, seq, sourceId, destinationId, amount, proof));
+        inputs.add(new BankCommand(clientId, seq, sourceId, destinationId, amount, myHash, DEFAULT_FEE, proof));
     }
 
     /**
@@ -477,6 +484,8 @@ public class NodeService implements UDPService {
                     // input values for which the observers where already notified
                     Set<BankCommand> acketToObserver = new HashSet<>();
 
+                    List<BankCommand> pendingInputs = new ArrayList<>();
+
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
                                 config.getId()));
@@ -484,18 +493,18 @@ public class NodeService implements UDPService {
                     // take must be used instead of remove because it's blocking.
                     // need to do get input outside loop to bootstrap.
                     BankCommand input = this.inputs.take();
-                    // String strippedInput = stripProof(input).get();
 
                     LOGGER.log(Level.INFO,
-                            MessageFormat.format("{0} Driver - Got input {1}",
+                            MessageFormat.format("{0} Driver - Got {1} inputs",
                                 config.getId(), input));
-
 
                     while (this.running.get()) {
                         // if input was already processed after agreement, there's
                         // nothing to do besides getting a new value
                         // TODO (dsa): probably no longer need this (because beta
                         // ensures that accept value was not already decided and is valid)
+                        
+                        // TODO (dsa): for each input in inputs
                         
                         // Check if input already in history (not considering proof)
                         if (history.containsKey(input)) {

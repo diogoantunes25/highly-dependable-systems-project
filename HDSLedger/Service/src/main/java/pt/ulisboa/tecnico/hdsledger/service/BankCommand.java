@@ -12,15 +12,20 @@ import java.util.Objects;
 import com.google.gson.Gson;
 
 /**
- * Command for state machine
+ * Bank command. Includes fee
  */
 public class BankCommand implements Command {
 
     private int clientId;
     private int seq;
+
     private String source;
     private String destination;
     private int amount;
+
+    private String miner;
+    private int fee;
+
     private String serializedProof;
 
     /**
@@ -29,9 +34,11 @@ public class BankCommand implements Command {
      * @param source source id (hash of public key)
      * @param destination destination id (hash of public key)
      * @param amount amount of funds to transfer
+     * @param miner miner id (hash of public key)
+     * @param fee fee paid to the miner
      * @param proof message proving that transfer was requested by the source
      */
-    public BankCommand(int clientId, int seq, String source, String destination, int amount, LedgerMessage proof) {
+    public BankCommand(int clientId, int seq, String source, String destination, int amount, String miner, int fee, LedgerMessage proof) {
 
         TransferRequest transferRequest = proof.deserializeTransferRequest();
         String messageSource = SigningUtils.publicKeyHash(transferRequest.getSourcePublicKey());
@@ -50,6 +57,8 @@ public class BankCommand implements Command {
         this.source = source;
         this.destination = destination;
         this.amount = amount;
+        this.miner = miner;
+        this.fee = fee;
         this.serializedProof = new Gson().toJson(proof);
     }
 
@@ -74,16 +83,27 @@ public class BankCommand implements Command {
     
     public int getAmount() { return this.amount; }
 
+    public String getMiner() { return this.miner; }
+
+    public int getFee() { return this.fee; }
+
     public LedgerMessage getProof() {
         return new Gson().fromJson(this.serializedProof, LedgerMessage.class);
     }
 
     /* Default method for equality */ 
-    public boolean equalsWithoutProof(BankCommand other) {
+    public boolean equalsWithoutProofAndFee(BankCommand other) {
         return (this.seq == other.getSeq()) &&
             (this.source.equals(other.getSource())) &&
             (this.destination.equals(other.getDestination())) &&
             (this.amount == other.getAmount());
+    }
+
+    /* Default method for equality */ 
+    public boolean equalsWithoutProof(BankCommand other) {
+        return this.equalsWithoutProofAndFee(other) &&
+            this.miner.equals(other.miner) &&
+            this.fee == other.fee;
     }
 
     public boolean equalsWithProof(BankCommand other) {
@@ -92,7 +112,7 @@ public class BankCommand implements Command {
     }
 
     /*
-     * Comparision that doesn't consider proof value
+     * Comparision that doesn't consider proof value and miner/fee information
      */
     @Override
     public boolean equals(Object o) {
@@ -105,11 +125,11 @@ public class BankCommand implements Command {
         }
 
         BankCommand other = (BankCommand) o;
-        return this.equalsWithoutProof(other);
+        return this.equalsWithoutProofAndFee(other);
     }
 
     /*
-     * Hash code that doesn't consider proof value
+     * Hash code that doesn't consider proof value and miner/fee information
      */
     @Override
     public int hashCode() {
@@ -119,10 +139,13 @@ public class BankCommand implements Command {
     @Override
     public String toString() {
         return "BankCommand{" +
-                "seq=" + seq +
+                "clientId=" + clientId +
+                ", seq=" + seq +
                 ", source='" + source + '\'' +
                 ", destination='" + destination + '\'' +
                 ", amount=" + amount +
+                ", miner='" + miner + '\'' +
+                ", fee=" + fee +
                 ", serializedProof='" + serializedProof + '\'' +
                 '}';
     }
