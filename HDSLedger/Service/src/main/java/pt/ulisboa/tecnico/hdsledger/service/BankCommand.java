@@ -149,4 +149,12 @@ public class BankCommand implements Command {
                 ", serializedProof='" + serializedProof + '\'' +
                 '}';
     }
+
+    public boolean checkSig(String pathToPublicKey) {
+        // Consistency of values is checked on constructor
+        // Remains to check that the signatures matches the sender
+        // (this isn't done in the constructor, to keep it computationally cheap)
+
+        return this.getProof().checkConsistentSig(pathToPublicKey);
+    }
 }
