@@ -135,9 +135,6 @@ public class HDSLedgerService implements UDPService {
                             config.getId(), senderId, seq));
         }
 
-        // Send the decided value to the client
-        //LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), seq, slotIdOpt);
-        //link.send(senderId, reply);
         sendTransferReply(link, config.getId(), senderId, seq, slotIdOpt);
     }
 
