@@ -4,10 +4,14 @@ import java.io.IOException;
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.crypto.*;
 
 public class SigningUtils {
+    private static Map<String, String> memoizedHashes = new ConcurrentHashMap<>();
+
     public static String encrypt(byte[] data, String pathToPrivateKey)
         throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
         NoSuchPaddingException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException {
@@ -54,6 +58,7 @@ public class SigningUtils {
         
         return sessionKey.getEncoded();
     }
+
     public static byte[] generateHMAC(byte[] data, Key key) {
         try {
             Mac sha256_HMAC = Mac.getInstance("HmacSHA256");
@@ -84,6 +89,10 @@ public class SigningUtils {
     }
 
     public static String publicKeyHash(String publicKeyPath) {
+        if (memoizedHashes.containsKey(publicKeyPath)) {
+            return memoizedHashes.get(publicKeyPath); 
+        }
+
         try {
             PublicKey publicKey = (PublicKey) RSAKeyGenerator.read(publicKeyPath, "pub");
             return digest(new String(publicKey.getEncoded()));
