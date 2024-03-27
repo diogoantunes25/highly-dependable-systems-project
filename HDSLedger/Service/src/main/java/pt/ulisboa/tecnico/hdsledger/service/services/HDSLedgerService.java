@@ -88,16 +88,8 @@ public class HDSLedgerService implements UDPService {
         Optional<Integer> balance;
         int clientId = message.getSenderId();
 
-        // check if the signature is consistent
-        if (!message.checkConsistentSig(others[clientId].getPublicKey())) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                        "{0} - Bad signature from client {1}",
-                        config.getId(), message.getSenderId()));
-            balance = Optional.empty();
-        }
         // check if the public key is valid and corresponds to the client id
-        else if (!balanceRequest.getSourcePublicKey().equals(others[clientId].getPublicKey())) {
+        if (!balanceRequest.getSourcePublicKey().equals(others[clientId].getPublicKey())) {
             // TODO (dgm): think about this verification
             LOGGER.log(Level.INFO,
                     MessageFormat.format(

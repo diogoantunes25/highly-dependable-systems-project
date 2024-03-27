@@ -65,7 +65,6 @@ public class ClientStub {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
         ledgerMessage.setSequenceNumber(sequenceNumber);
         ledgerMessage.setMessage(message);
-        ledgerMessage.signSelf(this.config.getPrivateKey());
         return ledgerMessage;
     }
 
@@ -73,6 +72,7 @@ public class ClientStub {
         int currentRequestId = this.requestId++; // nonce
         TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
+        request.signSelf(this.config.getPrivateKey());
         LOGGER.log(Level.INFO, "Sending transfer request: " + new Gson().toJson(request));
 
         return sendRequest(request);
