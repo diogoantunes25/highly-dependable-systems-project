@@ -121,5 +121,6 @@ public class LoaderClient {
         System.out.println(MessageFormat.format("Finished load - took {0,number,#.####} seconds", duration));
         System.out.println(MessageFormat.format("Mean Latency: {0,number,#.####} ms", meanLatency));
         System.out.println(MessageFormat.format("Throughput: {0,number,#.####} transactions per second", throughput));
+        System.exit(0);
     }
 }
