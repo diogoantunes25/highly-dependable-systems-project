@@ -152,4 +152,15 @@ cd HDSLedger/Client/
 mvn exec:java -DmainClass=pt.ulisboa.tecnico.hdsledger.client.loader.LoaderClient -Dexec.args="<clientId>"
 ```
 
+To run multiple clients that load the system, the following steps can be followed:
+```bash
+cd HDSLedger/Client/
+chmod +x multiple_clients.sh
+sh multiple_clients.sh <replicas> <clients> <txs>
+```
+
+This script assumes that the `setup.sh` script was already ran for the number of <replicas> and 
+<clients> specified and the replicas are already running. <txs> are the number of transactions 
+that each client is going to submit to the replicas.
+
 ---
