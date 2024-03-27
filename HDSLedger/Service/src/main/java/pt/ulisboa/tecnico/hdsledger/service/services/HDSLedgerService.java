@@ -5,6 +5,9 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 import com.google.gson.Gson;
@@ -17,6 +20,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferReply;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
+import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
 import pt.ulisboa.tecnico.hdsledger.service.Slot;
 import pt.ulisboa.tecnico.hdsledger.service.StringCommand;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -35,6 +39,8 @@ public class HDSLedgerService implements UDPService {
     // Link to communicate with nodes
     private final Link link;
 
+    private Queue<ObserverAck> observers = new ConcurrentLinkedQueue<>();
+
     // Node service that allows start consensus instances
     private final NodeService nodeService;
 
@@ -45,6 +51,11 @@ public class HDSLedgerService implements UDPService {
         this.nodeService = nodeService;
         nodeService.registerObserver(this::decided);
     }
+
+    public void registerObserver(ObserverAck observer) {
+        this.observers.add(observer);
+    }
+
 
     private LedgerMessage createLedgerMessage(int id, Message.Type type, String serializedMessage) {
        LedgerMessage message = new LedgerMessage(id, type);
@@ -81,6 +92,9 @@ public class HDSLedgerService implements UDPService {
 
         // If there was some failure, then reply to client saying that
         LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), sequenceNumber, Optional.empty());
+        for (ObserverAck obs: this.observers) {
+            obs.ack(config.getId(), sequenceNumber, Optional.empty());
+        }
         link.send(clientId, reply);
     }
 
@@ -173,7 +187,11 @@ public class HDSLedgerService implements UDPService {
 
     @Override
     public void stopAndWait() {
-        // TODO (dsa)
-    }   
+        
+    }
+    
+    public int getId() {
+        return this.config.getId();
+    }
 }
 
