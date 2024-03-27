@@ -39,6 +39,9 @@ public class HDSLedgerService implements UDPService {
     // Link to communicate with nodes
     private final Link link;
 
+    /*Used for testing purposes -> to check if the correct message was sent to the client
+     * without using the link method
+    */
     private Queue<ObserverAck> observers = new ConcurrentLinkedQueue<>();
 
     // Node service that allows start consensus instances
@@ -90,12 +93,7 @@ public class HDSLedgerService implements UDPService {
             return;
         }
 
-        // If there was some failure, then reply to client saying that
-        LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), sequenceNumber, Optional.empty());
-        for (ObserverAck obs: this.observers) {
-            obs.ack(config.getId(), sequenceNumber, Optional.empty());
-        }
-        link.send(clientId, reply);
+        sendTransferReply(link, config.getId(), clientId, sequenceNumber, Optional.empty());
     }
 
     public void checkBalance(LedgerMessage message) {
@@ -138,8 +136,17 @@ public class HDSLedgerService implements UDPService {
         }
 
         // Send the decided value to the client
+        //LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), seq, slotIdOpt);
+        //link.send(senderId, reply);
+        sendTransferReply(link, config.getId(), senderId, seq, slotIdOpt);
+    }
+
+    private void sendTransferReply (Link link, int senderId, int clientId, int seq, Optional<Integer> slotIdOpt) {
         LedgerMessage reply = MessageCreator.createTransferReply(config.getId(), seq, slotIdOpt);
-        link.send(senderId, reply);
+        link.send(clientId, reply);
+        for (ObserverAck obs: this.observers) {
+            obs.ack(config.getId(), seq, slotIdOpt);
+        }
     }
 
     @Override

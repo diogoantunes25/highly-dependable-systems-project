@@ -185,7 +185,7 @@ public class HDSLedgerServiceTest {
         return ledgerMessage;
     }
 
-	private LedgerMessage createWrongIdTransferRequest(int clientId,int requestId, int source, int destination, int amount) {
+	private LedgerMessage createClientIdTransferRequest(int clientId,int requestId, int source, int destination, int amount) {
         // TODO: make this consistent with the way this was done before
         String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
         String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
@@ -488,7 +488,7 @@ public class HDSLedgerServiceTest {
 
 
 		for (int i = 0; i < n_Nodes; i++) {
-			LedgerMessage request = createWrongIdTransferRequest(clientId, seq, clientId2, clientId3, amount);
+			LedgerMessage request = createClientIdTransferRequest(clientId, seq, clientId2, clientId3, amount);
 			clientLink.send(i, request);
 		}
 
