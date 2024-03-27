@@ -17,6 +17,10 @@ public class LoaderClient {
 
     private static String configPath = "../Service/src/main/resources/regular_config.json";
 
+    private static final int WARMUP = 20;
+
+    private static final int COOLDOWN = 20;
+
     private static final CustomLogger LOGGER = new CustomLogger(LoaderClient.class.getName());
 
     private static void printUsage() {
@@ -28,6 +32,10 @@ public class LoaderClient {
 
         final int clientId = Integer.parseInt(args[0]);
         final int txCount = Integer.parseInt(args[1]);
+
+        if (txCount <= COOLDOWN + WARMUP) {
+            throw new RuntimeException("transaction count should be at least COOLDOWN+WARMUP");
+        }
 
         LOGGER.log(Level.INFO, MessageFormat.format("Using clientId = {0}",
                     clientId));
@@ -64,7 +72,7 @@ public class LoaderClient {
         int source = clientId;
         int destination = 0;
         int amount = 1;
-        long start, end, globalStart, globalEnd;
+        long start, end, globalStart = 0, globalEnd = 0;
         double latency, throughput, duration;
 
         String sourcePublicKey = configs[source].getPublicKey();
@@ -72,8 +80,11 @@ public class LoaderClient {
 
         List<Double> latencies = new ArrayList<>();
 
-        globalStart = System.nanoTime();
         while (txCompleted < txCount) {
+            if (txCompleted == WARMUP) {
+                globalStart = System.nanoTime();
+            }
+
             LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
                     sourcePublicKey, destinationPublicKey, amount));
 
@@ -87,13 +98,18 @@ public class LoaderClient {
             } else {
                 latency = (end - start) / 1_000_000; // nanos to millis
                 System.out.println(MessageFormat.format("Transfer request sent. Slot: {0} - took {1} ms", slotOpt.get(), latency));
-                latencies.add(latency);
+                if (txCompleted >= WARMUP && txCompleted <= COOLDOWN) {
+                    latencies.add(latency);
+                }
             }
 
             txCompleted += 1;
+
+            if (txCompleted == txCount - COOLDOWN) {
+                globalEnd = System.nanoTime();
+            }
         }
 
-        globalEnd = System.nanoTime();
         duration = (globalEnd - globalStart) / 1_000_000_000; // nanos to millis
         double meanLatency = latencies.stream()
                               .mapToDouble(value -> (double) value)
