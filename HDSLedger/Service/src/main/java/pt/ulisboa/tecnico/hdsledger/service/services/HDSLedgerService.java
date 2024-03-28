@@ -75,7 +75,13 @@ public class HDSLedgerService implements UDPService {
 
         // check if the source public key is valid and corresponds to the client id
         // (entity can only transfer its own funds)
-        if (request.getSource() != clientId) {
+        if (request.getAmount() <= 0) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                        "{0} - Invalid amount from client {1}",
+                        config.getId(), message.getSenderId()));
+        }
+        else if (request.getSource() != clientId) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Source public key does not match client id {1}",
