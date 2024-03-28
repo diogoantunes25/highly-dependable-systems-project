@@ -580,6 +580,77 @@ public class HDSLedgerServiceTest {
 		
 	}
 
+	@Test
+	void HDSLedgerNegativeAmountTest(@TempDir Path tempDir) {
+		int n_Nodes = 4;
+		int basePortNode = 20600;
+		int n_Clients = 2;
+		int basePortClient = 30600;
+		int basePortHDS = 40600;
+		int clientId = n_Nodes; // must be greater than n-1
+		int clientId2 = n_Nodes+1; // must be greater than n-1
+		String clientHashPk = numberToId(clientId);
+		String clientHashPk2 = numberToId(clientId2);
+		int seq = 0;
+		int amount = -10;
+		int initial1 = 15;
+		int initial2 = 15;
+
+		Map<Integer, Deque<Boolean>> success = genSuccessMap(n_Nodes);
+
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n_Nodes, n_Clients, initial1);
+
+		Map<String, Integer> genesisBlock = new HashMap<>();
+		genesisBlock.put(clientHashPk, initial1);
+		genesisBlock.put(clientHashPk2, initial2);
+
+		// Setup node service
+		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
+		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
+		List<String> clientPks = defaultClientKeys(n_Nodes, n_Clients);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisFilePath);
+
+		// Setup ledger service and client links
+		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);
+		List<Link> ledgerLinks = linksFromConfigs(ledgerConfigs, LedgerMessage.class);
+		List<HDSLedgerService> HDSLedgerServices = setupHDSLedgerServices(n_Nodes, ledgerConfigs, ledgerLinks, nodeServices);
+
+		Link clientLink = ledgerLinks.get(clientId);
+
+		nodeServices.forEach(service -> service.listen());
+		HDSLedgerServices.forEach(service -> service.listen());
+
+		HDSLedgerServices.forEach(service -> {
+			final int id = service.getId();
+			ObserverAck observer = (cidOpt, seqNOpt, slotIdOpt) ->
+				success.get(id).add(!slotIdOpt.isEmpty());
+			service.registerObserver(observer);
+		});
+
+
+		for (int i = 0; i < n_Nodes; i++) {
+			LedgerMessage request = MessageCreator.createTransferRequest(seq, clientId, clientId2, amount);
+			clientLink.send(i, request);
+		}
+
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		HDSLedgerServices.forEach(service -> service.stopAndWait());
+
+
+		// Verifies no success in this transfer
+		for (int i = 0; i < n_Nodes; i++) {
+			Boolean success_value = success.get(i).removeFirst();
+			assertFalse(success_value);
+		}
+		
+	}
+
 
 	private class Confirmation {
 		int clientId;
