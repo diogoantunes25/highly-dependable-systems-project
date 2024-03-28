@@ -50,7 +50,7 @@ public class BankState implements State<BankCommand> {
     }
 
     public static boolean canExecute(Map<Integer, Integer> record, Map<Integer, HashSet<Integer>> executed, int seq, int from, int amount) {
-        return !executed.getOrDefault(from, new HashSet<>()).contains(seq) && record.getOrDefault(from, 0) >= amount;
+        return amount > 0 && !executed.getOrDefault(from, new HashSet<>()).contains(seq) && record.getOrDefault(from, 0) >= amount;
     }
 
     // checks command has not yet been executed and that source has enough funds
