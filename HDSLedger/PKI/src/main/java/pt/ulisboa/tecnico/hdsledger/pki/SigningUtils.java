@@ -12,7 +12,7 @@ import javax.crypto.*;
 public class SigningUtils {
     private static Map<String, String> memoizedHashes = new ConcurrentHashMap<>();
 
-    private static final boolean DUMMY = true;
+    private static final boolean DUMMY = false;
 
     public static String encrypt(byte[] data, String pathToPrivateKey)
         throws NoSuchAlgorithmException, InvalidKeySpecException, IOException,
