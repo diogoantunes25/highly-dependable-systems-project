@@ -19,11 +19,11 @@ public class BankCommand implements Command {
     private int clientId;
     private int seq;
 
-    private String source;
-    private String destination;
+    private int source;
+    private int destination;
     private int amount;
 
-    private String miner;
+    private int miner;
     private int fee;
 
     private String serializedProof;
@@ -38,20 +38,19 @@ public class BankCommand implements Command {
      * @param fee fee paid to the miner
      * @param proof message proving that transfer was requested by the source
      */
-    public BankCommand(int clientId, int seq, String source, String destination, int amount, String miner, int fee, LedgerMessage proof) {
+    public BankCommand(int clientId, int seq, int source, int destination, int amount, int miner, int fee, LedgerMessage proof) {
 
         TransferRequest transferRequest = proof.deserializeTransferRequest();
-        String messageSource = SigningUtils.publicKeyHash(transferRequest.getSourcePublicKey());
-        String messageDestination = SigningUtils.publicKeyHash(transferRequest.getDestinationPublicKey());
+        int messageSource = transferRequest.getSource();
+        int messageDestination = transferRequest.getDestination();
 
         if (seq != proof.getSequenceNumber() &&
-                !source.equals(messageSource) &&
-                !destination.equals(messageDestination) &&
+                source != messageSource &&
+                destination != messageDestination &&
                 amount != transferRequest.getAmount()) {
             // TODO: move to HDSLedgerException
             throw new RuntimeException("Bad command provided - proof is not consistent with values provided");
         }
-
         this.clientId = clientId;
         this.seq = seq;
         this.source = source;
@@ -77,13 +76,13 @@ public class BankCommand implements Command {
 
     public int getSeq() { return this.seq; }
 
-    public String getSource() { return this.source; }
+    public int getSource() { return this.source; }
 
-    public String getDestination() { return this.destination; }
+    public int getDestination() { return this.destination; }
     
     public int getAmount() { return this.amount; }
 
-    public String getMiner() { return this.miner; }
+    public int getMiner() { return this.miner; }
 
     public int getFee() { return this.fee; }
 
@@ -94,15 +93,15 @@ public class BankCommand implements Command {
     /* Default method for equality */ 
     public boolean equalsWithoutProofAndFee(BankCommand other) {
         return (this.seq == other.getSeq()) &&
-            (this.source.equals(other.getSource())) &&
-            (this.destination.equals(other.getDestination())) &&
+            (this.source == other.getSource()) &&
+            (this.destination == other.getDestination()) &&
             (this.amount == other.getAmount());
     }
 
     /* Default method for equality */ 
     public boolean equalsWithoutProof(BankCommand other) {
         return this.equalsWithoutProofAndFee(other) &&
-            this.miner.equals(other.miner) &&
+            this.miner == other.miner &&
             this.fee == other.fee;
     }
 

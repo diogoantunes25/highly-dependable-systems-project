@@ -26,15 +26,14 @@ public class BankState implements State<BankCommand> {
     private int ops;
 
     /* balance map */
-    private HashMap<String, Integer> balances;
+    private HashMap<Integer, Integer> balances;
 
-    // TODO (dsa): merkle tree type thing (it seems that this will grow quite a lot)?
     /* all transactions (include proofs) - required to ensure non-repudiation */
     private List<BankCommand> history;
 
     // executed commands for each client (ensures that there's no replay)
     // (`HashSet` is used to have clonable set)
-    private Map<String, HashSet<Integer>> executed;
+    private Map<Integer, HashSet<Integer>> executed;
 
     public BankState() {
         this.balances = new HashMap<>();
@@ -46,11 +45,11 @@ public class BankState implements State<BankCommand> {
     // Used to bootstrap the system
     // Should not be used after system boots
     // @param owner identification of owner
-    public void spawnMoney(String owner, int amount) {
+    public void spawnMoney(int owner, int amount) {
         balances.put(owner, balances.getOrDefault(owner, 0) + amount);
     }
 
-    public static boolean canExecute(Map<String, Integer> record, Map<String, HashSet<Integer>> executed, int seq, String from, int amount) {
+    public static boolean canExecute(Map<Integer, Integer> record, Map<Integer, HashSet<Integer>> executed, int seq, int from, int amount) {
         return !executed.getOrDefault(from, new HashSet<>()).contains(seq) && record.getOrDefault(from, 0) >= amount;
     }
 
@@ -66,7 +65,7 @@ public class BankState implements State<BankCommand> {
         cmds.getCommands().forEach(this::forceUpdate);
     }
 
-    private static void transfer(Map<String, Integer> record, String from, String to, int amount) {
+    private static void transfer(Map<Integer, Integer> record, int from, int to, int amount) {
         record.put(from, record.getOrDefault(from, 0) - amount);
         record.put(to, record.getOrDefault(to, 0) + amount);
     }
@@ -104,9 +103,9 @@ public class BankState implements State<BankCommand> {
         List<BankCommand> invalid = new ArrayList<>();
 
         // Deep copy of balances and executed
-        Map<String, Integer> balancesClone = (HashMap<String, Integer>) this.balances.clone();
-        Map<String, HashSet<Integer>> executedClone = new HashMap<>();
-        for (String client: executed.keySet()) {
+        Map<Integer, Integer> balancesClone = (HashMap<Integer, Integer>) this.balances.clone();
+        Map<Integer, HashSet<Integer>> executedClone = new HashMap<>();
+        for (int client: executed.keySet()) {
             executedClone.put(client, (HashSet<Integer>) executed.get(client).clone());
         }
 
@@ -160,13 +159,13 @@ public class BankState implements State<BankCommand> {
     }
 
     // returns balance for given id
-    public int getBalance(String id) {
+    public int getBalance(int id) {
         return this.balances.get(id);
     }
 
     // returns copy of current state
-    public Map<String, Integer> getState() {
-        return (HashMap<String, Integer>) this.balances.clone();
+    public Map<Integer, Integer> getState() {
+        return (HashMap<Integer, Integer>) this.balances.clone();
     }
 
     public String toString() {

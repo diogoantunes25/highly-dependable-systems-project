@@ -68,9 +68,9 @@ public class ClientStub {
         return ledgerMessage;
     }
 
-    public Optional<Integer> transfer(String sourcePublicKey, String destinationPublicKey, int amount) {
+    public Optional<Integer> transfer(int source, int destination, int amount) {
         int currentRequestId = this.requestId++; // nonce
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        TransferRequest transferRequest = new TransferRequest(source, destination, amount);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
         request.signSelf(this.config.getPrivateKey());
         LOGGER.log(Level.INFO, "Sending transfer request: " + new Gson().toJson(request));
@@ -78,9 +78,9 @@ public class ClientStub {
         return sendRequest(request);
     }
 
-    public Optional<Integer> checkBalance(String publicKey) {
+    public Optional<Integer> checkBalance(int id) {
         int currentRequestId = this.requestId++; // nonce
-        BalanceRequest balanceRequest = new BalanceRequest(currentRequestId, publicKey);
+        BalanceRequest balanceRequest = new BalanceRequest(currentRequestId, id);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         LOGGER.log(Level.INFO, "Sending balance request: " + new Gson().toJson(request));
 

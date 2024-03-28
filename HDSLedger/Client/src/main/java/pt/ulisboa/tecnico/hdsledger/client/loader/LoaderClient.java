@@ -75,9 +75,6 @@ public class LoaderClient {
         long start, end, globalStart = 0, globalEnd = 0;
         double latency, throughput, duration;
 
-        String sourcePublicKey = configs[source].getPublicKey();
-        String destinationPublicKey = configs[destination].getPublicKey();
-
         List<Double> latencies = new ArrayList<>();
 
         while (txCompleted < txCount) {
@@ -86,10 +83,10 @@ public class LoaderClient {
             }
 
             LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
-                    sourcePublicKey, destinationPublicKey, amount));
+                    source, destination, amount));
 
             start = System.nanoTime();
-            Optional<Integer> slotOpt = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
+            Optional<Integer> slotOpt = stub.transfer(source, destination, amount);
             end = System.nanoTime();
 
             if (slotOpt.isEmpty()) {

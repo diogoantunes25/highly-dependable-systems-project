@@ -44,7 +44,7 @@ public class BankStateTest {
 	}
 
 	// Returns hash of public key with id i
-	private static String numberToId(int i) {
+	private static String numberTo(int i) {
 		return SigningUtils.publicKeyHash(String.format("/tmp/pub_%d.key", i));
 	}
 
@@ -53,31 +53,29 @@ public class BankStateTest {
 		BankState state = new BankState();
 
 		int source = 4; // client
-		String sourceId = numberToId(source);
 
 		int destination = 3; // a replica
-		String destinationId = numberToId(destination);
 
 		int amount = 5;
 		int seq = 1;
 
 		System.out.println(state);
 
-		state.spawnMoney(sourceId, amount);
+		state.spawnMoney(source, amount);
 
 		System.out.println(state);
 
 		LedgerMessage request = MessageCreator.createTransferRequest(seq, source, destination, amount);
-		BankCommand cmd = new BankCommand(source, seq, sourceId, destinationId, amount, sourceId, 0, request); 
+		BankCommand cmd = new BankCommand(source, seq, source, destination, amount, source, 0, request); 
 
 		assertEquals(Optional.of(1), state.update(cmd));
 
 		System.out.println(state);
 
-		Map<String, Integer> balances = state.getState();
+		Map<Integer, Integer> balances = state.getState();
 
-		assertEquals(0, balances.get(sourceId));
-		assertEquals(amount, balances.get(destinationId));
+		assertEquals(0, balances.get(source));
+		assertEquals(amount, balances.get(destination));
 		
 	}
 
@@ -86,25 +84,23 @@ public class BankStateTest {
 		BankState state = new BankState();
 
 		int A = 4;
-		String AId = numberToId(A);
 
 		int B = 3;
-		String BId = numberToId(B);
 
 		System.out.println(state);
 
-		state.spawnMoney(AId, 10);
+		state.spawnMoney(A, 10);
 
 		System.out.println(state);
 
 		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
-		BankCommand cmd1 = new BankCommand(A, 1, AId, BId, 5, AId, 0, request1); 
+		BankCommand cmd1 = new BankCommand(A, 1, A, B, 5, A, 0, request1); 
 
 		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 4);
-		BankCommand cmd2 = new BankCommand(A, 2, AId, BId, 4, AId, 0, request2); 
+		BankCommand cmd2 = new BankCommand(A, 2, A, B, 4, A, 0, request2); 
 
 		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
-		BankCommand cmd3 = new BankCommand(A, 1, BId, AId, 3, AId, 0, request3); 
+		BankCommand cmd3 = new BankCommand(A, 1, B, A, 3, A, 0, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
 		System.out.println(state);
@@ -115,10 +111,10 @@ public class BankStateTest {
 		assertEquals(Optional.of(3), state.update(cmd3));
 		System.out.println(state);
 
-		Map<String, Integer> balances = state.getState();
+		Map<Integer, Integer> balances = state.getState();
 
-		assertEquals(4, balances.get(AId));
-		assertEquals(6, balances.get(BId));
+		assertEquals(4, balances.get(A));
+		assertEquals(6, balances.get(B));
 	}
 
 	@Test
@@ -126,25 +122,23 @@ public class BankStateTest {
 		BankState state = new BankState();
 
 		int A = 4;
-		String AId = numberToId(A);
 
 		int B = 3;
-		String BId = numberToId(B);
 
 		System.out.println(state);
 
-		state.spawnMoney(AId, 10);
+		state.spawnMoney(A, 10);
 
 		System.out.println(state);
 
 		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
-		BankCommand cmd1 = new BankCommand(A, 1, AId, BId, 5, AId, 0, request1); 
+		BankCommand cmd1 = new BankCommand(A, 1, A, B, 5, A, 0, request1); 
 
 		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 6);
-		BankCommand cmd2 = new BankCommand(A, 2, AId, BId, 6, AId, 0, request2); 
+		BankCommand cmd2 = new BankCommand(A, 2, A, B, 6, A, 0, request2); 
 
 		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
-		BankCommand cmd3 = new BankCommand(B, 1, BId, AId, 3, AId, 0, request3); 
+		BankCommand cmd3 = new BankCommand(B, 1, B, A, 3, A, 0, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
 		System.out.println(state);
@@ -155,10 +149,10 @@ public class BankStateTest {
 		assertEquals(Optional.of(2), state.update(cmd3));
 		System.out.println(state);
 
-		Map<String, Integer> balances = state.getState();
+		Map<Integer, Integer> balances = state.getState();
 
-		assertEquals(8, balances.get(AId));
-		assertEquals(2, balances.get(BId));
+		assertEquals(8, balances.get(A));
+		assertEquals(2, balances.get(B));
 		
 	}
 
@@ -167,25 +161,23 @@ public class BankStateTest {
 		BankState state = new BankState();
 
 		int A = 4;
-		String AId = numberToId(A);
 
 		int B = 3;
-		String BId = numberToId(B);
 
 		System.out.println(state);
 
-		state.spawnMoney(AId, 10);
+		state.spawnMoney(A, 10);
 
 		System.out.println(state);
 
 		LedgerMessage request1 = MessageCreator.createTransferRequest(1, A, B, 5);
-		BankCommand cmd1 = new BankCommand(A, 1, AId, BId, 5, AId, 0, request1); 
+		BankCommand cmd1 = new BankCommand(A, 1, A, B, 5, A, 0, request1); 
 
 		LedgerMessage request2 = MessageCreator.createTransferRequest(2, A, B, 4);
-		BankCommand cmd2 = new BankCommand(A, 2, AId, BId, 4, AId, 0, request2); 
+		BankCommand cmd2 = new BankCommand(A, 2, A, B, 4, A, 0, request2); 
 
 		LedgerMessage request3 = MessageCreator.createTransferRequest(1, B, A, 3);
-		BankCommand cmd3 = new BankCommand(B, 1, BId, AId, 3, AId, 0, request3); 
+		BankCommand cmd3 = new BankCommand(B, 1, B, A, 3, A, 0, request3); 
 
 		assertEquals(Optional.of(1), state.update(cmd1));
 		System.out.println(state);
@@ -199,9 +191,9 @@ public class BankStateTest {
 		assertEquals(Optional.of(3), state.update(cmd3));
 		System.out.println(state);
 
-		Map<String, Integer> balances = state.getState();
+		Map<Integer, Integer> balances = state.getState();
 
-		assertEquals(4, balances.get(AId));
-		assertEquals(6, balances.get(BId));
+		assertEquals(4, balances.get(A));
+		assertEquals(6, balances.get(B));
 	}
 }

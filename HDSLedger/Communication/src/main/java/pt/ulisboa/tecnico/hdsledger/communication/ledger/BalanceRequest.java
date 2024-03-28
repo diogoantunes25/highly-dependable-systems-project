@@ -1,13 +1,13 @@
 package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 
 public class BalanceRequest {
-    private String sourcePublicKey;
+    private int source;
 
     // sequence number
     private int seq;
 
-    public BalanceRequest(int seq, String sourcePublicKey) {
-        this.sourcePublicKey = sourcePublicKey;
+    public BalanceRequest(int seq, int source) {
+        this.source = source;
         this.seq = seq;
     }
 
@@ -15,11 +15,7 @@ public class BalanceRequest {
         return this.seq;
     }
 
-    public String getSourcePublicKey() {
-        return sourcePublicKey;
-    }
-
-    public void setSourcePublicKey(String sourcePublicKey) {
-        this.sourcePublicKey = sourcePublicKey;
+    public int getSource() {
+        return source;
     }
 }

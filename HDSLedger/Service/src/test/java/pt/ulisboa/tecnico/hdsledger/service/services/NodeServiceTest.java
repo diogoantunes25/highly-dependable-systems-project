@@ -190,7 +190,7 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(clientId, seq, clientPk, clientPk2, amount, proof));
+		services.forEach(service -> service.startConsensus(clientId, seq, clientId, clientId2, amount, proof));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -258,8 +258,8 @@ public class NodeServiceTest {
 			service.registerObserver(observer);
 		});
 
-		services.forEach(service -> service.startConsensus(clientId, seq1, clientPk, clientPk2, amount1, proof1));
-		services.forEach(service -> service.startConsensus(clientId, seq2, clientPk, clientPk2, amount2, proof2));
+		services.forEach(service -> service.startConsensus(clientId, seq1, clientId, clientId2, amount1, proof1));
+		services.forEach(service -> service.startConsensus(clientId, seq2, clientId, clientId2, amount2, proof2));
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness
@@ -335,11 +335,11 @@ public class NodeServiceTest {
 
 		services.forEach(service -> {
 			if (service.getId() < n/2) {
-				service.startConsensus(clientId, seq1, clientPk, clientPk2, amount1, proof1);
-				service.startConsensus(clientId, seq2, clientPk, clientPk2, amount2, proof2);
+				service.startConsensus(clientId, seq1, clientId, clientId2, amount1, proof1);
+				service.startConsensus(clientId, seq2, clientId, clientId2, amount2, proof2);
 			} else {
-				service.startConsensus(clientId, seq2, clientPk, clientPk2, amount2, proof2);
-				service.startConsensus(clientId, seq1, clientPk, clientPk2, amount1, proof1);
+				service.startConsensus(clientId, seq2, clientId, clientId2, amount2, proof2);
+				service.startConsensus(clientId, seq1, clientId, clientId2, amount1, proof1);
 			}
 		});
 
@@ -415,11 +415,11 @@ public class NodeServiceTest {
 		});
 
 		services.forEach(service -> {
-			if (service.getId() != 0) service.startConsensus(clientId, seq1, clientPk, clientPk2, amount1, proof1);
+			if (service.getId() != 0) service.startConsensus(clientId, seq1, clientId, clientId2, amount1, proof1);
 		});
 
 		services.forEach(service -> {
-			if (service.getId() != 0) service.startConsensus(clientId, seq2, clientPk, clientPk2, amount2, proof2);
+			if (service.getId() != 0) service.startConsensus(clientId, seq2, clientId, clientId2, amount2, proof2);
 		});
 
 		// FIXME (dsa): don't like this, but don't know how to do check
@@ -430,8 +430,8 @@ public class NodeServiceTest {
 			e.printStackTrace();
 		}
 
-		services.get(0).startConsensus(clientId, seq2, clientPk, clientPk2, amount2, proof2);
-		services.get(0).startConsensus(clientId, seq1, clientPk, clientPk2, amount1, proof1);
+		services.get(0).startConsensus(clientId, seq2, clientId, clientId2, amount2, proof2);
+		services.get(0).startConsensus(clientId, seq1, clientId, clientId2, amount1, proof1);
 
 		// FIXME (dsa): don't like this, but don't know how to do check
 		// without assuming stuff about some correctness

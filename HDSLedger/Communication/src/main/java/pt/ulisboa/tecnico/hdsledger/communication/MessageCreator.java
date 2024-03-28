@@ -52,9 +52,9 @@ public class MessageCreator {
 
     public static LedgerMessage createTransferRequest(int requestId, int source, int destination, int amount) {
         // TODO: make this consistent with the way this was done before
-        String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
-        String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        // String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
+        // String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
+        TransferRequest transferRequest = new TransferRequest(source, destination, amount);
 
         LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.TRANSFER_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(transferRequest));

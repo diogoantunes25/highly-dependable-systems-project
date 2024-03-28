@@ -92,7 +92,7 @@ public class Client {
 
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending transfer request from {0} to {1} with amount {2}",
                             sourcePublicKey, destinationPublicKey, amount));
-                    Optional<Integer> slotOpt = stub.transfer(sourcePublicKey, destinationPublicKey, amount);
+                    Optional<Integer> slotOpt = stub.transfer(source, destination, amount);
                     if (slotOpt.isEmpty()) {
                         System.out.println("Transfer failed.");
                     } else {
@@ -106,12 +106,11 @@ public class Client {
                         break;
                     }
                     int client = Integer.parseInt(tokens[1]);
-                    String publicKey = configs[client].getPublicKey();
                     LOGGER.log(Level.INFO, MessageFormat.format("Sending check balance request for {0}",
                                 client));
-                    Optional<Integer> balanceOpt = stub.checkBalance(publicKey);
+                    Optional<Integer> balanceOpt = stub.checkBalance(client);
                     if (balanceOpt.isPresent()) {
-                        System.out.println(MessageFormat.format("Balance for {0} is {1}", publicKey, balanceOpt.get()));
+                        System.out.println(MessageFormat.format("Balance for {0} is {1}", client, balanceOpt.get()));
                     } else {
                         System.out.println("Balance check failed.");
                     }

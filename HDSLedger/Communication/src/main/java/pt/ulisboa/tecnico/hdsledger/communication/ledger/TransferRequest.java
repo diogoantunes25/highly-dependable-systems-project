@@ -2,36 +2,28 @@ package pt.ulisboa.tecnico.hdsledger.communication.ledger;
 
 public class TransferRequest {
 
-    private String sourcePublicKey;
+    private int source;
 
-    private String destinationPublicKey;
+    private int destination;
 
     private int amount;
 
-    public TransferRequest(String sourcePublicKey, String destinationPublicKey, int amount) {
-        this.sourcePublicKey = sourcePublicKey;
-        this.destinationPublicKey = destinationPublicKey;
+    public TransferRequest(int source, int destination, int amount) {
+        this.source = source;
+        this.destination = destination;
         this.amount = amount;
     }
 
-    public String getSourcePublicKey() {
-        return sourcePublicKey;
+    public int getSource() {
+        return source;
     }
 
-    public String getDestinationPublicKey() {
-        return destinationPublicKey;
+    public int getDestination() {
+        return destination;
     }
 
     public int getAmount() {
         return amount;
-    }
-
-    public void setSourcePublicKey(String sourcePublicKey) {
-        this.sourcePublicKey = sourcePublicKey;
-    }
-
-    public void setDestinationPublicKey(String destinationPublicKey) {
-        this.destinationPublicKey = destinationPublicKey;
     }
 
     public void setAmount(int amount) {

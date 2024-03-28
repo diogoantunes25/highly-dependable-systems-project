@@ -79,9 +79,6 @@ public class NodeService implements UDPService {
     // My configuration
     private final ProcessConfig config;
 
-    // Hash of my public key
-    private final String myHash;
-    
     // Link to communicate with nodes
     private final Link link;
 
@@ -131,6 +128,9 @@ public class NodeService implements UDPService {
     // coming out from consensus). slot is empty is the command failed
     Map<BankCommand, Slot<BankCommand>> history = new ConcurrentHashMap<>();
 
+    // Reverse lookup of ids given hash of public key
+    Map<String, Integer> idLookUp;
+
     public NodeService(Link link, ProcessConfig config,
                        ProcessConfig[] nodesConfig, List<String> clientPks, String genesisFilePath) {
         this.link = link;
@@ -138,9 +138,8 @@ public class NodeService implements UDPService {
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
         this.allKeys = getAllKeys(nodesConfig, clientPks);
-        this.myHash = SigningUtils.publicKeyHash(this.allKeys.get(this.config.getId()));
 
-        Map<String, Integer> initalBalances = loadGenesisFromFile(genesisFilePath, this.allKeys);
+        Map<Integer, Integer> initalBalances = loadGenesisFromFile(genesisFilePath);
         genesis(initalBalances);
     }
 
@@ -160,22 +159,17 @@ public class NodeService implements UDPService {
         return this.config;
     }
 
-    public Map<String, Integer> getLedger() {
-        return this.ledger.getState();
-    }
-
-    private Map<String, Integer> loadGenesisFromFile(String filename, List<String> pks) {
+    private Map<Integer, Integer> loadGenesisFromFile(String filename) {
         try (InputStreamReader reader = new FileReader(filename)) {
             Gson gson = new Gson();
             JsonArray array = gson.fromJson(reader, JsonArray.class);
 
-            Map<String, Integer> initialBalances = new HashMap<>();
+            Map<Integer, Integer> initialBalances = new HashMap<>();
             for (JsonElement element: array) {
                 JsonObject obj = element.getAsJsonObject();
                 int clientId = obj.get("id").getAsInt();
-                String clientHash = SigningUtils.publicKeyHash(pks.get(clientId));
                 int balance = obj.get("balance").getAsInt();
-                initialBalances.put(clientHash, balance);
+                initialBalances.put(clientId, balance);
             }
 
             return initialBalances;
@@ -187,8 +181,8 @@ public class NodeService implements UDPService {
     /**
      * Initializes state.
      */
-    void genesis(Map<String, Integer> initialBalances) {
-        for (Map.Entry<String,Integer> entry: initialBalances.entrySet()) {
+    void genesis(Map<Integer, Integer> initialBalances) {
+        for (Map.Entry<Integer,Integer> entry: initialBalances.entrySet()) {
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Spawning money: {1} added to {2}",
                 config.getId(), entry.getValue(), entry.getKey()));
             this.ledger.spawnMoney(entry.getKey(), entry.getValue());
@@ -310,13 +304,9 @@ public class NodeService implements UDPService {
      * @param amount amount of funds to transfer
      * @param proof message proving that transfer was requested by the source
      */
-    public void startConsensus(int clientId, int seq, String sourcePublicKey, String destinationPublicKey, int amount, LedgerMessage proof) {
-
-        String sourceId = SigningUtils.publicKeyHash(sourcePublicKey);
-        String destinationId = SigningUtils.publicKeyHash(destinationPublicKey);
-
+    public void startConsensus(int clientId, int seq, int source, int destination, int amount, LedgerMessage proof) {
         // note: add must be used instead of put as it's non-blocking
-        inputs.add(new BankCommand(clientId, seq, sourceId, destinationId, amount, myHash, DEFAULT_FEE, proof));
+        inputs.add(new BankCommand(clientId, seq, source, destination, amount, this.config.getId(), DEFAULT_FEE, proof));
     }
 
     /**
@@ -324,8 +314,7 @@ public class NodeService implements UDPService {
      * Assumes clearance was already verified
      */
     public synchronized int getBalance(int clientId) {
-        String hashValue = SigningUtils.publicKeyHash(this.allKeys.get(clientId));
-        return this.ledger.getBalance(hashValue);
+        return this.ledger.getBalance(clientId);
     }
 
     /**
@@ -378,6 +367,12 @@ public class NodeService implements UDPService {
         this.observers.add(observer);
     }
 
+    public Map<String, Integer> getLedger() {
+        Map<String, Integer> map = new HashMap<>();
+        this.ledger.getState().forEach((id, bal) -> map.put(SigningUtils.publicKeyHash(this.allKeys.get(id)), bal));
+        return map;
+    }
+
     /**
      * Updates state and returns slot position for value
      * Non thread-safe.
@@ -387,7 +382,7 @@ public class NodeService implements UDPService {
         
         if (slotIdOpt.isPresent()) {
             StringBuilder stringBuilder = new StringBuilder();
-            for (Map.Entry<String, Integer> entry : ledger.getState().entrySet()) {
+            for (Map.Entry<Integer, Integer> entry : ledger.getState().entrySet()) {
                 stringBuilder.append("\t").append(entry.getKey()).append(": ").append(entry.getValue()).append(", ");
             }
 

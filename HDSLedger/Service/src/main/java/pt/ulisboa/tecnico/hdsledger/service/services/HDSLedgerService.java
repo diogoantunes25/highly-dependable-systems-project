@@ -61,12 +61,13 @@ public class HDSLedgerService implements UDPService {
 
         // check if the source public key is valid and corresponds to the client id
         // (entity can only transfer its own funds)
-        if (!request.getSourcePublicKey().equals(others[clientId].getPublicKey())) {
+        if (request.getSource() != clientId) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                         "{0} - Source public key does not match client id {1}",
                         config.getId(), message.getSenderId()));
         }
+        
         // check if the signature is consistent
         else if (!message.checkConsistentSig(others[clientId].getPublicKey())) {
             LOGGER.log(Level.INFO,
@@ -74,7 +75,7 @@ public class HDSLedgerService implements UDPService {
                         "{0} - Bad signature from client {1}",
                         config.getId(), message.getSenderId()));
         } else {
-            nodeService.startConsensus(clientId, sequenceNumber, request.getSourcePublicKey(), request.getDestinationPublicKey(), request.getAmount(), message);
+            nodeService.startConsensus(clientId, sequenceNumber, request.getSource(), request.getDestination(), request.getAmount(), message);
             return;
         }
 
@@ -89,7 +90,7 @@ public class HDSLedgerService implements UDPService {
         int clientId = message.getSenderId();
 
         // check if the public key is valid and corresponds to the client id
-        if (!balanceRequest.getSourcePublicKey().equals(others[clientId].getPublicKey())) {
+        if (balanceRequest.getSource() != clientId) {
             // TODO (dgm): think about this verification
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
