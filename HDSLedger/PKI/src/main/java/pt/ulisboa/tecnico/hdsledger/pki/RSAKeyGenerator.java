@@ -9,10 +9,14 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.logging.Level;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RSAKeyGenerator {
 
     private static final CustomLogger LOGGER = new CustomLogger(RSAKeyGenerator.class.getName());
+
+    private static Map<String, Key> memoizedKeys = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws Exception {
 
@@ -74,6 +78,10 @@ public class RSAKeyGenerator {
     }
 
     public static Key read(String keyPath, String type) throws IOException, NoSuchAlgorithmException, InvalidKeySpecException {
+        if (memoizedKeys.containsKey(keyPath)) {
+            return memoizedKeys.get(keyPath);
+        }
+
         LOGGER.log(Level.INFO, "Reading key from '" + keyPath + "' ..." );
         byte[] encoded;
         try (FileInputStream fis = new FileInputStream(keyPath)) {
@@ -83,10 +91,15 @@ public class RSAKeyGenerator {
         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
         if (type.equals("pub") ){
             X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);
-            return keyFactory.generatePublic(keySpec);
+            Key key = keyFactory.generatePublic(keySpec);
+            memoizedKeys.put(keyPath, key);
+            return key;
         }
 
         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(encoded);
-        return keyFactory.generatePrivate(keySpec);
+        Key key = keyFactory.generatePrivate(keySpec);
+        memoizedKeys.put(keyPath, key);
+
+        return key;
     }
 }
