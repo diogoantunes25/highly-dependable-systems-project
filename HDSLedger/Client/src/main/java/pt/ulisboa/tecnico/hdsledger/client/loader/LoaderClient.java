@@ -113,7 +113,7 @@ public class LoaderClient {
                               .average()
                               .orElse(0);
 
-        throughput = txCompleted / duration;
+        throughput = latencies.size() / duration;
 
         System.out.println(MessageFormat.format("Finished load - took {0,number,#.####} seconds", duration));
         System.out.println(MessageFormat.format("Mean Latency: {0,number,#.####} ms", meanLatency));
