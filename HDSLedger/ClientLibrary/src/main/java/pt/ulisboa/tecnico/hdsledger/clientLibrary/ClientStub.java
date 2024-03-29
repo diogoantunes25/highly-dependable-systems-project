@@ -69,7 +69,7 @@ public class ClientStub {
     }
 
     public Optional<Integer> transfer(int source, int destination, int amount) {
-        int currentRequestId = this.requestId++; // nonce
+        int currentRequestId = ++this.requestId; // nonce
         TransferRequest transferRequest = new TransferRequest(source, destination, amount);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.TRANSFER_REQUEST, new Gson().toJson(transferRequest), currentRequestId);
         request.signSelf(this.config.getPrivateKey());
@@ -79,7 +79,7 @@ public class ClientStub {
     }
 
     public Optional<Integer> checkBalance(int id) {
-        int currentRequestId = this.requestId++; // nonce
+        int currentRequestId = ++this.requestId; // nonce
         BalanceRequest balanceRequest = new BalanceRequest(currentRequestId, id);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         LOGGER.log(Level.INFO, "Sending balance request: " + new Gson().toJson(request));
@@ -121,6 +121,11 @@ public class ClientStub {
         LOGGER.log(Level.INFO, "Received Transfer reply");
         TransferReply transferReply = message.deserializeTransferReply();
 
+        if (transferReply.getSequenceNumber() != this.requestId) {
+            LOGGER.log(Level.INFO, "Stale message received. Dropping");
+            return;
+        }
+
         if (transferReply.getSlot().isPresent()) {
             LOGGER.log(Level.INFO, "Response registered");
         } else {
@@ -133,6 +138,12 @@ public class ClientStub {
     public void handleBalanceReply(LedgerMessage message) {
         LOGGER.log(Level.INFO, "Received Balance reply");
         BalanceReply balanceReply = message.deserializeBalanceReply();
+
+        if (balanceReply.getSequenceNumber() != this.requestId) {
+            LOGGER.log(Level.INFO, "Stale message received. Dropping");
+            return;
+        }
+
         receivedMessages.addSlot(balanceReply.getValue(), message.getSenderId());
         LOGGER.log(Level.INFO, "Response registered");
     }
