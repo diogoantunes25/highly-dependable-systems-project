@@ -95,7 +95,7 @@ public class LoaderClient {
             } else {
                 latency = (end - start) / 1_000_000; // nanos to millis
                 System.out.println(MessageFormat.format("Transfer request sent. Slot: {0} - took {1} ms", slotOpt.get(), latency));
-                if (txCompleted >= WARMUP && txCompleted <= COOLDOWN) {
+                if (txCompleted >= WARMUP && txCompleted <= txCount - COOLDOWN) {
                     latencies.add(latency);
                 }
             }
@@ -107,7 +107,7 @@ public class LoaderClient {
             }
         }
 
-        duration = (globalEnd - globalStart) / 1_000_000_000; // nanos to millis
+        duration = (globalEnd - globalStart) / 1_000_000_000; // nanos to seconds
         double meanLatency = latencies.stream()
                               .mapToDouble(value -> (double) value)
                               .average()
