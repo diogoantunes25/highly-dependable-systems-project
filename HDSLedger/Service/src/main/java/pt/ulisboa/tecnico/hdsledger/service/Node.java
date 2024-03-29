@@ -30,6 +30,27 @@ public class Node {
             // Command line arguments
             int id = Integer.valueOf(args[0]);
 
+            NodeService.FaultType faultType = NodeService.FaultType.NONE;
+
+            // if args length then switch case of byzantine type. if not faultType = NONE
+            // Check the length of args to determine Byzantine type
+            if (args.length > 1) {
+                String byzantineType = args[1];
+                switch (byzantineType) {
+                    case "DELAY":
+                        faultType = NodeService.FaultType.DELAY;
+                        break;
+                    case "BADSIG":
+                        faultType = NodeService.FaultType.BADSIG;
+                        break;
+                    case "BOTH":
+                        faultType = NodeService.FaultType.BOTH;
+                    // Add more cases for different Byzantine types as needed
+                    default:
+                        throw new RuntimeException("Bad byzantine type");
+                }
+            }
+
             // Get all configs
             Pair<ProcessConfig[], ProcessConfig[]> configs = new ProcessConfigBuilder().fromFile(configPath);
             ProcessConfig[] nodesConfigs = configs.getKey();
@@ -59,7 +80,7 @@ public class Node {
             Link ledgerLink = new HMACLink(ledgerConfig, ledgerConfig.getPort(), ledgerConfigs,
                     LedgerMessage.class);
 
-            NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs, clientPks);
+            NodeService nodeService = new NodeService(nodeLink, nodeConfig, nodesConfigs, clientPks, faultType);
             HDSLedgerService hdsLedgerService = new HDSLedgerService(ledgerConfigs, ledgerLink, ledgerConfig, nodeService);
             
             nodeService.listen();

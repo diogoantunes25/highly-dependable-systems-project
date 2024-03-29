@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import javafx.util.Pair;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
 import pt.ulisboa.tecnico.hdsledger.consensus.Istanbul;
 import pt.ulisboa.tecnico.hdsledger.consensus.Timer;
 import pt.ulisboa.tecnico.hdsledger.consensus.SimpleTimer;
@@ -128,16 +129,21 @@ public class NodeService implements UDPService {
     // coming out from consensus). slot is empty is the command failed
     Map<BankCommand, Slot<BankCommand>> history = new ConcurrentHashMap<>();
 
-    // Reverse lookup of ids given hash of public key
-    Map<String, Integer> idLookUp;
+    // Enum for fault type
+    public enum FaultType {
+        NONE, DELAY, BADSIG, BOTH
+    }
+
+    private FaultType faultType = FaultType.NONE;
 
     public NodeService(Link link, ProcessConfig config,
-                       ProcessConfig[] nodesConfig, List<String> clientPks, String genesisFilePath) {
+                       ProcessConfig[] nodesConfig, List<String> clientPks, String genesisFilePath, FaultType type) {
         this.link = link;
         this.config = config;
         this.others = Arrays.asList(nodesConfig);
         this.clientPks = clientPks;
         this.allKeys = getAllKeys(nodesConfig, clientPks);
+        this.faultType = type;
 
         Map<Integer, Integer> initalBalances = loadGenesisFromFile(genesisFilePath);
         genesis(initalBalances);
@@ -145,7 +151,12 @@ public class NodeService implements UDPService {
 
     public NodeService(Link link, ProcessConfig config,
             ProcessConfig[] nodesConfig, List<String> clientPks) {
-        this(link, config, nodesConfig, clientPks, DEFAULT_GENESIS_FILE);
+        this(link, config, nodesConfig, clientPks, DEFAULT_GENESIS_FILE, FaultType.NONE);
+    }
+
+    public NodeService(Link link, ProcessConfig config,
+                       ProcessConfig[] nodesConfig, List<String> clientPks, FaultType type) {
+        this(link, config, nodesConfig, clientPks, DEFAULT_GENESIS_FILE, type);
     }
 
     public List<String> getAllKeys(ProcessConfig[] nodesConfig, List<String> clientPks) {
@@ -270,6 +281,11 @@ public class NodeService implements UDPService {
         // Input into state machine
         List<ConsensusMessage> output = instance.start(value);
 
+        // delay decision if replica is byzantine
+        if (this.faultType.equals(FaultType.DELAY) || this.faultType.equals(FaultType.BOTH)) {
+            byzWait();
+        }
+
         // Dispatch messages
         output.forEach(m -> link.send(m.getReceiver(), m));
 
@@ -291,6 +307,18 @@ public class NodeService implements UDPService {
         }
     }
 
+    private void byzWait() {
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - I am Byzantine, delaying accutaly inputting",
+                        config.getId()));
+        try {
+            Thread.sleep(Istanbul.INITIAL_TIMEOUT / 2);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /*
      * Start an instance of consensus for a cmd if one is not ongoing, otherwise
      * just queues input to be eventually added to state.
@@ -305,8 +333,25 @@ public class NodeService implements UDPService {
      * @param proof message proving that transfer was requested by the source
      */
     public void startConsensus(int clientId, int seq, int source, int destination, int amount, LedgerMessage proof) {
+        if (this.faultType.equals(FaultType.BADSIG) || this.faultType.equals(FaultType.BOTH)) {
+            proof = getFakeProof(clientId, seq, source, destination, amount);
+        }
         // note: add must be used instead of put as it's non-blocking
         inputs.add(new BankCommand(clientId, seq, source, destination, amount, this.config.getId(), DEFAULT_FEE, proof));
+    }
+
+    // Creates message sign by current replica
+    private LedgerMessage getFakeProof(int clientId, int seq, int source, int destination, int amount) {
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - I am Byzantine and I am faking proof",
+                        config.getId()));
+        TransferRequest transferRequest = new TransferRequest(source, destination, amount);
+        LedgerMessage ledgerMessage = new LedgerMessage(clientId, Message.Type.TRANSFER_REQUEST);
+        ledgerMessage.setSequenceNumber(seq);
+        ledgerMessage.setMessage(new Gson().toJson(transferRequest));
+        ledgerMessage.signSelf(this.config.getPrivateKey());
+        return ledgerMessage;
     }
 
     /**

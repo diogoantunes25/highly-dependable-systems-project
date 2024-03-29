@@ -50,17 +50,6 @@ public class ClientStub {
         this.receivedMessages = new ReceivedMessages(n);
     }
 
-    private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
-        AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
-
-        AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
-
-        message.setMessage(new Gson().toJson(appendRequest));
-        message.signSelf(this.config.getPrivateKey());
-
-        return message;
-    }
-
     private LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequenceNumber) {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
         ledgerMessage.setSequenceNumber(sequenceNumber);

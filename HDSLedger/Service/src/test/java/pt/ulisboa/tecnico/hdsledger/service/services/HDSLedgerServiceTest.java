@@ -117,7 +117,7 @@ public class HDSLedgerServiceTest {
 		for (int i = 0; i < n; i++) {
 			ProcessConfig config = configs.get(i);
 			Link link = links.get(i);
-			services.add(new NodeService(link, config, configsArray, clientPks, genesisFilePath));
+			services.add(new NodeService(link, config, configsArray, clientPks, genesisFilePath, NodeService.FaultType.NONE));
 		}
 
 		return services;
