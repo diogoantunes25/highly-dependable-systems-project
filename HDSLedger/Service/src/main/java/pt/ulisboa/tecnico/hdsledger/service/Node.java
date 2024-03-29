@@ -45,7 +45,7 @@ public class Node {
                         break;
                     case "BOTH":
                         faultType = NodeService.FaultType.BOTH;
-                    // Add more cases for different Byzantine types as needed
+                    	break;
                     default:
                         throw new RuntimeException("Bad byzantine type");
                 }
