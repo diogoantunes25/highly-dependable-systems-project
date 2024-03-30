@@ -50,17 +50,6 @@ public class ClientStub {
         this.receivedMessages = new ReceivedMessages(n);
     }
 
-    private AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
-        AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
-
-        AppendMessage message = new AppendMessage(id, Message.Type.APPEND_REQUEST, receiver);
-
-        message.setMessage(new Gson().toJson(appendRequest));
-        message.signSelf(this.config.getPrivateKey());
-
-        return message;
-    }
-
     private LedgerMessage createLedgerMessage(int id, Message.Type type, String message, int sequenceNumber) {
         LedgerMessage ledgerMessage = new LedgerMessage(id, type);
         ledgerMessage.setSequenceNumber(sequenceNumber);
@@ -80,7 +69,7 @@ public class ClientStub {
 
     public Optional<Integer> checkBalance(int id) {
         int currentRequestId = ++this.requestId; // nonce
-        BalanceRequest balanceRequest = new BalanceRequest(currentRequestId, id);
+        BalanceRequest balanceRequest = new BalanceRequest(id);
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         LOGGER.log(Level.INFO, "Sending balance request: " + new Gson().toJson(request));
 
