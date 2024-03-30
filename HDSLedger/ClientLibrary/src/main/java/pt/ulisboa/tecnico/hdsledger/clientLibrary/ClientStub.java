@@ -64,7 +64,7 @@ public class ClientStub {
         request.signSelf(this.config.getPrivateKey());
         LOGGER.log(Level.INFO, "Sending transfer request: " + new Gson().toJson(request));
 
-        return sendRequest(request);
+        return sendRequest(request, false);
     }
 
     public Optional<Integer> checkBalance(int id) {
@@ -73,20 +73,34 @@ public class ClientStub {
         LedgerMessage request = createLedgerMessage(config.getId(), Message.Type.BALANCE_REQUEST, new Gson().toJson(balanceRequest), currentRequestId);
         LOGGER.log(Level.INFO, "Sending balance request: " + new Gson().toJson(request));
 
-        return sendRequest(request);
+        return sendRequest(request, true);
     }
 
-    private Optional<Integer> sendRequest(LedgerMessage request) {
+    /**
+     * Sends request and waits for f+1 consistent replies.
+     * @param request request to send
+     * @param canDiverge wheter it's possible for f+1 consistent not to appear
+     */
+    private Optional<Integer> sendRequest(LedgerMessage request, boolean canDiverge) {
         IntStream.range(0, n).forEach(i -> this.link.send(i, request));
 
         receivedMessages = new ReceivedMessages(n);
 
         while (!receivedMessages.hasDecided()) {
             try {
-                // TODO (dsa): bad
+                if (receivedMessages.quorumReplied()) {
+                    if (canDiverge) {
+                        receivedMessages.resetRegistration();
+                        IntStream.range(0, n).forEach(i -> this.link.send(i, request));
+                    } else {
+                        // if among 2f+1 there's not f+1 consistent, that means
+                        // that correct replicas are disagreeing
+                        throw new RuntimeException("divergence found among correct replicas, where no divergence was expected");
+                    }
+                }
                 Thread.sleep(100);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
         }
 
@@ -171,8 +185,11 @@ public class ClientStub {
 
     // class that holds the received messages for each value
     private static class ReceivedMessages {
-        // value -> replica -> slot confirmed
+        // replica -> confirmed value
         private final Map<Integer, Optional<Integer>> slots = new HashMap<>();
+
+        // who replied since last reses
+        private Set<Integer> replied = new HashSet<>();
 
         private Optional<Optional<Integer>> decision = Optional.empty();
 
@@ -188,7 +205,8 @@ public class ClientStub {
         public synchronized void addSlot(Optional<Integer> slotId, int senderId) {
             LOGGER.log(Level.INFO, "Received slot " + slotId + " from " + senderId);
             slots.putIfAbsent(senderId, slotId);
-        
+            replied.add(senderId); 
+
             // Histogram
             Map<Optional<Integer>, Integer> histogram = new HashMap<>();
             slots.entrySet()
@@ -219,6 +237,14 @@ public class ClientStub {
             }
         }
 
+        public synchronized boolean quorumReplied() {
+            return replied.size() >= (2 * f + 1);
+        }
+
+        // Resets the accounting of who has replied
+        public synchronized void resetRegistration() {
+            this.replied = new HashSet<>();
+        }
 
         public synchronized boolean hasDecided() {
             return decision.isPresent();
