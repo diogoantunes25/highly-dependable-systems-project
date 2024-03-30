@@ -75,8 +75,7 @@ public class MessageCreator {
     
     public static LedgerMessage createBalanceRequest(int requestId, int source) {
         // TODO: make this consistent with the way this was done before
-        String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
-        BalanceRequest balanceRequest = new BalanceRequest(sourcePublicKey);
+        BalanceRequest balanceRequest = new BalanceRequest(source);
 
         LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.BALANCE_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(balanceRequest));

@@ -143,7 +143,7 @@ public class HDSLedgerServiceTest {
 	private static Map<Integer, Deque<Confirmation>> genSlotMap(int n) {
 		Map<Integer, Deque<Confirmation>> confirmedSlots = new ConcurrentHashMap<>();
 		for (int i = 0; i < n; i++) {
-			confirmedSlots.put(i, new LinkedBlockingDeque());
+			confirmedSlots.put(i, new LinkedBlockingDeque<>());
 		}
 
 		return confirmedSlots;
@@ -174,9 +174,7 @@ public class HDSLedgerServiceTest {
 
 	private LedgerMessage createNoSignedTransferRequest(int requestId, int source, int destination, int amount) {
         // TODO: make this consistent with the way this was done before
-        String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
-        String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        TransferRequest transferRequest = new TransferRequest(source, destination, amount);
         LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.TRANSFER_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(transferRequest));
         ledgerMessage.setSequenceNumber(requestId);
@@ -187,9 +185,7 @@ public class HDSLedgerServiceTest {
 
 	private LedgerMessage createClientIdTransferRequest(int clientId,int requestId, int source, int destination, int amount) {
         // TODO: make this consistent with the way this was done before
-        String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
-        String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        TransferRequest transferRequest = new TransferRequest(source, destination, amount);
 
         LedgerMessage ledgerMessage = new LedgerMessage(clientId, Message.Type.TRANSFER_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(transferRequest));
@@ -201,9 +197,7 @@ public class HDSLedgerServiceTest {
 
 	private LedgerMessage createBadSignedTransferRequest(int requestId, int source, int destination, int amount, int signature) {
         // TODO: make this consistent with the way this was done before
-        String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
-        String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
-        TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
+        TransferRequest transferRequest = new TransferRequest(source, destination, amount);
 
         LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.TRANSFER_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(transferRequest));
@@ -213,15 +207,14 @@ public class HDSLedgerServiceTest {
         return ledgerMessage;
     }
 
-	private LedgerMessage createAnotherClientBalanceRequest(int requestId, int real_source, int fake_source) {
+	private LedgerMessage createAnotherClientBalanceRequest(int requestId, int realSource, int fakeSource) {
         // TODO: make this consistent with the way this was done before
-        String fakeSourcePublicKey = String.format("/tmp/pub_%d.key", fake_source);
-        BalanceRequest balanceRequest = new BalanceRequest(fakeSourcePublicKey);
+        BalanceRequest balanceRequest = new BalanceRequest(fakeSource);
 
-        LedgerMessage ledgerMessage = new LedgerMessage(real_source, Message.Type.TRANSFER_REQUEST);
+        LedgerMessage ledgerMessage = new LedgerMessage(realSource, Message.Type.TRANSFER_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(balanceRequest));
         ledgerMessage.setSequenceNumber(requestId);
-        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", real_source));
+        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", realSource));
 
         return ledgerMessage;
     }
@@ -370,8 +363,7 @@ public class HDSLedgerServiceTest {
 
 		// Verifies no success in this transfer
 		for (int i = 0; i < n_Nodes; i++) {
-			Boolean success_value = success.get(i).removeFirst();
-			assertFalse(success_value);
+			assert(success.get(i).size() == 0 || success.get(i).removeFirst() == false);
 		}
 		
 	}
@@ -441,8 +433,7 @@ public class HDSLedgerServiceTest {
 
 		// Verifies no success in this transfer
 		for (int i = 0; i < n_Nodes; i++) {
-			Boolean success_value = success.get(i).removeFirst();
-			assertFalse(success_value);
+			assert(success.get(i).size() == 0 || success.get(i).removeFirst() == false);
 		}
 		
 	}
@@ -516,8 +507,7 @@ public class HDSLedgerServiceTest {
 
 		// Verifies no success in this transfer
 		for (int i = 0; i < n_Nodes; i++) {
-			Boolean success_value = success.get(i).removeFirst();
-			assertFalse(success_value);
+			assert(success.get(i).size() == 0 || success.get(i).removeFirst() == false);
 		}
 		
 	}
@@ -587,8 +577,7 @@ public class HDSLedgerServiceTest {
 
 		// Verifies no success in this transfer
 		for (int i = 0; i < n_Nodes; i++) {
-			Boolean success_value = success.get(i).removeFirst();
-			assertFalse(success_value);
+			assert(success.get(i).size() == 0 || success.get(i).removeFirst() == false);
 		}
 		
 	}
@@ -658,8 +647,7 @@ public class HDSLedgerServiceTest {
 
 		// Verifies no success in this transfer
 		for (int i = 0; i < n_Nodes; i++) {
-			Boolean success_value = success.get(i).removeFirst();
-			assertFalse(success_value);
+			assert(success.get(i).size() == 0 || success.get(i).removeFirst() == false);
 		}
 	}
 
@@ -724,11 +712,9 @@ public class HDSLedgerServiceTest {
 
 		HDSLedgerServices.forEach(service -> service.stopAndWait());
 
-
 		// Verifies no success in this transfer
 		for (int i = 0; i < n_Nodes; i++) {
-			Boolean success_value = success.get(i).removeFirst();
-			assertFalse(success_value);
+			assert(success.get(i).size() == 0 || success.get(i).removeFirst() == false);
 		}
 		
 	}

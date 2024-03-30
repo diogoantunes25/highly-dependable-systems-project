@@ -500,9 +500,10 @@ public class NodeService implements UDPService {
 
                     Pair<List<BankCommand>, List<BankCommand>> parsedInputs;
 
-                    List<BankCommand> valid, proposed;
+                    List<BankCommand> valid, invalid, proposed;
 
                     valid = new ArrayList<>();
+                    invalid = new ArrayList<>();
 
                     LOGGER.log(Level.INFO,
                             MessageFormat.format("{0} Driver - Waiting for input",
@@ -566,6 +567,7 @@ public class NodeService implements UDPService {
 
                         parsedInputs = this.ledger.getValidFromBatch(notConfirmed);
                         valid = parsedInputs.getKey();
+
                         pendingInputs = valid;
 
                         // If there are not enough valid request, then get more inputs
