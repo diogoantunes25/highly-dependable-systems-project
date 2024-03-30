@@ -11,6 +11,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceRequest;
 import pt.ulisboa.tecnico.hdsledger.service.ObserverAck;
 import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 
@@ -176,7 +177,6 @@ public class HDSLedgerServiceTest {
         String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
         String destinationPublicKey = String.format("/tmp/pub_%d.key", destination);
         TransferRequest transferRequest = new TransferRequest(sourcePublicKey, destinationPublicKey, amount);
-
         LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.TRANSFER_REQUEST);
         ledgerMessage.setMessage(new Gson().toJson(transferRequest));
         ledgerMessage.setSequenceNumber(requestId);
@@ -209,6 +209,19 @@ public class HDSLedgerServiceTest {
         ledgerMessage.setMessage(new Gson().toJson(transferRequest));
         ledgerMessage.setSequenceNumber(requestId);
         ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", signature));
+
+        return ledgerMessage;
+    }
+
+	private LedgerMessage createAnotherClientBalanceRequest(int requestId, int real_source, int fake_source) {
+        // TODO: make this consistent with the way this was done before
+        String fakeSourcePublicKey = String.format("/tmp/pub_%d.key", fake_source);
+        BalanceRequest balanceRequest = new BalanceRequest(fakeSourcePublicKey);
+
+        LedgerMessage ledgerMessage = new LedgerMessage(real_source, Message.Type.TRANSFER_REQUEST);
+        ledgerMessage.setMessage(new Gson().toJson(balanceRequest));
+        ledgerMessage.setSequenceNumber(requestId);
+        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", real_source));
 
         return ledgerMessage;
     }
@@ -631,6 +644,75 @@ public class HDSLedgerServiceTest {
 
 		for (int i = 0; i < n_Nodes; i++) {
 			LedgerMessage request = MessageCreator.createTransferRequest(seq, clientId, clientId2, amount);
+			clientLink.send(i, request);
+		}
+
+		try {
+			Thread.sleep(5000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		HDSLedgerServices.forEach(service -> service.stopAndWait());
+
+
+		// Verifies no success in this transfer
+		for (int i = 0; i < n_Nodes; i++) {
+			Boolean success_value = success.get(i).removeFirst();
+			assertFalse(success_value);
+		}
+	}
+
+	@Test
+	void HDSLedgerBalanceAnotherClientTest(@TempDir Path tempDir) {
+		int n_Nodes = 4;
+		int basePortNode = 20700;
+		int n_Clients = 2;
+		int basePortClient = 30700;
+		int basePortHDS = 40700;
+		int clientId = n_Nodes; // must be greater than n-1
+		int clientId2 = n_Nodes+1; // must be greater than n-1
+		String clientHashPk = numberToId(clientId);
+		String clientHashPk2 = numberToId(clientId2);
+		int seq = 0;
+		int initial1 = 15;
+		int initial2 = 15;
+
+		Map<Integer, Deque<Boolean>> success = genSuccessMap(n_Nodes);
+
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n_Nodes, n_Clients, initial1);
+
+		Map<String, Integer> genesisBlock = new HashMap<>();
+		genesisBlock.put(clientHashPk, initial1);
+		genesisBlock.put(clientHashPk2, initial2);
+
+		// Setup node service
+		List<ProcessConfig> nodeConfigs = defaultConfigs(n_Nodes, basePortNode);
+		List<Link> nodeLinks = linksFromConfigs(nodeConfigs, ConsensusMessage.class);
+		List<String> clientPks = defaultClientKeys(n_Nodes, n_Clients);
+		List<NodeService> nodeServices = setupNodeServices(nodeConfigs, nodeLinks, clientPks, genesisFilePath);
+
+		// Setup ledger service and client links
+		List<ProcessConfig> ledgerConfigs = defaultConfigs(n_Nodes + n_Clients, basePortHDS);
+		List<Link> ledgerLinks = linksFromConfigs(ledgerConfigs, LedgerMessage.class);
+		List<HDSLedgerService> HDSLedgerServices = setupHDSLedgerServices(n_Nodes, ledgerConfigs, ledgerLinks, nodeServices);
+
+		Link clientLink = ledgerLinks.get(clientId);
+
+		nodeServices.forEach(service -> service.listen());
+		HDSLedgerServices.forEach(service -> service.listen());
+
+		HDSLedgerServices.forEach(service -> {
+			final int id = service.getId();
+			ObserverAck observer = (cidOpt, seqNOpt, slotIdOpt) ->
+				success.get(id).add(!slotIdOpt.isEmpty());
+			service.registerObserver(observer);
+		});
+
+
+		for (int i = 0; i < n_Nodes; i++) {
+			LedgerMessage request = createAnotherClientBalanceRequest(seq, clientId, clientId2);
 			clientLink.send(i, request);
 		}
 

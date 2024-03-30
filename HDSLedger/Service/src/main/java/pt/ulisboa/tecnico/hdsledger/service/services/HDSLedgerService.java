@@ -119,9 +119,11 @@ public class HDSLedgerService implements UDPService {
             balance = Optional.of(nodeService.getBalance(clientId));
         }
 
-        BalanceReply balanceReply = new BalanceReply(balance, balanceRequest.getSeq());
-        LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.BALANCE_REPLY, new Gson().toJson(balanceReply));
-        link.send(clientId, reply);
+        //BalanceReply balanceReply = new BalanceReply(balance, balanceRequest.getSeq());
+        //LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.BALANCE_REPLY, new Gson().toJson(balanceReply));
+        //link.send(clientId, reply);
+
+        sendBalanceReply (link, config.getId(), clientId, message.getSequenceNumber(), balance);
     }
 
     /**
@@ -149,6 +151,15 @@ public class HDSLedgerService implements UDPService {
         link.send(clientId, reply);
         for (ObserverAck obs: this.observers) {
             obs.ack(config.getId(), seq, slotIdOpt);
+        }
+    }
+
+    private void sendBalanceReply (Link link, int senderId, int clientId, int seq, Optional<Integer> balance) {
+        BalanceReply balanceReply = new BalanceReply(balance, seq);
+        LedgerMessage reply = createLedgerMessage(config.getId(), Message.Type.BALANCE_REPLY, new Gson().toJson(balanceReply));
+        link.send(clientId, reply);
+        for (ObserverAck obs: this.observers) {
+            obs.ack(config.getId(), seq, balance);
         }
     }
 

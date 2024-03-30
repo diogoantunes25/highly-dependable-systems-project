@@ -11,6 +11,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.ledger.AppendRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.TransferReply;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.ledger.BalanceReply;
 
 import java.util.List;
 import java.util.Optional;
@@ -70,8 +72,27 @@ public class MessageCreator {
         ledgerMessage.setMessage(new Gson().toJson(transferReply));
         return ledgerMessage;
     }
+    
+    public static LedgerMessage createBalanceRequest(int requestId, int source) {
+        // TODO: make this consistent with the way this was done before
+        String sourcePublicKey = String.format("/tmp/pub_%d.key", source);
+        BalanceRequest balanceRequest = new BalanceRequest(sourcePublicKey);
 
+        LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.BALANCE_REQUEST);
+        ledgerMessage.setMessage(new Gson().toJson(balanceRequest));
+        ledgerMessage.setSequenceNumber(requestId);
+        ledgerMessage.signSelf(String.format("/tmp/priv_%d.key", source));
 
+        return ledgerMessage;
+    }
+
+    public static LedgerMessage createBalanceReply(int source ,int seq, Optional<Integer> balance) {
+        BalanceReply transferReply = new BalanceReply(balance, seq);
+        LedgerMessage ledgerMessage = new LedgerMessage(source, Message.Type.BALANCE_REPLY);
+        ledgerMessage.setMessage(new Gson().toJson(transferReply));
+        return ledgerMessage;
+    }
+    
     public static AppendMessage createAppendRequestMessage(int id, int receiver, String value, int sequenceNumber) {
         AppendRequest appendRequest = new AppendRequest(value, sequenceNumber);
 
