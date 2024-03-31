@@ -1191,15 +1191,18 @@ public class IstanbulTest {
 			Field othersField = Istanbul.class.getDeclaredField("others");
 			Field betaField = Istanbul.class.getDeclaredField("beta");
 			Field quorumSize = Istanbul.class.getDeclaredField("quorumSize");
+			Field configField = Istanbul.class.getDeclaredField("config");
 
 			// Make the fields accessible
 			othersField.setAccessible(true);
 			betaField.setAccessible(true);
 			quorumSize.setAccessible(true);
+			configField.setAccessible(true);
 
 			List<ProcessConfig> othersValue = (List<ProcessConfig>) othersField.get(instance);
 			Predicate<String> betaValue = (Predicate<String>) betaField.get(instance);
 			int quorumSizeValue = (int) quorumSize.get(instance);
+			ProcessConfig config = (ProcessConfig) configField.get(instance);
 
 			// do nasty things to messages here
 			if (!Istanbul.checkSignature(message, othersValue, betaValue, quorumSizeValue)) {
@@ -1226,7 +1229,10 @@ public class IstanbulTest {
 					.setMessage(fakeRoundChange.toJson())
 					.setReceiver(message.getReceiver())
 					.build();
-			}).toList();
+
+			}).map(m -> Istanbul.sign(m, config.getPrivateKey()))
+			.toList();
+
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
