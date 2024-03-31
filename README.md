@@ -71,7 +71,7 @@ The genesis file defines the initial balances in the system when it boots. The s
 ```
 
 ## HDS Configuration
-In order to ease the setup of the system, a script was created to generate the PKI for `<n>` nodes and `<c>` clients, the configuration file on `Service/src/main/regular_config.json>` and the genesis file on `</tmp/gensis.json>` with <initial-balance> for every participant.
+In order to ease the setup of the system, a script was created to generate the PKI for `<n>` nodes and `<c>` clients, the configuration file on `Service/src/main/regular_config.json>` and the genesis file on `</tmp/gensis.json>` with `<initial-balance>` for every participant.
 
 To run the script, execute the following command:
 
@@ -94,29 +94,11 @@ This should install the following dependencies:
 
 - [Google's Gson](https://github.com/google/gson) - A Java library that can be used to convert Java Objects into their JSON representation.
 
-## Puppet Master
-
-The puppet master is a python script `puppet-master.py` which is responsible for starting the replicas.
-The script runs with `kitty` terminal emulator by default since it's installed on the RNL labs.
-
-To run the script you need to have `python3` installed.
-The script has arguments which can be modified:
-
-- `terminal` - the terminal emulator used by the script
-- `server_config` - a string from the array `server_configs` which contains the possible configurations for the replicas
-
-Run the script with the following command:
-
-```bash
-python3 puppet-master.py
-```
-Note: You may need to install **kitty** in your computer
-
 ## Maven
 
 It's also possible to run the project manually by using Maven.
 
-### Instalation
+### Installation
 
 Compile and install all modules using:
 
@@ -162,5 +144,15 @@ sh multiple_clients.sh <replicas> <clients> <txs>
 This script assumes that the `setup.sh` script was already ran for the number of <replicas> and 
 <clients> specified and the replicas are already running. <txs> are the number of transactions 
 that each client is going to submit to the replicas.
+
+## Cryptography microbenchmarks
+
+To run the microbenchmarks for the digital signature functions, the following steps
+can be followed:
+
+```bash
+cd PKI
+mvn exec:java -DmainClass=pt.ulisboa.tecnico.hdsledger.pki.Microbenchmark
+```
 
 ---
