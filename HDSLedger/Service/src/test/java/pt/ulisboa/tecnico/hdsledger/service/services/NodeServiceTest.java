@@ -12,6 +12,7 @@ import pt.ulisboa.tecnico.hdsledger.pki.SigningUtils;
 import pt.ulisboa.tecnico.hdsledger.communication.ledger.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.MessageCreator;
 
+import java.lang.reflect.*;
 import java.nio.file.Path;
 import java.security.*;
 import java.io.IOException;
@@ -471,9 +472,67 @@ public class NodeServiceTest {
 
 	}
 
-	// TODO: add tests with previous round messages
-	// TODO: add tests where client sends bad signatures
-	// TODO: add tests where client sends same thing twice
+	// All leaders try to propose fee that is incorrect. Check that the transaction
+	// is not confirmed.
+	@Test
+	void badFeeTest(@TempDir Path tempDir) {
+		int n = 4;
+		int nClients = 2;
+		int basePort = 9000;
+		int clientId = n;
+		int clientId2 = n+1;
+
+		String clientHashPk = numberToId(clientId);
+		String clientHashPk2 = numberToId(clientId2);
+
+		int seq = 134;
+		int amount = 10;
+		int initial = 15;
+
+		String genesisFilePath = tempDir.resolve("genesis.json").toString();
+		defaultGenesisFile(genesisFilePath, n, nClients, initial);
+
+		LedgerMessage proof = MessageCreator.createTransferRequest(seq, clientId, clientId2, amount);
+
+		Map<Integer, Deque<Confirmation>> confirmedSlots = genSlotMap(n);
+
+		List<NodeService> services = setupServices(n, basePort, nClients, genesisFilePath);
+
+		services.forEach(service -> service.setFee(NodeService.DEFAULT_FEE + 1));
+		services.forEach(service -> service.listen());
+		services.forEach(service -> {
+			final int id = service.getId();
+			ObserverAck observer = (cid, seqN, slotId) ->
+				confirmedSlots.get(id).add(new Confirmation(cid, seqN, slotId.get()));
+			service.registerObserver(observer);
+		});
+
+		services.forEach(service -> service.startConsensus(clientId, seq, clientId, clientId2, amount, proof));
+
+		// FIXME (dsa): don't like this, but don't know how to do check
+		// without assuming stuff about some correctness
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		services.forEach(service -> service.stopAndWait());
+
+		printSlotMap(confirmedSlots);
+
+		// Check output to clients is what was expected (no slots)
+		for (int i = 0; i < n; i++) {
+			assertEquals(0, confirmedSlots.get(i).size());
+		}
+		
+		// Check state is what was expected (no transfer went through)
+		for (NodeService service: services) {
+			Map<String, Integer> ledger = service.getLedger();
+			assertEquals(ledger.get(clientHashPk), initial);
+			assertEquals(ledger.get(clientHashPk2), initial);
+		}
+	}
 	
 	private class Confirmation {
 		int clientId;

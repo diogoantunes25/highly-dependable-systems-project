@@ -125,6 +125,9 @@ public class NodeService implements UDPService {
     // List of paths to client public keys
     private List<String> clientPks;
 
+    // Fee to propose in batches
+    private int fee = DEFAULT_FEE;
+
     // maps values to the slot they were finalized to (after
     // coming out from consensus). slot is empty is the command failed
     Map<BankCommand, Slot<BankCommand>> history = new ConcurrentHashMap<>();
@@ -337,7 +340,7 @@ public class NodeService implements UDPService {
             proof = getFakeProof(clientId, seq, source, destination, amount);
         }
         // note: add must be used instead of put as it's non-blocking
-        inputs.add(new BankCommand(clientId, seq, source, destination, amount, this.config.getId(), DEFAULT_FEE, proof));
+        inputs.add(new BankCommand(clientId, seq, source, destination, amount, this.config.getId(), this.getFee(), proof));
     }
 
     // Creates message sign by current replica
@@ -360,6 +363,15 @@ public class NodeService implements UDPService {
      */
     public synchronized int getBalance(int clientId) {
         return this.ledger.getBalance(clientId);
+    }
+
+    public synchronized int getFee() {
+        return this.fee;
+    }
+
+    public synchronized void setFee(int newFee) {
+        LOGGER.log(Level.WARNING, "Since a flat static fee is expected, the fee should not be changed.");
+        this.fee = newFee;
     }
 
     /**
