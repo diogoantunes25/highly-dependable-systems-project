@@ -10,6 +10,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.consensus.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.consensus.RoundChangeMessage;
 import pt.ulisboa.tecnico.hdsledger.pki.RSAKeyGenerator;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.communication.consensus.builder.ConsensusMessageBuilder;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -623,7 +624,7 @@ public class IstanbulTest {
 
 		// Run for at most 5 seconds
 		long startTime = System.currentTimeMillis();
-        long duration = 0;
+		long duration = 0;
 		while (duration < 5000) {
 			while (messages.size() > 0) {
 				ConsensusMessage message = messages.pollFirst();	
@@ -1099,7 +1100,66 @@ public class IstanbulTest {
 			throw new RuntimeException("ERROR: agreed to wrong value");
 		}
 	}
+	
+	@Test
+	public void tryToForceHighestPrepareUpwardsTest() {
+		int n = 4;
+		int lambda = 0;
+		String value = "a";
 
+		// Stores the values confirmed by each replica
+		Map<Integer, List<String>> confirmed = new HashMap<>();
+
+		// Backlog of messages
+		Deque<ConsensusMessage> messages = new ConcurrentLinkedDeque();
+		Deque<ConsensusMessage> messages2 = new ConcurrentLinkedDeque();
+
+		// Consensus instances
+		List<Istanbul> instances = defaultInstances(n, confirmed, lambda, messages);
+		// make one instances byzantine
+		instances.get(0).setMessageHandler(m -> highPreparedRoundHandler(instances.get(0), m));
+
+		// Start every replica
+		instances.forEach(instance -> {
+			List<ConsensusMessage> output = instance.start(value);
+
+			// Store all messages to be processed
+			output.forEach(m -> messages.addLast(m));
+		});
+
+		// Run for at most 5 seconds
+		long startTime = System.currentTimeMillis();
+		long duration = 0;
+		while (duration < 5000) {
+			while (messages.size() > 0) {
+				ConsensusMessage message = messages.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				// Don't allow messages to go through
+				messages2.addLast(message);
+			}
+
+			duration = System.currentTimeMillis() - startTime;
+		}
+
+		while (messages2.size() > 0) {
+				ConsensusMessage message = messages2.pollFirst();	
+				if (message == null) {
+					throw new RuntimeException("ERROR: null message found");
+				}
+
+				int receiver = message.getReceiver();
+				List<ConsensusMessage> output = instances.get(receiver).handleMessage(message);
+				output.forEach(m -> messages2.addLast(m));
+		}
+
+		// Check that everyone still delivered despite attack
+		checkConfirmed(confirmed);
+	}
+
+	// Doesn't sign messages
 	private List<ConsensusMessage> badHandler(Istanbul instance, ConsensusMessage message) {
 		try {
 			Field othersField = Istanbul.class.getDeclaredField("others");
@@ -1121,10 +1181,56 @@ public class IstanbulTest {
 			}
 			return callRealHandler(instance, message);
 		} catch (Exception e) {
-			// TODO
 			throw new RuntimeException(e);
 		}
-    }
+	}
+
+	// Modifies ROUND-CHANGEs with very high rounds
+	private List<ConsensusMessage> highPreparedRoundHandler(Istanbul instance, ConsensusMessage message) {
+		try {
+			Field othersField = Istanbul.class.getDeclaredField("others");
+			Field betaField = Istanbul.class.getDeclaredField("beta");
+			Field quorumSize = Istanbul.class.getDeclaredField("quorumSize");
+
+			// Make the fields accessible
+			othersField.setAccessible(true);
+			betaField.setAccessible(true);
+			quorumSize.setAccessible(true);
+
+			List<ProcessConfig> othersValue = (List<ProcessConfig>) othersField.get(instance);
+			Predicate<String> betaValue = (Predicate<String>) betaField.get(instance);
+			int quorumSizeValue = (int) quorumSize.get(instance);
+
+			// do nasty things to messages here
+			if (!Istanbul.checkSignature(message, othersValue, betaValue, quorumSizeValue)) {
+				return new ArrayList<>();
+			}
+
+			List<ConsensusMessage> messages = callRealHandler(instance, message);
+
+			return messages.stream().map(m -> {
+				if (m.getType() != Message.Type.ROUND_CHANGE) {
+					return m;
+				}
+
+				// If message is ROUND-CHANGE, then put very
+				// high prepared round. Of course, because it's
+				// a lie, this won't be properly justified
+					
+				RoundChangeMessage roundChange = message.deserializeRoundChangeMessage();
+				RoundChangeMessage fakeRoundChange = new RoundChangeMessage(Optional.of("dsfasdfa"), Optional.of(10000000), roundChange.getJustification());
+				
+				return new ConsensusMessageBuilder(message.getMessageId(), Message.Type.ROUND_CHANGE)
+					.setConsensusInstance(message.getConsensusInstance())
+					.setRound(message.getRound())
+					.setMessage(fakeRoundChange.toJson())
+					.setReceiver(message.getReceiver())
+					.build();
+			}).toList();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
 
 	private List<ConsensusMessage> callRealHandler(Istanbul instance, ConsensusMessage message) {
 		try {
