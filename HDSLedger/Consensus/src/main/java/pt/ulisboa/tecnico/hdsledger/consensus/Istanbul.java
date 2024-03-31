@@ -46,7 +46,7 @@ public class Istanbul {
 	private final int quorumSize;
 
 	// Milliseconds
-	private static final int INITIAL_TIMEOUT = 500;
+	public static final int INITIAL_TIMEOUT = 500;
 
 	// Process configuration (includes its id)
 	private final ProcessConfig config;
@@ -1319,7 +1319,7 @@ public class Istanbul {
 
 		return this.signAll(this._handleMessage(message));
 	}
-	
+
 	private synchronized List<ConsensusMessage> _handleTimeout(int round) {
 
 		if (round != this.ri) {
