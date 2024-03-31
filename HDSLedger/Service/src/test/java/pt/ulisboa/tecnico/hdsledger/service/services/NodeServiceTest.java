@@ -478,7 +478,7 @@ public class NodeServiceTest {
 	void badFeeTest(@TempDir Path tempDir) {
 		int n = 4;
 		int nClients = 2;
-		int basePort = 13024;
+		int basePort = 9000;
 		int clientId = n;
 		int clientId2 = n+1;
 
