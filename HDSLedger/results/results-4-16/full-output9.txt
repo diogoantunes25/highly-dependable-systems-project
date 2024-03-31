@@ -1,0 +1,30 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] --------------< pt.ulisboa.tecnico.hdsledger.G06:Client >---------------
+[INFO] Building Client 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.0.0:java (default-cli) @ Client ---
+[WARNING] 
+pt.ulisboa.tecnico.hdsledger.utilities.HDSSException: Error while opening socket
+    at pt.ulisboa.tecnico.hdsledger.communication.PerfectLink.<init> (PerfectLink.java:65)
+    at pt.ulisboa.tecnico.hdsledger.communication.HMACLink.<init> (HMACLink.java:56)
+    at pt.ulisboa.tecnico.hdsledger.communication.HMACLink.<init> (HMACLink.java:51)
+    at pt.ulisboa.tecnico.hdsledger.clientLibrary.ClientStub.<init> (ClientStub.java:47)
+    at pt.ulisboa.tecnico.hdsledger.client.loader.LoaderClient.main (LoaderClient.java:68)
+    at org.codehaus.mojo.exec.ExecJavaMojo$1.run (ExecJavaMojo.java:254)
+    at java.lang.Thread.run (Thread.java:1589)
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  1.013 s
+[INFO] Finished at: 2024-03-31T00:53:57Z
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.codehaus.mojo:exec-maven-plugin:3.0.0:java (default-cli) on project Client: An exception occured while executing the Java class. Error while opening socket -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

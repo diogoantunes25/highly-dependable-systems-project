@@ -1,0 +1,3 @@
+Finished load - took 172 seconds
+Mean Latency: 286.6023 ms
+Throughput: 3.4942 transactions per second
