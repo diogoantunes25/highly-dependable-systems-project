@@ -5,6 +5,9 @@ import json
 import sys
 import signal
 
+print("Use of puppet-master is deprecated and is not recommended.")
+if input("Are you sure you want to continue? (y/n)  ").strip() != "y":
+    exit(1)
 
 # Terminal Emulator used to spawn the processes
 terminal = "kitty"
